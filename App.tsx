@@ -3,7 +3,6 @@ import { StatusBar } from 'expo-status-bar';
 import { NavigationContainer } from '@react-navigation/native';
 import { createMaterialTopTabNavigator } from '@react-navigation/material-top-tabs';
 import NDK from '@nostr-dev-kit/ndk-mobile';
-import { NDKProvider } from '@nostr-dev-kit/ndk-mobile';
 import { NDKCacheAdapterSqlite } from '@nostr-dev-kit/ndk-mobile';
 
 import HomeScreen from './screens/HomeScreen';
@@ -28,27 +27,25 @@ ndk.connect().catch((err) => console.error('NDK connect error:', err));
 /**
  * Eventinel Mobile App
  *
- * Simple, direct NDK integration - no shared hooks complexity
+ * Simple, direct NDK integration - no React Context provider needed for mobile
  */
 export default function App() {
   return (
-    <NDKProvider ndk={ndk}>
-      <NavigationContainer>
-        <StatusBar style="auto" />
-        <Tab.Navigator
-          screenOptions={{
-            tabBarActiveTintColor: '#2563eb',
-            tabBarInactiveTintColor: '#6b7280',
-            tabBarLabelStyle: { fontSize: 14, fontWeight: '600' },
-            tabBarStyle: { backgroundColor: '#fff' },
-            tabBarIndicatorStyle: { backgroundColor: '#2563eb' },
-          }}
-        >
-          <Tab.Screen name="Home" component={HomeScreen} />
-          <Tab.Screen name="Map" component={MapScreen} />
-          <Tab.Screen name="Profile" component={ProfileScreen} />
-        </Tab.Navigator>
-      </NavigationContainer>
-    </NDKProvider>
+    <NavigationContainer>
+      <StatusBar style="auto" />
+      <Tab.Navigator
+        screenOptions={{
+          tabBarActiveTintColor: '#2563eb',
+          tabBarInactiveTintColor: '#6b7280',
+          tabBarLabelStyle: { fontSize: 14, fontWeight: '600' },
+          tabBarStyle: { backgroundColor: '#fff' },
+          tabBarIndicatorStyle: { backgroundColor: '#2563eb' },
+        }}
+      >
+        <Tab.Screen name="Home" component={HomeScreen} />
+        <Tab.Screen name="Map" component={MapScreen} />
+        <Tab.Screen name="Profile" component={ProfileScreen} />
+      </Tab.Navigator>
+    </NavigationContainer>
   );
 }
