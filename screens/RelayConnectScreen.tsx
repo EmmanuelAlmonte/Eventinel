@@ -1,46 +1,46 @@
 import { useState, useEffect } from 'react';
-import { StyleSheet, Text, View, TextInput, TouchableOpacity, ScrollView, KeyboardAvoidingView, Platform } from 'react-native';
+import { StyleSheet, Text, View, TextInput, TouchableOpacity, ScrollView, Alert } from 'react-native';
 import { ndk } from '../lib/ndk';
-import { NDKEvent, NDKPrivateKeySigner } from '@nostr-dev-kit/ndk-mobile';
-
-// Generate or retrieve signer for this session
-let sessionSigner: NDKPrivateKeySigner | null = null;
-
-function getSessionSigner() {
-  // If user set a key via PrivateKeyScreen, use that
-  if (ndk.signer) {
-    return ndk.signer;
-  }
-
-  // Otherwise generate a temporary one
-  if (!sessionSigner) {
-    sessionSigner = NDKPrivateKeySigner.generate();
-    ndk.signer = sessionSigner;
-  }
-  return sessionSigner;
-}
+import { NDKRelayStatus } from '@nostr-dev-kit/ndk-mobile';
+import { isConnected, getStatusString, getStatusColor } from '../lib/relay/status';
+import { addRelayToStorage, removeRelayFromStorage } from '../lib/relay/storage';
+import type { RelayInfo } from '../types/relay';
 
 export default function RelayConnectScreen() {
   const [relayUrl, setRelayUrl] = useState('');
-  const [connectedRelays, setConnectedRelays] = useState<string[]>([]);
+  const [relays, setRelays] = useState<RelayInfo[]>([]);
   const [message, setMessage] = useState('');
-  const [noteContent, setNoteContent] = useState('');
-  const [sendStatus, setSendStatus] = useState('');
+
+  // Update relay list from NDK pool
+  const updateRelays = () => {
+    const poolRelays = Array.from(ndk.pool.relays.values());
+    const relayInfos: RelayInfo[] = poolRelays.map(relay => ({
+      url: relay.url,
+      status: getStatusString(relay.status),
+      rawStatus: relay.status,
+      isConnected: isConnected(relay.status),
+    }));
+    setRelays(relayInfos);
+  };
 
   useEffect(() => {
-    // Update connected relays list
-    const updateRelays = () => {
-      const relays = Array.from(ndk.pool.relays.values());
-      const connected = relays
-        .filter(relay => relay.status === 1) // 1 = connected
-        .map(relay => relay.url);
-      setConnectedRelays(connected);
-    };
-
+    // Initial load
     updateRelays();
-    const interval = setInterval(updateRelays, 2000);
 
-    return () => clearInterval(interval);
+    // Event-based updates (no polling!)
+    const handleConnect = () => updateRelays();
+    const handleDisconnect = () => updateRelays();
+    const handleConnecting = () => updateRelays();
+
+    ndk.pool.on('relay:connect', handleConnect);
+    ndk.pool.on('relay:disconnect', handleDisconnect);
+    ndk.pool.on('relay:connecting', handleConnecting);
+
+    return () => {
+      ndk.pool.off('relay:connect', handleConnect);
+      ndk.pool.off('relay:disconnect', handleDisconnect);
+      ndk.pool.off('relay:connecting', handleConnecting);
+    };
   }, []);
 
   const handleConnect = async () => {
@@ -55,68 +55,87 @@ export default function RelayConnectScreen() {
       return;
     }
 
-    try {
-      // Add relay to NDK
-      const relay = ndk.addExplicitRelay(relayUrl.trim());
-      await relay.connect();
+    const url = relayUrl.trim();
+    console.log('🔌 [Relay] User adding relay:', url);
+    setMessage(`Connecting to ${url}...`);
 
-      setMessage(`Connected to ${relayUrl}`);
+    try {
+      // Add relay to NDK pool
+      console.log('➕ [Relay] Adding to NDK pool:', url);
+      const relay = ndk.addExplicitRelay(url);
+
+      // Save to persistent storage immediately
+      console.log('💾 [Relay] Saving to storage:', url);
+      await addRelayToStorage(url);
+
+      // Attempt connection
+      console.log('🔄 [Relay] Initiating connection:', url);
+      relay.connect();
+
+      // Wait a moment to check actual status
+      setTimeout(() => {
+        const poolRelay = ndk.pool.relays.get(url);
+        if (poolRelay && isConnected(poolRelay.status)) {
+          console.log('✅ [Relay] Connection successful:', url, 'status:', poolRelay.status);
+          setMessage(`✓ Connected to ${url}`);
+        } else if (poolRelay) {
+          const status = getStatusString(poolRelay.status);
+          console.warn('⚠️ [Relay] Connection not established:', url, 'status:', status, 'rawStatus:', poolRelay.status);
+          setMessage(`⚠️ Added ${url} (${status})`);
+        } else {
+          console.warn('⚠️ [Relay] Relay not in pool:', url);
+          setMessage(`Added ${url} - attempting connection...`);
+        }
+      }, 2000);
+
       setRelayUrl('');
 
-      // Update the list immediately
-      setTimeout(() => {
-        const relays = Array.from(ndk.pool.relays.values());
-        const connected = relays
-          .filter(relay => relay.status === 1)
-          .map(relay => relay.url);
-        setConnectedRelays(connected);
-      }, 1000);
+      // UI updates automatically via event listeners
     } catch (error) {
-      setMessage(`Failed to connect: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      console.error('❌ [Relay] Failed to add relay:', url, error);
+      setMessage(`Failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   };
 
-  const handleSendNote = async () => {
-    if (!noteContent.trim()) {
-      setSendStatus('Please enter a note');
-      return;
-    }
+  const handleDisconnect = async (url: string) => {
+    Alert.alert(
+      'Disconnect Relay',
+      `Remove ${url}?`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Remove',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              console.log('🗑️ [Relay] User removing relay:', url);
 
-    if (connectedRelays.length === 0) {
-      setSendStatus('Please connect to at least one relay first');
-      return;
-    }
+              // Remove from NDK pool
+              console.log('➖ [Relay] Removing from NDK pool:', url);
+              ndk.pool.removeRelay(url);
 
-    try {
-      // Get or create a signer for this session
-      getSessionSigner();
+              // Remove from persistent storage
+              console.log('💾 [Relay] Removing from storage:', url);
+              await removeRelayFromStorage(url);
 
-      // Create a new note event (kind 1)
-      const event = new NDKEvent(ndk);
-      event.kind = 1;
-      event.content = noteContent.trim();
+              console.log('✅ [Relay] Successfully removed:', url);
+              setMessage(`Removed ${url}`);
 
-      // Sign and publish to all connected relays
-      await event.sign();
-      await event.publish();
-
-      setSendStatus(`Note published to ${connectedRelays.length} relay(s)!`);
-      setNoteContent('');
-
-      // Clear status after 3 seconds
-      setTimeout(() => setSendStatus(''), 3000);
-    } catch (error) {
-      setSendStatus(`Failed to send: ${error instanceof Error ? error.message : 'Unknown error'}`);
-    }
+              // UI updates automatically via event listeners
+            } catch (error) {
+              console.error('❌ [Relay] Failed to remove:', url, error);
+              setMessage(`Failed to remove: ${error instanceof Error ? error.message : 'Unknown error'}`);
+            }
+          },
+        },
+      ]
+    );
   };
+
 
   return (
-    <KeyboardAvoidingView
-      style={{ flex: 1 }}
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-    >
-      <ScrollView style={styles.container}>
-        <Text style={styles.title}>Connect to Relay</Text>
+    <ScrollView style={styles.container}>
+      <Text style={styles.title}>Relay Management</Text>
 
         <View style={styles.inputContainer}>
           <TextInput
@@ -138,51 +157,36 @@ export default function RelayConnectScreen() {
           </Text>
         ) : null}
 
-        <Text style={styles.subtitle}>Connected Relays ({connectedRelays.length})</Text>
+        <Text style={styles.subtitle}>
+          Relays ({relays.length}) - {relays.filter(r => r.isConnected).length} connected
+        </Text>
         <View style={styles.relayListContainer}>
-          {connectedRelays.length === 0 ? (
-            <Text style={styles.emptyText}>No relays connected</Text>
+          {relays.length === 0 ? (
+            <Text style={styles.emptyText}>No relays added</Text>
           ) : (
-            connectedRelays.map((url, index) => (
+            relays.map((relay, index) => (
               <View key={index} style={styles.relayItem}>
-                <View style={styles.statusDot} />
-                <Text style={styles.relayUrl}>{url}</Text>
+                <View
+                  style={[
+                    styles.statusDot,
+                    { backgroundColor: getStatusColor(relay.status) }
+                  ]}
+                />
+                <View style={styles.relayInfo}>
+                  <Text style={styles.relayUrl}>{relay.url}</Text>
+                  <Text style={styles.relayStatus}>{relay.status}</Text>
+                </View>
+                <TouchableOpacity
+                  style={styles.removeButton}
+                  onPress={() => handleDisconnect(relay.url)}
+                >
+                  <Text style={styles.removeButtonText}>✕</Text>
+                </TouchableOpacity>
               </View>
             ))
           )}
         </View>
-
-        <View style={styles.divider} />
-
-        <Text style={styles.subtitle}>Send Note</Text>
-        <View style={styles.noteContainer}>
-          <TextInput
-            style={styles.noteInput}
-            placeholder="Write your note here..."
-            value={noteContent}
-            onChangeText={setNoteContent}
-            multiline
-            numberOfLines={4}
-            textAlignVertical="top"
-          />
-          <TouchableOpacity
-            style={[styles.button, styles.sendButton]}
-            onPress={handleSendNote}
-            disabled={connectedRelays.length === 0}
-          >
-            <Text style={styles.buttonText}>
-              {connectedRelays.length === 0 ? 'Connect to Relay First' : 'Send Note'}
-            </Text>
-          </TouchableOpacity>
-        </View>
-
-        {sendStatus ? (
-          <Text style={[styles.message, sendStatus.includes('Failed') ? styles.error : styles.success]}>
-            {sendStatus}
-          </Text>
-        ) : null}
       </ScrollView>
-    </KeyboardAvoidingView>
   );
 }
 
@@ -269,30 +273,32 @@ const styles = StyleSheet.create({
     backgroundColor: '#10b981',
     marginRight: 10,
   },
+  relayInfo: {
+    flex: 1,
+    marginRight: 8,
+  },
   relayUrl: {
     fontSize: 14,
     color: '#374151',
-    flex: 1,
+    fontWeight: '500',
+    marginBottom: 2,
   },
-  divider: {
-    height: 1,
-    backgroundColor: '#e5e7eb',
-    marginVertical: 24,
+  relayStatus: {
+    fontSize: 12,
+    color: '#6b7280',
+    textTransform: 'capitalize',
   },
-  noteContainer: {
-    marginBottom: 20,
+  removeButton: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#fee2e2',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
-  noteInput: {
-    backgroundColor: '#fff',
-    borderWidth: 1,
-    borderColor: '#d1d5db',
-    borderRadius: 8,
-    padding: 12,
-    fontSize: 16,
-    minHeight: 100,
-    marginBottom: 10,
-  },
-  sendButton: {
-    marginTop: 0,
+  removeButtonText: {
+    color: '#dc2626',
+    fontSize: 18,
+    fontWeight: 'bold',
   },
 });

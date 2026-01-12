@@ -42,3 +42,4 @@ yarn-error.*
 
 # Claude Code configuration (local only)
 .claude/
+/os
