@@ -1,0 +1,57 @@
+{
+  "expo": {
+    "name": "Eventinel",
+    "slug": "eventinel",
+    "version": "1.0.0",
+    "scheme": "eventinel",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "automatic",
+    "jsEngine": "hermes",
+    "developmentClient": {
+      "silentLaunch": true
+    },
+    "newArchEnabled": true,
+    "plugins": [
+      "expo-secure-store",
+      "expo-sqlite",
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "gradleVersion": "8.10",
+            "kotlinVersion": "2.0.21"
+          }
+        }
+      ],
+      "expo-asset"
+    ],
+    "splash": {
+      "image": "./assets/splash-icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#ffffff"
+    },
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "com.eventinel.app",
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      }
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#ffffff"
+      },
+      "package": "com.eventinel.app"
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "extra": {
+      "eas": {
+        "projectId": "1a58dec9-3386-4d0f-822e-48bf0ee5a852"
+      }
+    }
+  }
+}
