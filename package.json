@@ -15,11 +15,13 @@
     "@react-native-async-storage/async-storage": "^2.2.0",
     "@react-navigation/material-top-tabs": "^7.4.12",
     "@react-navigation/native": "^7.1.27",
+    "@rnmapbox/maps": "^10.2.10",
     "expo": "^53.0.9",
     "expo-asset": "~11.1.7",
     "expo-build-properties": "~0.14.6",
     "expo-dev-client": "~5.2.4",
     "expo-image": "~2.4.1",
+    "expo-location": "~18.1.6",
     "expo-modules-core": "~2.5.0",
     "expo-secure-store": "~14.2.3",
     "expo-sqlite": "~15.2.10",
@@ -32,7 +34,8 @@
     "react-native-reanimated": "~3.17.5",
     "react-native-safe-area-context": "5.4.0",
     "react-native-screens": "~4.11.1",
-    "react-native-tab-view": "^4.2.2"
+    "react-native-tab-view": "^4.2.2",
+    "zustand": "^5.0.10"
   },
   "devDependencies": {
     "@types/react": "~19.0.10",
