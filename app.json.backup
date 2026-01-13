@@ -36,7 +36,9 @@
       "supportsTablet": false,
       "bundleIdentifier": "com.eventinel.app",
       "infoPlist": {
-        "ITSAppUsesNonExemptEncryption": false
+        "ITSAppUsesNonExemptEncryption": false,
+        "NSLocationWhenInUseUsageDescription": "Eventinel needs your location to show nearby safety incidents on the map.",
+        "NSLocationAlwaysAndWhenInUseUsageDescription": "Eventinel can track your location in the background to provide real-time incident alerts and continuous map updates even when the app is closed."
       }
     },
     "android": {

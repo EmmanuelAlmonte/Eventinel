@@ -15,9 +15,7 @@ const RELAY_STORAGE_KEY = 'eventinel:saved-relays';
  * These are reliable, well-maintained relays.
  */
 export const DEFAULT_RELAYS = [
-  'wss://relay.damus.io',
-  'wss://relay.primal.net',
-  'wss://nos.lol',
+  'ws://10.0.2.2:8085/'
 ];
 
 /**
@@ -25,7 +23,7 @@ export const DEFAULT_RELAYS = [
  *
  * @example
  * ```typescript
- * await saveRelays(['wss://relay.damus.io', 'wss://nos.lol']);
+ * await saveRelays(['ws://10.0.2.2:8085/']);
  * ```
  */
 export async function saveRelays(urls: string[]): Promise<void> {
@@ -47,7 +45,7 @@ export async function saveRelays(urls: string[]): Promise<void> {
  * @example
  * ```typescript
  * const relays = await loadRelays();
- * // Returns: ['wss://relay.damus.io', ...]
+ * // Returns: ['ws://10.0.2.2:8085/', ...]
  * ```
  */
 export async function loadRelays(): Promise<string[]> {
