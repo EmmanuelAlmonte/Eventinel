@@ -244,11 +244,9 @@ export default function MapScreen() {
   }
 
   // =============================================================================
-  // NDK SUBSCRIPTION - TEMPORARILY DISABLED FOR MAP DEBUGGING
+  // NDK SUBSCRIPTION
   // =============================================================================
 
-  // TODO: Re-enable once map rendering is working
-  /*
   useEffect(() => {
     if (!ndk.pool) {
       console.warn('MapScreen: NDK pool not initialized');
@@ -308,7 +306,6 @@ export default function MapScreen() {
       subscription.stop();
     };
   }, []);
-  */
 
   // =============================================================================
   // MARKER INTERACTION
