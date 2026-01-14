@@ -9,7 +9,7 @@
  * - Real-time updates via NDK subscription
  */
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import {
   View,
   Text,
@@ -23,15 +23,17 @@ import {
 import Mapbox from '@rnmapbox/maps';
 import * as Location from 'expo-location';
 import geohash from 'ngeohash';
-import { ndk } from '../lib/ndk';
+import { useSubscribe } from '@nostr-dev-kit/ndk-mobile';
+import type { NDKFilter } from '@nostr-dev-kit/ndk-mobile';
 import { parseIncidentEvent } from '../lib/nostr/events/incident';
 import type { ParsedIncident } from '../lib/nostr/events/types';
 import { IncidentMarker } from '../lib/map/IncidentMarker';
 import { DEFAULT_CAMERA, MAP_STYLES } from '../lib/map/types';
 import { MAPBOX_CONFIG, INCIDENT_LIMITS, USER_LOCATION } from '../lib/map/constants';
+import { DEFAULT_GEOHASH_PRECISION } from '../lib/nostr/config';
 
-// Geohash precision 5 = ~5km x 5km cells
-const GEOHASH_PRECISION = 5;
+// Geohash precision from config (ensures consistency with incident publishing)
+const GEOHASH_PRECISION = DEFAULT_GEOHASH_PRECISION;
 
 // Set Mapbox access token programmatically as fallback
 // This ensures the token is set even if app.config.js doesn't work
@@ -52,15 +54,84 @@ export default function MapScreen() {
   const [userLocation, setUserLocation] = useState<[number, number] | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
-  // Incident data state
-  const [incidents, setIncidents] = useState<Map<string, ParsedIncident>>(new Map());
+  // Selected incident for details card
   const [selectedIncident, setSelectedIncident] = useState<ParsedIncident | null>(null);
 
-  // Stats for debugging
-  const [eventCount, setEventCount] = useState(0);
+  // =============================================================================
+  // NDK SUBSCRIPTION (using useSubscribe hook)
+  // =============================================================================
 
-  // Debug: trigger re-fetch by toggling this state
-  const [fetchTrigger, setFetchTrigger] = useState(0);
+  // Calculate geohashes for NIP-52 filtering (user location + 8 neighbors = ~15km)
+  const geohashes = useMemo(() => {
+    if (!userLocation) return null;
+    
+    const userGeohash = geohash.encode(
+      userLocation[1], // latitude
+      userLocation[0], // longitude
+      GEOHASH_PRECISION
+    );
+    const neighbors = geohash.neighbors(userGeohash);
+    const hashes = [userGeohash, ...Object.values(neighbors)];
+    
+    console.log('MapScreen: Geohash filter calculated:', {
+      center: userGeohash,
+      totalCells: hashes.length,
+    });
+    
+    return hashes;
+  }, [userLocation]);
+
+  // Build filter (false disables subscription until location is ready)
+  const filter = useMemo((): NDKFilter[] | false => {
+    if (!geohashes) return false;
+    
+    const sinceTimestamp = Math.floor(Date.now() / 1000) - INCIDENT_LIMITS.SINCE_DAYS * 86400;
+    
+    return [{
+      kinds: [30911 as number],
+      '#g': geohashes,
+      '#t': ['incident'],
+      since: sinceTimestamp,
+      limit: INCIDENT_LIMITS.FETCH_LIMIT,
+    }];
+  }, [geohashes]);
+
+  // Subscribe with buffering (NDK handles batching and EOSE)
+  const { events: rawEvents, eose } = useSubscribe(filter, {
+    closeOnEose: false,
+    bufferMs: 100, // Batch events for 100ms to reduce re-renders
+  });
+
+  // Parse raw events into incidents (memoized to avoid re-parsing)
+  const incidents = useMemo(() => {
+    const incidentMap = new Map<string, ParsedIncident>();
+    
+    for (const event of rawEvents) {
+      const parsed = parseIncidentEvent(event);
+      if (parsed) {
+        incidentMap.set(parsed.incidentId, parsed);
+      }
+    }
+    
+    // Apply cache limit
+    if (incidentMap.size > INCIDENT_LIMITS.MAX_CACHE) {
+      const entries = Array.from(incidentMap.entries());
+      const limited = entries.slice(-INCIDENT_LIMITS.MAX_CACHE);
+      return new Map(limited);
+    }
+    
+    return incidentMap;
+  }, [rawEvents]);
+
+  // Log subscription state changes
+  useEffect(() => {
+    if (eose) {
+      console.log('MapScreen: End of stored events (EOSE)', {
+        incidentCount: incidents.size,
+        rawEventCount: rawEvents.length,
+      });
+    }
+  }, [eose, incidents.size, rawEvents.length]);
 
   // =============================================================================
   // LOCATION PERMISSION & FETCH
@@ -251,97 +322,6 @@ export default function MapScreen() {
   }
 
   // =============================================================================
-  // NDK SUBSCRIPTION (depends on userLocation for geohash filtering)
-  // =============================================================================
-
-  useEffect(() => {
-    // Wait for user location before subscribing
-    if (!userLocation) {
-      console.log('MapScreen: Waiting for user location before subscribing...');
-      return;
-    }
-
-    if (!ndk.pool) {
-      console.warn('MapScreen: NDK pool not initialized');
-      return;
-    }
-
-    // Calculate geohashes for filtering (user location + 8 neighbors = ~15km coverage)
-    const userGeohash = geohash.encode(
-      userLocation[1], // latitude
-      userLocation[0], // longitude
-      GEOHASH_PRECISION
-    );
-    const neighbors = geohash.neighbors(userGeohash);
-    const geohashes = [userGeohash, ...Object.values(neighbors)];
-
-    console.log('MapScreen: Starting incident subscription with geohash filter:', {
-      center: userGeohash,
-      totalCells: geohashes.length,
-    });
-
-    // Calculate timestamp for "since" filter (last N days)
-    const sinceTimestamp =
-      Math.floor(Date.now() / 1000) - INCIDENT_LIMITS.SINCE_DAYS * 86400;
-
-    // Subscribe to kind:30911 incidents filtered by geohash (NIP-52)
-    const subscription = ndk.subscribe(
-      {
-        kinds: [30911 as number],
-        '#g': geohashes, // 9 geohashes (center + 8 neighbors)
-        '#t': ['incident'],
-        since: sinceTimestamp,
-        limit: INCIDENT_LIMITS.FETCH_LIMIT,
-      },
-      { closeOnEose: false }
-    );
-
-    // Handle incoming events
-    subscription.on('event', (event) => {
-      const parsed = parseIncidentEvent(event);
-
-      if (parsed) {
-        setIncidents((prev) => {
-          const next = new Map(prev);
-
-          // Implement LRU eviction if cache is full
-          if (next.size >= INCIDENT_LIMITS.MAX_CACHE) {
-            const oldest = Array.from(next.keys())[0];
-            next.delete(oldest);
-            console.log('MapScreen: Evicted oldest incident:', oldest);
-          }
-
-          next.set(parsed.incidentId, parsed);
-          return next;
-        });
-
-        setEventCount((prev) => prev + 1);
-      } else {
-        console.warn('MapScreen: Failed to parse incident event:', event.id);
-      }
-    });
-
-    // Handle end of stored events
-    subscription.on('eose', () => {
-      console.log('MapScreen: End of stored events (EOSE)');
-    });
-
-    // Cleanup on unmount or when location changes
-    return () => {
-      console.log('MapScreen: Stopping incident subscription');
-      subscription.stop();
-    };
-  }, [userLocation, fetchTrigger]);
-
-  // Debug: Manual re-fetch function
-  function handleRefetch() {
-    console.log('MapScreen: Manual re-fetch triggered');
-    setIncidents(new Map());
-    setEventCount(0);
-    setFetchTrigger((prev) => prev + 1);
-  }
-
-  // =============================================================================
   // MARKER INTERACTION
   // =============================================================================
 
@@ -401,10 +381,8 @@ export default function MapScreen() {
       {__DEV__ && (
         <View style={styles.statsOverlay}>
           <Text style={styles.statsText}>Incidents: {incidents.size}</Text>
-          <Text style={styles.statsText}>Events: {eventCount}</Text>
-          <TouchableOpacity style={styles.refetchButton} onPress={handleRefetch}>
-            <Text style={styles.refetchButtonText}>↻ Refetch</Text>
-          </TouchableOpacity>
+          <Text style={styles.statsText}>Events: {rawEvents.length}</Text>
+          <Text style={styles.statsText}>EOSE: {eose ? '✓' : '...'}</Text>
         </View>
       )}
 
@@ -466,8 +444,8 @@ export default function MapScreen() {
         </TouchableOpacity>
       )}
 
-      {/* No incidents message */}
-      {!isLoading && incidents.size === 0 && (
+      {/* No incidents message - only show after EOSE */}
+      {!isLoading && eose && incidents.size === 0 && (
         <View style={styles.emptyState}>
           <Text style={styles.emptyStateText}>No incidents found</Text>
           <Text style={styles.emptyStateSubtext}>
@@ -527,21 +505,6 @@ const styles = StyleSheet.create({
   },
 
   statsText: {
-    color: '#fff',
-    fontSize: 12,
-    fontWeight: '600',
-  },
-
-  refetchButton: {
-    marginTop: 8,
-    backgroundColor: '#2563eb',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 6,
-    alignItems: 'center',
-  },
-
-  refetchButtonText: {
     color: '#fff',
     fontSize: 12,
     fontWeight: '600',

@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react';
 import { StatusBar } from 'expo-status-bar';
 import { NavigationContainer } from '@react-navigation/native';
 import { createMaterialTopTabNavigator } from '@react-navigation/material-top-tabs';
+import { useNDKStore } from '@nostr-dev-kit/ndk-mobile';
 
 import MenuScreen from './screens/MenuScreen';
 import MapScreen from './screens/MapScreen';
@@ -21,6 +22,13 @@ const Tab = createMaterialTopTabNavigator();
  */
 export default function App() {
   const [isReady, setIsReady] = useState(false);
+  const setNDK = useNDKStore((state) => state.setNDK);
+
+  // Register NDK singleton with Zustand store (required for useSubscribe hook)
+  useEffect(() => {
+    console.log('🔧 [App] Registering NDK with store for hooks...');
+    setNDK(ndk);
+  }, [setNDK]);
 
   useEffect(() => {
     async function initializeRelays() {

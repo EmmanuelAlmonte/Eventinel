@@ -194,7 +194,7 @@ export type DataSource = (typeof DATA_SOURCES)[keyof typeof DATA_SOURCES];
  */
 export const GEOHASH_PRECISION = {
   REGIONAL: 4,
-  CITY: 5, // Default for Eventinel
+  CITY: 5, // Default for Eventinel (~5km cells)
   NEIGHBORHOOD: 6,
   BLOCK: 7,
 } as const;
