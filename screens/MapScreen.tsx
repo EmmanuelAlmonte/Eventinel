@@ -9,7 +9,7 @@
  * - Real-time updates via NDK subscription
  */
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -22,12 +22,16 @@ import {
 } from 'react-native';
 import Mapbox from '@rnmapbox/maps';
 import * as Location from 'expo-location';
+import geohash from 'ngeohash';
 import { ndk } from '../lib/ndk';
 import { parseIncidentEvent } from '../lib/nostr/events/incident';
 import type { ParsedIncident } from '../lib/nostr/events/types';
 import { IncidentMarker } from '../lib/map/IncidentMarker';
 import { DEFAULT_CAMERA, MAP_STYLES } from '../lib/map/types';
 import { MAPBOX_CONFIG, INCIDENT_LIMITS, USER_LOCATION } from '../lib/map/constants';
+
+// Geohash precision 5 = ~5km x 5km cells
+const GEOHASH_PRECISION = 5;
 
 // Set Mapbox access token programmatically as fallback
 // This ensures the token is set even if app.config.js doesn't work
@@ -54,6 +58,9 @@ export default function MapScreen() {
 
   // Stats for debugging
   const [eventCount, setEventCount] = useState(0);
+
+  // Debug: trigger re-fetch by toggling this state
+  const [fetchTrigger, setFetchTrigger] = useState(0);
 
   // =============================================================================
   // LOCATION PERMISSION & FETCH
@@ -244,25 +251,44 @@ export default function MapScreen() {
   }
 
   // =============================================================================
-  // NDK SUBSCRIPTION
+  // NDK SUBSCRIPTION (depends on userLocation for geohash filtering)
   // =============================================================================
 
   useEffect(() => {
+    // Wait for user location before subscribing
+    if (!userLocation) {
+      console.log('MapScreen: Waiting for user location before subscribing...');
+      return;
+    }
+
     if (!ndk.pool) {
       console.warn('MapScreen: NDK pool not initialized');
       return;
     }
 
-    console.log('MapScreen: Starting incident subscription');
+    // Calculate geohashes for filtering (user location + 8 neighbors = ~15km coverage)
+    const userGeohash = geohash.encode(
+      userLocation[1], // latitude
+      userLocation[0], // longitude
+      GEOHASH_PRECISION
+    );
+    const neighbors = geohash.neighbors(userGeohash);
+    const geohashes = [userGeohash, ...Object.values(neighbors)];
+
+    console.log('MapScreen: Starting incident subscription with geohash filter:', {
+      center: userGeohash,
+      totalCells: geohashes.length,
+    });
 
     // Calculate timestamp for "since" filter (last N days)
     const sinceTimestamp =
       Math.floor(Date.now() / 1000) - INCIDENT_LIMITS.SINCE_DAYS * 86400;
 
-    // Subscribe to kind:30911 incidents with incident tag
+    // Subscribe to kind:30911 incidents filtered by geohash (NIP-52)
     const subscription = ndk.subscribe(
       {
-        kinds: [30911],
+        kinds: [30911 as number],
+        '#g': geohashes, // 9 geohashes (center + 8 neighbors)
         '#t': ['incident'],
         since: sinceTimestamp,
         limit: INCIDENT_LIMITS.FETCH_LIMIT,
@@ -300,12 +326,20 @@ export default function MapScreen() {
       console.log('MapScreen: End of stored events (EOSE)');
     });
 
-    // Cleanup on unmount
+    // Cleanup on unmount or when location changes
     return () => {
       console.log('MapScreen: Stopping incident subscription');
       subscription.stop();
     };
-  }, []);
+  }, [userLocation, fetchTrigger]);
+
+  // Debug: Manual re-fetch function
+  function handleRefetch() {
+    console.log('MapScreen: Manual re-fetch triggered');
+    setIncidents(new Map());
+    setEventCount(0);
+    setFetchTrigger((prev) => prev + 1);
+  }
 
   // =============================================================================
   // MARKER INTERACTION
@@ -363,11 +397,16 @@ export default function MapScreen() {
         ))}
       </Mapbox.MapView>
 
-      {/* Stats overlay (top-right) */}
-      <View style={styles.statsOverlay}>
-        <Text style={styles.statsText}>Incidents: {incidents.size}</Text>
-        <Text style={styles.statsText}>Events: {eventCount}</Text>
-      </View>
+      {/* Stats overlay (top-right) - DEV only */}
+      {__DEV__ && (
+        <View style={styles.statsOverlay}>
+          <Text style={styles.statsText}>Incidents: {incidents.size}</Text>
+          <Text style={styles.statsText}>Events: {eventCount}</Text>
+          <TouchableOpacity style={styles.refetchButton} onPress={handleRefetch}>
+            <Text style={styles.refetchButtonText}>↻ Refetch</Text>
+          </TouchableOpacity>
+        </View>
+      )}
 
       {/* Incident details card (bottom) */}
       {selectedIncident && (
@@ -488,6 +527,21 @@ const styles = StyleSheet.create({
   },
 
   statsText: {
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: '600',
+  },
+
+  refetchButton: {
+    marginTop: 8,
+    backgroundColor: '#2563eb',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 6,
+    alignItems: 'center',
+  },
+
+  refetchButtonText: {
     color: '#fff',
     fontSize: 12,
     fontWeight: '600',
