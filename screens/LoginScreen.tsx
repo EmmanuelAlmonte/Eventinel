@@ -1,14 +1,13 @@
+/**
+ * LoginScreen
+ *
+ * Multi-method Nostr authentication screen.
+ * Supports NIP-55 (device signer), NIP-46 (bunker), and manual key entry.
+ */
+
 import { useState } from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  TouchableOpacity,
-  TextInput,
-  ScrollView,
-  Platform,
-  ActivityIndicator,
-} from 'react-native';
+import { View, StyleSheet, Platform } from 'react-native';
+import { Text, Button, Input, Card, Icon, Overlay } from '@rneui/themed';
 import {
   useNip55,
   NDKNip55Signer,
@@ -18,6 +17,9 @@ import {
   NDKNip46Signer,
 } from '@nostr-dev-kit/mobile';
 import type { SignerAppInfo } from 'expo-nip55';
+
+import { ScreenContainer, SectionHeader } from '../lib/ui';
+import { PRIMARY, SEMANTIC, NEUTRAL } from '../lib/brand/colors';
 
 export default function LoginScreen() {
   const { ndk } = useNDK();
@@ -91,108 +93,208 @@ export default function LoginScreen() {
   };
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.contentContainer}>
-      <Text style={styles.title}>Welcome to Eventinel</Text>
-      <Text style={styles.subtitle}>Sign in to continue</Text>
+    <ScreenContainer scroll>
+      {/* Header */}
+      <View style={styles.header}>
+        <Text h1 style={styles.title}>Welcome to Eventinel</Text>
+        <Text style={styles.subtitle}>Sign in to continue</Text>
+      </View>
 
       {/* Loading Overlay */}
-      {isLoading && (
-        <View style={styles.loadingOverlay}>
-          <ActivityIndicator size="large" color="#2563eb" />
+      <Overlay
+        isVisible={isLoading}
+        overlayStyle={styles.loadingOverlay}
+      >
+        <View style={styles.loadingContent}>
+          <Icon
+            name="sync"
+            type="material"
+            size={48}
+            color={PRIMARY.DEFAULT}
+          />
           <Text style={styles.loadingText}>Connecting...</Text>
         </View>
-      )}
+      </Overlay>
 
       {/* NIP-55 Section (Android Only) */}
       {isAndroid && isAvailable && apps.length > 0 && (
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>🔐 Device Signer (Recommended)</Text>
-          <Text style={styles.sectionDescription}>
+        <Card containerStyle={styles.card}>
+          <View style={styles.cardHeader}>
+            <Icon
+              name="security"
+              type="material"
+              size={24}
+              color={PRIMARY.DEFAULT}
+            />
+            <Text style={styles.cardTitle}>Device Signer</Text>
+            <View style={styles.recommendedBadge}>
+              <Text style={styles.recommendedText}>Recommended</Text>
+            </View>
+          </View>
+          <Text style={styles.cardDescription}>
             Sign in with an installed signer app. Your keys never leave the device.
           </Text>
 
           {apps.map((app) => (
-            <TouchableOpacity
+            <Button
               key={app.packageName}
-              style={[styles.button, styles.primaryButton]}
+              title={`Login with ${app.name || app.packageName}`}
               onPress={() => handleNip55Login(app)}
               disabled={isLoading}
-            >
-              <Text style={styles.buttonText}>
-                Login with {app.name || app.packageName}
-              </Text>
-            </TouchableOpacity>
+              containerStyle={styles.buttonContainer}
+              icon={
+                <Icon
+                  name="key"
+                  type="material"
+                  size={20}
+                  color="#FFFFFF"
+                  style={{ marginRight: 8 }}
+                />
+              }
+            />
           ))}
-        </View>
+        </Card>
       )}
 
-      {/* NIP-46 Bunker Section (iOS Primary, Android Optional) */}
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>
-          {isIOS ? '🔐 Remote Signer (Recommended)' : '🌐 Remote Signer (NIP-46)'}
-        </Text>
-        <Text style={styles.sectionDescription}>
+      {/* NIP-46 Bunker Section */}
+      <Card containerStyle={styles.card}>
+        <View style={styles.cardHeader}>
+          <Icon
+            name="cloud"
+            type="material"
+            size={24}
+            color={isIOS ? PRIMARY.DEFAULT : NEUTRAL.textMuted}
+          />
+          <Text style={styles.cardTitle}>Remote Signer (NIP-46)</Text>
+          {isIOS && (
+            <View style={styles.recommendedBadge}>
+              <Text style={styles.recommendedText}>Recommended</Text>
+            </View>
+          )}
+        </View>
+        <Text style={styles.cardDescription}>
           Connect to a Nostr bunker for secure remote signing.
         </Text>
 
-        <TextInput
-          style={styles.input}
+        <Input
           placeholder="bunker://pubkey?relay=wss://..."
-          placeholderTextColor="#9ca3af"
           value={bunkerUrl}
           onChangeText={setBunkerUrl}
           autoCapitalize="none"
           autoCorrect={false}
-          editable={!isLoading}
+          disabled={isLoading}
+          leftIcon={
+            <Icon
+              name="link"
+              type="material"
+              size={20}
+              color={NEUTRAL.textMuted}
+            />
+          }
+          containerStyle={styles.inputContainer}
+          inputContainerStyle={styles.input}
+          inputStyle={styles.inputText}
         />
 
-        <TouchableOpacity
-          style={[styles.button, isIOS ? styles.primaryButton : styles.secondaryButton]}
+        <Button
+          title="Connect to Bunker"
           onPress={handleBunkerLogin}
           disabled={isLoading}
-        >
-          <Text style={styles.buttonText}>Connect to Bunker</Text>
-        </TouchableOpacity>
-      </View>
+          containerStyle={styles.buttonContainer}
+          buttonStyle={isIOS ? undefined : styles.secondaryButton}
+          icon={
+            <Icon
+              name="login"
+              type="material"
+              size={20}
+              color="#FFFFFF"
+              style={{ marginRight: 8 }}
+            />
+          }
+        />
+      </Card>
 
-      {/* Manual Entry Section (Fallback for Both) */}
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>🔑 Manual Login (Testing Only)</Text>
-        <Text style={styles.sectionDescription}>
+      {/* Manual Entry Section */}
+      <Card containerStyle={styles.card}>
+        <View style={styles.cardHeader}>
+          <Icon
+            name="vpn-key"
+            type="material"
+            size={24}
+            color={SEMANTIC.warning}
+          />
+          <Text style={styles.cardTitle}>Manual Login</Text>
+          <View style={styles.testOnlyBadge}>
+            <Text style={styles.testOnlyText}>Testing Only</Text>
+          </View>
+        </View>
+        <Text style={styles.cardDescription}>
           Enter your private key directly. Use test keys only!
         </Text>
 
-        <TextInput
-          style={styles.input}
+        <Input
           placeholder="nsec1... or hex private key"
-          placeholderTextColor="#9ca3af"
           value={manualKey}
           onChangeText={setManualKey}
           autoCapitalize="none"
           autoCorrect={false}
           secureTextEntry
-          editable={!isLoading}
+          disabled={isLoading}
+          leftIcon={
+            <Icon
+              name="lock"
+              type="material"
+              size={20}
+              color={NEUTRAL.textMuted}
+            />
+          }
+          containerStyle={styles.inputContainer}
+          inputContainerStyle={styles.input}
+          inputStyle={styles.inputText}
         />
 
-        <TouchableOpacity
-          style={[styles.button, styles.tertiaryButton]}
+        <Button
+          title="Login with Private Key"
           onPress={handleManualLogin}
           disabled={isLoading}
-        >
-          <Text style={styles.buttonText}>Login with Private Key</Text>
-        </TouchableOpacity>
-      </View>
+          containerStyle={styles.buttonContainer}
+          buttonStyle={styles.tertiaryButton}
+          icon={
+            <Icon
+              name="key"
+              type="material"
+              size={20}
+              color="#FFFFFF"
+              style={{ marginRight: 8 }}
+            />
+          }
+        />
+      </Card>
 
       {/* Error Display */}
       {error ? (
         <View style={styles.errorContainer}>
+          <Icon
+            name="error-outline"
+            type="material"
+            size={20}
+            color={SEMANTIC.alert}
+          />
           <Text style={styles.errorText}>{error}</Text>
         </View>
       ) : null}
 
       {/* Security Warning */}
-      <View style={styles.warningContainer}>
-        <Text style={styles.warningTitle}>⚠️ Security Notice</Text>
+      <Card containerStyle={styles.warningCard}>
+        <View style={styles.cardHeader}>
+          <Icon
+            name="warning"
+            type="material"
+            size={24}
+            color={SEMANTIC.warning}
+          />
+          <Text style={styles.warningTitle}>Security Notice</Text>
+        </View>
         <Text style={styles.warningText}>
           {isAndroid
             ? '• NIP-55 signer apps (Amber) are most secure\n'
@@ -201,122 +303,149 @@ export default function LoginScreen() {
           • Use test keys for development only{'\n'}
           • Keys are encrypted and stored securely
         </Text>
-      </View>
-    </ScrollView>
+      </Card>
+    </ScreenContainer>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#f5f5f5',
-  },
-  contentContainer: {
-    padding: 20,
-    paddingTop: 60,
-    paddingBottom: 40,
+  header: {
+    alignItems: 'center',
+    marginBottom: 24,
+    marginTop: 16,
   },
   title: {
-    fontSize: 28,
-    fontWeight: 'bold',
+    color: NEUTRAL.textPrimary,
     marginBottom: 8,
-    color: '#1f2937',
-    textAlign: 'center',
   },
   subtitle: {
+    color: NEUTRAL.textMuted,
     fontSize: 16,
-    color: '#6b7280',
-    textAlign: 'center',
-    marginBottom: 32,
   },
   loadingOverlay: {
-    backgroundColor: 'rgba(255, 255, 255, 0.9)',
-    padding: 24,
-    borderRadius: 12,
+    backgroundColor: NEUTRAL.darkElevated,
+    borderRadius: 16,
+    padding: 32,
+    borderWidth: 1,
+    borderColor: NEUTRAL.darkBorder,
+  },
+  loadingContent: {
     alignItems: 'center',
-    marginBottom: 16,
+    gap: 16,
   },
   loadingText: {
-    marginTop: 12,
+    color: NEUTRAL.textPrimary,
     fontSize: 16,
-    color: '#374151',
+    fontWeight: '500',
   },
-  section: {
-    backgroundColor: '#fff',
+  card: {
+    backgroundColor: NEUTRAL.darkElevated,
     borderRadius: 12,
-    padding: 16,
-    marginBottom: 16,
     borderWidth: 1,
-    borderColor: '#e5e7eb',
+    borderColor: NEUTRAL.darkBorder,
+    padding: 16,
+    margin: 0,
+    marginBottom: 16,
   },
-  sectionTitle: {
+  cardHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 12,
+    gap: 10,
+  },
+  cardTitle: {
+    color: NEUTRAL.textPrimary,
     fontSize: 18,
     fontWeight: '600',
-    color: '#1f2937',
-    marginBottom: 8,
+    flex: 1,
   },
-  sectionDescription: {
+  cardDescription: {
+    color: NEUTRAL.textMuted,
     fontSize: 14,
-    color: '#6b7280',
+    lineHeight: 20,
     marginBottom: 16,
+  },
+  recommendedBadge: {
+    backgroundColor: PRIMARY.DEFAULT,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+  },
+  recommendedText: {
+    color: '#FFFFFF',
+    fontSize: 11,
+    fontWeight: '600',
+  },
+  testOnlyBadge: {
+    backgroundColor: SEMANTIC.warning,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+  },
+  testOnlyText: {
+    color: '#FFFFFF',
+    fontSize: 11,
+    fontWeight: '600',
+  },
+  inputContainer: {
+    paddingHorizontal: 0,
+    marginBottom: 8,
   },
   input: {
-    backgroundColor: '#f9fafb',
     borderWidth: 1,
-    borderColor: '#d1d5db',
+    borderColor: NEUTRAL.darkBorder,
     borderRadius: 8,
-    padding: 12,
+    paddingHorizontal: 12,
+    backgroundColor: NEUTRAL.dark,
+  },
+  inputText: {
+    color: NEUTRAL.textPrimary,
     fontSize: 14,
-    marginBottom: 12,
-    fontFamily: 'monospace',
-    color: '#1f2937',
+    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
   },
-  button: {
-    padding: 14,
-    borderRadius: 8,
-    alignItems: 'center',
-    marginBottom: 8,
-  },
-  primaryButton: {
-    backgroundColor: '#2563eb',
+  buttonContainer: {
+    marginTop: 4,
   },
   secondaryButton: {
-    backgroundColor: '#7c3aed',
+    backgroundColor: PRIMARY.dark,
   },
   tertiaryButton: {
-    backgroundColor: '#6b7280',
-  },
-  buttonText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: '600',
+    backgroundColor: '#52525B', // zinc-600
   },
   errorContainer: {
-    backgroundColor: '#fee2e2',
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(220, 38, 38, 0.15)',
     padding: 12,
     borderRadius: 8,
     marginBottom: 16,
+    gap: 10,
+    borderWidth: 1,
+    borderColor: 'rgba(220, 38, 38, 0.3)',
   },
   errorText: {
-    color: '#991b1b',
+    color: SEMANTIC.alert,
     fontSize: 14,
+    flex: 1,
   },
-  warningContainer: {
-    backgroundColor: '#fef3c7',
-    padding: 16,
-    borderRadius: 8,
+  warningCard: {
+    backgroundColor: 'rgba(245, 158, 11, 0.1)',
+    borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#fbbf24',
+    borderColor: 'rgba(245, 158, 11, 0.3)',
+    padding: 16,
+    margin: 0,
+    marginBottom: 24,
   },
   warningTitle: {
+    color: SEMANTIC.warning,
     fontSize: 16,
     fontWeight: '600',
-    color: '#92400e',
-    marginBottom: 8,
   },
   warningText: {
+    color: NEUTRAL.textMuted,
     fontSize: 14,
-    color: '#78350f',
-    lineHeight: 20,
+    lineHeight: 22,
+    marginTop: 8,
   },
 });

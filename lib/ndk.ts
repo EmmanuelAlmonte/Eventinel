@@ -22,6 +22,13 @@ export const ndk = new NDK({
   explicitRelayUrls: [],
   cacheAdapter,
 
+  // DISABLE outbox model - prevents auto-connecting to purplepag.es, nos.lol
+  enableOutboxModel: false,
+
+  // DISABLE auto-connect to user's relay list - prevents connecting to
+  // relays stored in user's kind:10002 event (relay.damus.io, relay.primal.net, etc.)
+  autoConnectUserRelays: false,
+
   // Enable AI Guardrails in development to catch common mistakes
   // Automatically disabled in production builds for zero performance impact
   aiGuardrails: isDevelopment,

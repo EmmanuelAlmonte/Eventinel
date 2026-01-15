@@ -13,6 +13,14 @@ import LoginScreen from './screens/LoginScreen';
 import { ndk } from './lib/ndk';
 import { loadRelays } from './lib/relay/storage';
 
+// Register NDK singleton with Zustand store SYNCHRONOUSLY at module level
+// This MUST happen before any React components render, because useSessionMonitor
+// needs the NDK instance immediately when the component mounts.
+// Moving this from useEffect fixes the race condition:
+// "NDK instance not initialized in session store"
+useNDKStore.getState().setNDK(ndk);
+console.log('🔧 [App] NDK registered with store (module level)');
+
 const Tab = createMaterialTopTabNavigator();
 
 /**
@@ -22,14 +30,7 @@ const Tab = createMaterialTopTabNavigator();
  */
 export default function App() {
   const [isReady, setIsReady] = useState(false);
-  const setNDK = useNDKStore((state) => state.setNDK);
   const currentUser = useNDKCurrentUser(); // Check auth state
-
-  // Register NDK singleton with Zustand store (required for useSubscribe hook)
-  useEffect(() => {
-    console.log('🔧 [App] Registering NDK with store for hooks...');
-    setNDK(ndk);
-  }, [setNDK]);
 
   // Enable automatic session persistence to SecureStore
   // This hook:
