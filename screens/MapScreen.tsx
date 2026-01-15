@@ -35,15 +35,8 @@ import { DEFAULT_GEOHASH_PRECISION } from '../lib/nostr/config';
 // Geohash precision from config (ensures consistency with incident publishing)
 const GEOHASH_PRECISION = DEFAULT_GEOHASH_PRECISION;
 
-// Set Mapbox access token programmatically as fallback
-// This ensures the token is set even if app.config.js doesn't work
-const MAPBOX_TOKEN = 'pk.eyJ1IjoiYXRlbW1hIiwiYSI6ImNtanU3ZXFiaTN0b2Yza29qMzkwamJ3cTUifQ.AT45ZkDDVgwxjajd2KcUcA';
-try {
-  Mapbox.setAccessToken(MAPBOX_TOKEN);
-  console.log('MapScreen: Mapbox token set programmatically');
-} catch (error) {
-  console.error('MapScreen: Failed to set Mapbox token:', error);
-}
+// Mapbox token is set via app.config.js - no need to set it here
+// Token comes from MAPBOX_ACCESS_TOKEN env variable
 
 // =============================================================================
 // COMPONENT
@@ -105,12 +98,18 @@ export default function MapScreen() {
   // Parse raw events into incidents (memoized to avoid re-parsing)
   const incidents = useMemo(() => {
     const incidentMap = new Map<string, ParsedIncident>();
+    const severityCounts = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 };
     
     for (const event of rawEvents) {
       const parsed = parseIncidentEvent(event);
       if (parsed) {
+        severityCounts[parsed.severity as keyof typeof severityCounts]++;
         incidentMap.set(parsed.incidentId, parsed);
       }
+    }
+    
+    if (rawEvents.length > 0) {
+      console.log('MapScreen: Severity distribution:', severityCounts);
     }
     
     // Apply cache limit

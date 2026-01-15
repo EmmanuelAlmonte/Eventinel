@@ -1,0 +1,144 @@
+#!/bin/bash
+# Pre-commit hook to prevent committing sensitive files and secrets
+# Even if skip-worktree is accidentally removed
+
+echo "🔍 Checking for sensitive files and secrets..."
+
+# List of files that should NEVER be committed
+SENSITIVE_FILES=(
+  "^\.env$"                          # Block .env but not .env.example
+  "\.env\.local$"                    # Block .env.local
+  "\.env\..+\.local$"                # Block .env.production.local, etc.
+  "^secrets\.json$"
+  "\.key$"
+  "\.pem$"
+  "\.p12$"
+  "\.mobileprovision$"
+  "^google-services\.json$"
+  "^GoogleService-Info\.plist$"
+)
+
+# Secret patterns to detect in file content
+declare -A SECRET_PATTERNS=(
+  ["Mapbox Token"]="pk\.[a-zA-Z0-9]{60,}|sk\.[a-zA-Z0-9]{60,}|tk\.[a-zA-Z0-9]{60,}"
+  ["AWS Key"]="AKIA[0-9A-Z]{16}"
+  ["Private Key"]="-----BEGIN (RSA|EC|OPENSSH) PRIVATE KEY-----"
+  ["Nostr Private Key (nsec)"]="nsec1[a-z0-9]{58,}"
+  ["Nostr Private Key (hex)"]="['\"][0-9a-f]{64}['\"]"
+  ["Generic API Key"]="api[_-]?key['\"]?\s*[:=]\s*['\"][a-zA-Z0-9]{20,}['\"]"
+  ["Auth Token"]="auth[_-]?token['\"]?\s*[:=]\s*['\"][a-zA-Z0-9]{20,}['\"]"
+)
+
+# =============================================================================
+# CHECK 1: Skip-worktree files
+# =============================================================================
+
+SKIP_WORKTREE_FILES=$(git ls-files -v | grep "^S" | cut -c 3-)
+
+for file in $SKIP_WORKTREE_FILES; do
+  if git diff --cached --name-only | grep -q "^${file}$"; then
+    echo ""
+    echo "❌ ERROR: Attempting to commit skip-worktree file: $file"
+    echo ""
+    echo "This file is marked as skip-worktree to prevent local changes from being committed."
+    echo ""
+    echo "If you really want to commit this file:"
+    echo "  1. Remove skip-worktree: git update-index --no-skip-worktree $file"
+    echo "  2. Commit your changes"
+    echo "  3. Re-apply skip-worktree: git update-index --skip-worktree $file"
+    echo ""
+    exit 1
+  fi
+done
+
+# =============================================================================
+# CHECK 2: Sensitive file patterns
+# =============================================================================
+
+for pattern in "${SENSITIVE_FILES[@]}"; do
+  if git diff --cached --name-only | grep -qE "$pattern"; then
+    matched_files=$(git diff --cached --name-only | grep -E "$pattern")
+    echo ""
+    echo "❌ ERROR: Attempting to commit sensitive file(s):"
+    echo "$matched_files"
+    echo ""
+    echo "These files should NEVER be committed."
+    echo "Make sure they are in .gitignore"
+    echo ""
+    exit 1
+  fi
+done
+
+# =============================================================================
+# CHECK 3: Secret patterns in file content
+# =============================================================================
+
+# Get list of staged files (text files only, exclude binaries)
+STAGED_FILES=$(git diff --cached --name-only --diff-filter=ACM | grep -E '\.(js|jsx|ts|tsx|json|yml|yaml|env|sh|md)$')
+
+if [ -n "$STAGED_FILES" ]; then
+  for file in $STAGED_FILES; do
+    # Get the staged content
+    CONTENT=$(git show ":$file")
+
+    # Check each secret pattern
+    for secret_type in "${!SECRET_PATTERNS[@]}"; do
+      pattern="${SECRET_PATTERNS[$secret_type]}"
+
+      if echo "$CONTENT" | grep -qiE "$pattern"; then
+        echo ""
+        echo "❌ ERROR: Potential $secret_type detected in: $file"
+        echo ""
+        echo "Pattern matched: $pattern"
+        echo ""
+        echo "Matched line(s):"
+        echo "$CONTENT" | grep -iE "$pattern" --color=always | head -3
+        echo ""
+        echo "If this is a false positive, you can:"
+        echo "  1. Review the file to ensure no secrets"
+        echo "  2. Skip this hook: git commit --no-verify"
+        echo ""
+        exit 1
+      fi
+    done
+  done
+fi
+
+# =============================================================================
+# CHECK 4: Verify .env.example has no real secrets
+# =============================================================================
+
+if git diff --cached --name-only | grep -qE "\.env\.example$|\.env\.template$"; then
+  ENV_EXAMPLE_FILES=$(git diff --cached --name-only | grep -E "\.env\.example$|\.env\.template$")
+
+  for env_file in $ENV_EXAMPLE_FILES; do
+    CONTENT=$(git show ":$env_file")
+
+    # Check for real Mapbox tokens (should be placeholders)
+    if echo "$CONTENT" | grep -qE "pk\.eyJ[a-zA-Z0-9]{60,}"; then
+      echo ""
+      echo "❌ ERROR: Real Mapbox token detected in $env_file"
+      echo ""
+      echo "Example files should use placeholders like:"
+      echo "  MAPBOX_ACCESS_TOKEN=pk.your_token_here"
+      echo ""
+      exit 1
+    fi
+
+    # Check for real nsec keys (should be placeholders)
+    if echo "$CONTENT" | grep -qE "nsec1[a-z0-9]{58}"; then
+      echo ""
+      echo "❌ ERROR: Real Nostr private key detected in $env_file"
+      echo ""
+      echo "Example files should use placeholders like:"
+      echo "  NOSTR_PRIVATE_KEY=nsec1your_key_here"
+      echo ""
+      exit 1
+    fi
+
+    echo "✅ $env_file appears safe (no real secrets detected)"
+  done
+fi
+
+echo "✅ Pre-commit checks passed"
+exit 0
