@@ -62,7 +62,7 @@ export default function LoginScreen() {
     setIsLoading(true);
     setError('');
     try {
-      const signer = new NDKNip46Signer(ndk, bunkerUrl.trim());
+      const signer = NDKNip46Signer.bunker(ndk, bunkerUrl.trim());
       await signer.blockUntilReady();
       await login(signer, true);
     } catch (err) {

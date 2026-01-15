@@ -34,18 +34,24 @@ module.exports = {
     '^@nostr-dev-kit/mobile$': '<rootDir>/__mocks__/@nostr-dev-kit/mobile.ts',
   },
 
-  // Ignore patterns
+  // Ignore patterns - exclude documentation and build folders
   testPathIgnorePatterns: [
     '<rootDir>/node_modules/',
     '<rootDir>/android/',
     '<rootDir>/ios/',
     '<rootDir>/.expo/',
     '<rootDir>/ndk-docs/',
+    '<rootDir>/do/',
+    '<rootDir>/docs/',
+    '<rootDir>/auth-implementation/',
   ],
+
+  // Only look for tests in these directories
+  roots: ['<rootDir>/__tests__'],
 
   // Transform ignore patterns - process these modules
   transformIgnorePatterns: [
-    'node_modules/(?!((jest-)?react-native|@react-native(-community)?)|expo(nent)?|@expo(nent)?/.*|@expo-google-fonts/.*|react-navigation|@react-navigation/.*|@unimodules/.*|unimodules|sentry-expo|native-base|react-native-svg|@nostr-dev-kit/.*)',
+    'node_modules/(?!((jest-)?react-native|@react-native(-community)?)|expo(nent)?|@expo(nent)?/.*|@expo-google-fonts/.*|react-navigation|@react-navigation/.*|@unimodules/.*|unimodules|sentry-expo|native-base|react-native-svg|@nostr-dev-kit/.*|@rneui/.*|@rnmapbox/.*)',
   ],
 
   // Coverage configuration
