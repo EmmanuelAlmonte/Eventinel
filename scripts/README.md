@@ -39,12 +39,20 @@ git commit --no-verify -m "your message"
 
 ## How It Works
 
-```
+```bash
+# Blocked: .env file
 git add .env
 git commit -m "add config"
-
 🔍 Checking for sensitive files and secrets...
 ❌ ERROR: Attempting to commit sensitive file(s): .env
+...
+
+# Allowed: .env.example with placeholders
+git add .env.example
+git commit -m "add template"
+🔍 Checking for sensitive files and secrets...
+✅ .env.example appears safe (no real secrets detected)
+✅ Pre-commit checks passed
 ```
 
 The commit is blocked before it reaches the repo.
