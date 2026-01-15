@@ -1,14 +1,17 @@
 /**
  * Eventinel NDK Client
  *
- * Singleton NDK instance with browser-only Dexie caching.
+ * Singleton NDK instance for React Native.
  * Handles relay configuration from environment variables.
+ *
+ * NOTE: For mobile apps, prefer using lib/ndk.ts which includes
+ * SQLite caching. This module provides a factory function for
+ * creating additional NDK instances if needed.
  *
  * @see https://github.com/nostr-dev-kit/ndk
  */
 
-import NDK from '@nostr-dev-kit/ndk';
-import type { NDKCacheAdapter } from '@nostr-dev-kit/ndk';
+import NDK, { type NDKCacheAdapter } from '@nostr-dev-kit/mobile';
 import { getRelayUrls } from './config';
 
 // Singleton instance
@@ -20,46 +23,10 @@ let ndkInstance: NDK | null = null;
 export interface CreateNDKOptions {
   /** Custom relay URLs (overrides environment config) */
   relayUrls?: string[];
-  /** Enable caching (default: true in browser, false on server) */
-  enableCache?: boolean;
-  /** Custom cache adapter */
+  /** Custom cache adapter (e.g., NDKCacheAdapterSqlite from ndk-mobile) */
   cacheAdapter?: NDKCacheAdapter;
   /** Auto-connect after creation (default: false) */
   autoConnect?: boolean;
-}
-
-/**
- * Detects if code is running in a browser environment
- */
-function isBrowser(): boolean {
-  return typeof window !== 'undefined' && typeof document !== 'undefined';
-}
-
-/**
- * Creates the Dexie cache adapter (browser-only)
- * Dynamically imports to avoid SSR issues
- *
- * Uses IndexedDB via Dexie for persistent event caching.
- * Requires @nostr-dev-kit/cache-dexie 2.7.8-beta.66 for
- * compatibility with NDK 3.0.0-beta.66
- */
-async function createDexieCache(): Promise<NDKCacheAdapter | undefined> {
-  if (!isBrowser()) {
-    return undefined;
-  }
-
-  try {
-    // Dynamic import for browser-only Dexie
-    const { default: NDKCacheAdapterDexie } = await import(
-      '@nostr-dev-kit/cache-dexie'
-    );
-    return new NDKCacheAdapterDexie({
-      dbName: 'eventinel-cache',
-    }) as unknown as NDKCacheAdapter;
-  } catch (error) {
-    console.warn('[NDK] Failed to initialize Dexie cache:', error);
-    return undefined;
-  }
 }
 
 /**
@@ -67,7 +34,15 @@ async function createDexieCache(): Promise<NDKCacheAdapter | undefined> {
  *
  * @example
  * ```typescript
- * const ndk = await createNDK({ autoConnect: true });
+ * import { NDKCacheAdapterSqlite } from '@nostr-dev-kit/mobile';
+ *
+ * const cacheAdapter = new NDKCacheAdapterSqlite('my-app.db');
+ * await cacheAdapter.initialize();
+ *
+ * const ndk = await createNDK({
+ *   cacheAdapter,
+ *   autoConnect: true
+ * });
  * ```
  */
 export async function createNDK(
@@ -75,10 +50,6 @@ export async function createNDK(
 ): Promise<NDK> {
   const {
     relayUrls,
-    // DISABLED: Dexie cache causes memory bloat - events accumulate without eviction
-    // Re-enable once proper cache eviction is implemented
-    // See: https://github.com/nostr-dev-kit/ndk/issues/XXX
-    enableCache = false, // Was: isBrowser()
     cacheAdapter,
     autoConnect = false,
   } = options;
@@ -86,16 +57,10 @@ export async function createNDK(
   // Get relay URLs from options or environment
   const explicitRelayUrls = relayUrls || getRelayUrls();
 
-  // Set up cache adapter
-  let cache: NDKCacheAdapter | undefined = cacheAdapter;
-  if (!cache && enableCache) {
-    cache = await createDexieCache();
-  }
-
   // Create NDK instance
   const ndk = new NDK({
     explicitRelayUrls,
-    cacheAdapter: cache,
+    cacheAdapter,
   });
 
   // Auto-connect if requested

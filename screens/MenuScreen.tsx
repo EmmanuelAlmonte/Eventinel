@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { StyleSheet, Text, View, TouchableOpacity, ScrollView, TextInput, KeyboardAvoidingView, Platform } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { ndk } from '../lib/ndk';
-import { NDKEvent, NDKPrivateKeySigner } from '@nostr-dev-kit/ndk-mobile';
+import { NDKEvent, NDKPrivateKeySigner } from '@nostr-dev-kit/mobile';
 import { isConnected, getStatusString } from '../lib/relay/status';
 
 // Generate or retrieve signer for this session

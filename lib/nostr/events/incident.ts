@@ -5,8 +5,7 @@
  * Uses parameterized replaceable events for updatable incident data.
  */
 
-import type NDK from '@nostr-dev-kit/ndk';
-import { NDKEvent } from '@nostr-dev-kit/ndk';
+import NDK, { NDKEvent } from '@nostr-dev-kit/mobile';
 import geohash from 'ngeohash';
 
 import {

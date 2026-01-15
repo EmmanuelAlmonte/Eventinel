@@ -3,13 +3,13 @@ import { useEffect, useState } from 'react';
 import { StatusBar } from 'expo-status-bar';
 import { NavigationContainer } from '@react-navigation/native';
 import { createMaterialTopTabNavigator } from '@react-navigation/material-top-tabs';
-import { useNDKStore } from '@nostr-dev-kit/ndk-mobile';
+import { useNDKStore, useSessionMonitor, useNDKCurrentUser } from '@nostr-dev-kit/mobile';
 
 import MenuScreen from './screens/MenuScreen';
 import MapScreen from './screens/MapScreen';
 import ProfileScreen from './screens/ProfileScreen';
 import RelayConnectScreen from './screens/RelayConnectScreen';
-import PrivateKeyScreen from './screens/PrivateKeyScreen';
+import LoginScreen from './screens/LoginScreen';
 import { ndk } from './lib/ndk';
 import { loadRelays } from './lib/relay/storage';
 
@@ -23,12 +23,23 @@ const Tab = createMaterialTopTabNavigator();
 export default function App() {
   const [isReady, setIsReady] = useState(false);
   const setNDK = useNDKStore((state) => state.setNDK);
+  const currentUser = useNDKCurrentUser(); // Check auth state
 
   // Register NDK singleton with Zustand store (required for useSubscribe hook)
   useEffect(() => {
     console.log('🔧 [App] Registering NDK with store for hooks...');
     setNDK(ndk);
   }, [setNDK]);
+
+  // Enable automatic session persistence to SecureStore
+  // This hook:
+  // - Loads saved sessions from SecureStore on startup
+  // - Restores signers via ndkSignerFromPayload
+  // - Persists new sessions when added via initSession/login
+  // - Handles legacy nsec1 migration automatically
+  useSessionMonitor({
+    profile: true, // Auto-fetch profiles for restored sessions
+  });
 
   useEffect(() => {
     async function initializeRelays() {
@@ -70,6 +81,11 @@ export default function App() {
     return null;
   }
 
+  // Show LoginScreen if not authenticated
+  if (!currentUser) {
+    return <LoginScreen />;
+  }
+
   return (
     <NavigationContainer>
       <StatusBar style="auto" />
@@ -105,11 +121,6 @@ export default function App() {
           name="Relays"
           component={RelayConnectScreen}
           options={{ tabBarLabel: '🌐 Relays' }}
-        />
-        <Tab.Screen
-          name="Key"
-          component={PrivateKeyScreen}
-          options={{ tabBarLabel: '🔑 Key' }}
         />
         <Tab.Screen
           name="Map"

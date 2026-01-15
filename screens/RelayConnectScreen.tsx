@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { StyleSheet, Text, View, TextInput, TouchableOpacity, ScrollView, Alert } from 'react-native';
 import { ndk } from '../lib/ndk';
-import { NDKRelayStatus } from '@nostr-dev-kit/ndk-mobile';
+import { NDKRelayStatus } from '@nostr-dev-kit/mobile';
 import { isConnected, getStatusString, getStatusColor } from '../lib/relay/status';
 import { addRelayToStorage, removeRelayFromStorage } from '../lib/relay/storage';
 import type { RelayInfo } from '../types/relay';

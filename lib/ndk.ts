@@ -7,21 +7,37 @@
  * @module lib/ndk
  */
 
-import NDK from '@nostr-dev-kit/ndk-mobile';
-import { NDKCacheAdapterSqlite } from '@nostr-dev-kit/ndk-mobile';
+import NDK from '@nostr-dev-kit/mobile';
+import { NDKCacheAdapterSqlite } from '@nostr-dev-kit/mobile';
 
 // Initialize SQLite cache adapter
 const cacheAdapter = new NDKCacheAdapterSqlite('eventinel.db');
 cacheAdapter.initialize(); // Create database tables
 
+// Determine if we're in development mode
+const isDevelopment = __DEV__; // React Native's built-in dev flag
+
 // Initialize NDK with SQLite cache (no default relays - loaded from storage)
 export const ndk = new NDK({
   explicitRelayUrls: [],
   cacheAdapter,
+
+  // Enable AI Guardrails in development to catch common mistakes
+  // Automatically disabled in production builds for zero performance impact
+  aiGuardrails: isDevelopment,
 });
 
 // Set bidirectional reference for cache adapter
 cacheAdapter.ndk = ndk;
+
+// Log AI Guardrails status
+if (isDevelopment) {
+  console.log('🛡️ [NDK] AI Guardrails: ENABLED');
+  console.log('   → Catching common mistakes during development');
+  console.log('   → Automatically disabled in production builds');
+} else {
+  console.log('🛡️ [NDK] AI Guardrails: DISABLED (production build)');
+}
 
 // Add global relay event logging with detailed WebSocket info
 ndk.pool.on('relay:connect', (relay) => {
@@ -45,30 +61,6 @@ ndk.pool.on('relay:connecting', (relay) => {
   });
 });
 
-ndk.pool.on('relay:error', (relay, error) => {
-  // Extract detailed error info
-  const errorDetails = {
-    message: error?.message || 'Unknown error',
-    name: error?.name,
-    code: (error as any)?.code,
-    type: (error as any)?.type,
-    stack: error?.stack?.split('\n').slice(0, 3).join('\n'), // First 3 lines
-  };
-
-  console.error('❌ [NDK] Relay ERROR:', relay.url, errorDetails);
-
-  // Log specific error types
-  if ((error as any)?.code === 'ECONNREFUSED') {
-    console.error('   → Connection refused (relay not running or port blocked)');
-  } else if ((error as any)?.code === 'ETIMEDOUT') {
-    console.error('   → Connection timeout (relay unreachable)');
-  } else if ((error as any)?.code === 'ENOTFOUND') {
-    console.error('   → DNS resolution failed (invalid hostname)');
-  } else if ((error as any)?.type === 'close') {
-    console.error('   → WebSocket closed unexpectedly');
-  }
-});
-
 ndk.pool.on('relay:auth', (relay, challenge) => {
   console.log('🔐 [NDK] Relay AUTH requested:', relay.url, {
     challenge: challenge?.slice(0, 50) + '...',
@@ -76,11 +68,16 @@ ndk.pool.on('relay:auth', (relay, challenge) => {
   });
 });
 
-// Additional low-level relay events
-ndk.pool.on('relay:notice', (relay, notice) => {
+ndk.pool.on('relay:authed', (relay) => {
+  console.log('✅ [NDK] Relay AUTHENTICATED:', relay.url);
+});
+
+// Notice events (not relay:notice - that event doesn't exist)
+ndk.pool.on('notice', (relay, notice) => {
   console.log('📢 [NDK] Relay NOTICE:', relay.url, notice);
 });
 
-ndk.pool.on('relay:eose', (relay, subscription) => {
-  console.log('🏁 [NDK] End of stored events (EOSE):', relay.url, 'subscription:', subscription);
+// Flapping detection (relay connecting/disconnecting rapidly)
+ndk.pool.on('flapping', (relay) => {
+  console.warn('⚠️ [NDK] Relay FLAPPING (unstable connection):', relay.url);
 });

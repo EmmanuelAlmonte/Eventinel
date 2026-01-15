@@ -5,7 +5,7 @@
  * specifically the custom kind:30911 incident events.
  */
 
-import type { NDKEvent } from '@nostr-dev-kit/ndk';
+import type { NDKEvent } from '@nostr-dev-kit/mobile';
 import type { IncidentType, Severity, DataSource } from '../config';
 
 // =============================================================================

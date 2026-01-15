@@ -10,8 +10,7 @@
     "web": "expo start --web"
   },
   "dependencies": {
-    "@nostr-dev-kit/ndk": "^2.18.1",
-    "@nostr-dev-kit/ndk-mobile": "^0.8.43",
+    "@nostr-dev-kit/mobile": "0.9.3-beta.70",
     "@react-native-async-storage/async-storage": "^2.2.0",
     "@react-navigation/material-top-tabs": "^7.4.12",
     "@react-navigation/native": "^7.1.27",
@@ -40,6 +39,7 @@
     "zustand": "^5.0.10"
   },
   "devDependencies": {
+    "@types/jest": "^30.0.0",
     "@types/ngeohash": "^0.6.8",
     "@types/react": "~19.0.10",
     "dotenv": "^17.2.3",

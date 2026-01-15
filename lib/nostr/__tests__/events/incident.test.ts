@@ -14,7 +14,7 @@
  * Total: 48 test cases
  */
 
-import { NDKEvent } from '@nostr-dev-kit/ndk';
+import { NDKEvent } from '@nostr-dev-kit/mobile';
 import {
   parseIncidentEvent,
   createIncidentEvent,

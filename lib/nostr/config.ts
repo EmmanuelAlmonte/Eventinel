@@ -37,7 +37,7 @@ export function getRelayUrls(): string[] {
 
   // If explicitly configured, use those relays
   if (envRelays) {
-    return envRelays.split(',').map((r) => r.trim());
+    return envRelays.split(',').map((r: string) => r.trim());
   }
 
   // Default to local development relay only

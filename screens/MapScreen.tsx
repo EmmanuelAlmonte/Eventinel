@@ -23,8 +23,8 @@ import {
 import Mapbox from '@rnmapbox/maps';
 import * as Location from 'expo-location';
 import geohash from 'ngeohash';
-import { useSubscribe } from '@nostr-dev-kit/ndk-mobile';
-import type { NDKFilter } from '@nostr-dev-kit/ndk-mobile';
+import { useSubscribe } from '@nostr-dev-kit/mobile';
+import type { NDKFilter } from '@nostr-dev-kit/mobile';
 import { parseIncidentEvent } from '../lib/nostr/events/incident';
 import type { ParsedIncident } from '../lib/nostr/events/types';
 import { IncidentMarker } from '../lib/map/IncidentMarker';

@@ -6,7 +6,7 @@
  * @module lib/relay/status
  */
 
-import { NDKRelayStatus, type NDKRelay } from '@nostr-dev-kit/ndk-mobile';
+import { NDKRelayStatus, type NDKRelay } from '@nostr-dev-kit/mobile';
 import type { RelayStatusString, RelayInfo } from '../../types/relay';
 
 /**
