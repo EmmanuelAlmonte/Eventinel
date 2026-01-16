@@ -1,4 +1,3 @@
-// Crypto polyfill MUST be first - before ANY other imports
 import 'react-native-get-random-values';
 
 import { registerRootComponent } from 'expo';

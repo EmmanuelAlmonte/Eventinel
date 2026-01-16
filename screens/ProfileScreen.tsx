@@ -9,7 +9,8 @@ import { StyleSheet, View, Alert, Platform } from 'react-native';
 import { Text, Button, Card, Avatar, Icon, Divider, Switch } from '@rneui/themed';
 import { useNDKSessionLogout, useNDKCurrentPubkey, useNDKCurrentUser } from '@nostr-dev-kit/mobile';
 
-import { ScreenContainer, useAppTheme } from '../lib/ui';
+import { ScreenContainer } from '../lib/ui';
+import { useAppTheme } from '../lib/theme';
 
 export default function ProfileScreen() {
   const logout = useNDKSessionLogout();
