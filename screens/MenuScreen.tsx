@@ -1,9 +1,20 @@
+/**
+ * MenuScreen
+ *
+ * Main menu/dashboard with quick compose and navigation cards.
+ * Uses RNE components with BRAND theme support.
+ */
+
 import { useState } from 'react';
-import { StyleSheet, Text, View, TouchableOpacity, ScrollView, TextInput, KeyboardAvoidingView, Platform } from 'react-native';
+import { StyleSheet, View, KeyboardAvoidingView, Platform } from 'react-native';
+import { Text, Button, Input, Card, Icon } from '@rneui/themed';
 import { useNavigation } from '@react-navigation/native';
 import { ndk } from '../lib/ndk';
 import { NDKEvent, NDKPrivateKeySigner } from '@nostr-dev-kit/mobile';
-import { isConnected, getStatusString } from '../lib/relay/status';
+import { isConnected } from '../lib/relay/status';
+
+import { ScreenContainer } from '../lib/ui';
+import { useAppTheme } from '../lib/theme';
 
 // Generate or retrieve signer for this session
 let sessionSigner: NDKPrivateKeySigner | null = null;
@@ -26,6 +37,7 @@ type MenuItem = {
   title: string;
   description: string;
   icon: string;
+  iconType: string;
   screen: string;
   color: string;
 };
@@ -34,30 +46,34 @@ const menuItems: MenuItem[] = [
   {
     title: 'Relays',
     description: 'Manage Nostr relay connections',
-    icon: '🌐',
+    icon: 'public',
+    iconType: 'material',
     screen: 'Relays',
-    color: '#3b82f6',
+    color: '#3B82F6', // info blue
   },
   {
     title: 'Private Key',
     description: 'Set your Nostr identity',
-    icon: '🔑',
+    icon: 'vpn-key',
+    iconType: 'material',
     screen: 'Key',
-    color: '#8b5cf6',
+    color: '#9333EA', // primary purple
   },
   {
     title: 'Map',
     description: 'View incidents on map',
-    icon: '🗺️',
+    icon: 'map',
+    iconType: 'material',
     screen: 'Map',
-    color: '#10b981',
+    color: '#22C55E', // safe green
   },
   {
     title: 'Profile',
     description: 'Your profile and settings',
-    icon: '👤',
+    icon: 'person',
+    iconType: 'material',
     screen: 'Profile',
-    color: '#f59e0b',
+    color: '#F59E0B', // warning amber
   },
 ];
 
@@ -65,6 +81,9 @@ export default function MenuScreen() {
   const navigation = useNavigation<any>();
   const [noteContent, setNoteContent] = useState('');
   const [sendStatus, setSendStatus] = useState('');
+
+  // Get theme-aware colors
+  const { colors } = useAppTheme();
 
   const handleSendNote = async () => {
     if (!noteContent.trim()) {
@@ -109,7 +128,7 @@ export default function MenuScreen() {
 
       const published = relaySet.size;
       console.log('✅ [Note] Published to', published, 'relay(s):', Array.from(relaySet).map(r => r.url));
-      setSendStatus(`✓ Published to ${published} relay(s)!`);
+      setSendStatus(`Published to ${published} relay(s)!`);
       setNoteContent('');
 
       // Clear status after 3 seconds
@@ -121,193 +140,237 @@ export default function MenuScreen() {
     }
   };
 
+  // Determine status styling
+  const isError = sendStatus.includes('Failed') || sendStatus.includes('Please');
+  const statusColor = isError ? colors.error : colors.success;
+
   return (
     <KeyboardAvoidingView
-      style={{ flex: 1 }}
+      style={{ flex: 1, backgroundColor: colors.background }}
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
     >
-      <ScrollView style={styles.container}>
+      <ScreenContainer scroll>
+        {/* Header */}
         <View style={styles.header}>
-          <Text style={styles.title}>Eventinel</Text>
-          <Text style={styles.subtitle}>Nostr-native public safety monitoring</Text>
+          <Text h1 style={[styles.title, { color: colors.text }]}>Eventinel</Text>
+          <Text style={[styles.subtitle, { color: colors.textMuted }]}>
+            Nostr-native public safety monitoring
+          </Text>
         </View>
 
         {/* Quick Compose Section */}
-        <View style={styles.composeSection}>
-          <Text style={styles.sectionTitle}>✍️ Quick Compose</Text>
-          <TextInput
-            style={styles.noteInput}
+        <Card containerStyle={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+          <View style={styles.cardHeader}>
+            <Icon
+              name="edit"
+              type="material"
+              size={20}
+              color={colors.primary}
+            />
+            <Text style={[styles.sectionTitle, { color: colors.text }]}>Quick Compose</Text>
+          </View>
+
+          <Input
             placeholder="What's happening?"
             value={noteContent}
             onChangeText={setNoteContent}
             multiline
             numberOfLines={3}
-            textAlignVertical="top"
+            containerStyle={styles.inputContainer}
+            inputContainerStyle={[styles.input, { borderColor: colors.border, backgroundColor: colors.background }]}
+            inputStyle={[styles.inputText, { color: colors.text }]}
+            placeholderTextColor={colors.textMuted}
           />
-          <TouchableOpacity
-            style={styles.publishButton}
+
+          <Button
+            title="Publish Note"
             onPress={handleSendNote}
-          >
-            <Text style={styles.publishButtonText}>Publish Note</Text>
-          </TouchableOpacity>
+            containerStyle={styles.buttonContainer}
+            icon={
+              <Icon
+                name="send"
+                type="material"
+                size={20}
+                color="#FFFFFF"
+                style={{ marginRight: 8 }}
+              />
+            }
+          />
+
           {sendStatus ? (
-            <Text style={[
-              styles.statusText,
-              sendStatus.includes('Failed') || sendStatus.includes('Please') ? styles.statusError : styles.statusSuccess
+            <View style={[
+              styles.statusContainer,
+              { backgroundColor: `${statusColor}15`, borderColor: `${statusColor}40` }
             ]}>
-              {sendStatus}
-            </Text>
-          ) : null}
-        </View>
-
-        <View style={styles.grid}>
-        {menuItems.map((item, index) => (
-          <TouchableOpacity
-            key={index}
-            style={[styles.card, { borderLeftColor: item.color }]}
-            onPress={() => navigation.navigate(item.screen)}
-            activeOpacity={0.7}
-          >
-            <Text style={styles.icon}>{item.icon}</Text>
-            <View style={styles.cardContent}>
-              <Text style={styles.cardTitle}>{item.title}</Text>
-              <Text style={styles.cardDescription}>{item.description}</Text>
+              <Icon
+                name={isError ? 'error-outline' : 'check-circle-outline'}
+                type="material"
+                size={18}
+                color={statusColor}
+              />
+              <Text style={[styles.statusText, { color: statusColor }]}>{sendStatus}</Text>
             </View>
-            <Text style={styles.arrow}>›</Text>
-          </TouchableOpacity>
-        ))}
-      </View>
+          ) : null}
+        </Card>
 
-        <View style={styles.footer}>
-          <Text style={styles.footerText}>Tap any card to get started</Text>
+        {/* Navigation Grid */}
+        <View style={styles.grid}>
+          {menuItems.map((item, index) => (
+            <Card
+              key={index}
+              containerStyle={[
+                styles.menuCard,
+                {
+                  backgroundColor: colors.surface,
+                  borderColor: colors.border,
+                  borderLeftColor: item.color,
+                  borderLeftWidth: 4,
+                }
+              ]}
+              wrapperStyle={styles.menuCardWrapper}
+            >
+              <View style={styles.menuCardInner}>
+                <View style={[styles.iconContainer, { backgroundColor: `${item.color}20` }]}>
+                  <Icon
+                    name={item.icon}
+                    type={item.iconType}
+                    size={28}
+                    color={item.color}
+                  />
+                </View>
+                <View style={styles.menuCardContent}>
+                  <Text style={[styles.menuCardTitle, { color: colors.text }]}>{item.title}</Text>
+                  <Text style={[styles.menuCardDescription, { color: colors.textMuted }]}>
+                    {item.description}
+                  </Text>
+                </View>
+                <Icon
+                  name="chevron-right"
+                  type="material"
+                  size={24}
+                  color={colors.textMuted}
+                  onPress={() => navigation.navigate(item.screen)}
+                  containerStyle={styles.chevronContainer}
+                />
+              </View>
+            </Card>
+          ))}
         </View>
-      </ScrollView>
+
+        {/* Footer */}
+        <View style={styles.footer}>
+          <Text style={[styles.footerText, { color: colors.textMuted }]}>
+            Tap any card to get started
+          </Text>
+        </View>
+      </ScreenContainer>
     </KeyboardAvoidingView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#f5f5f5',
-  },
   header: {
-    padding: 24,
-    paddingTop: 40,
-    backgroundColor: '#fff',
-    borderBottomWidth: 1,
-    borderBottomColor: '#e5e7eb',
+    marginBottom: 20,
+    marginTop: 8,
   },
   title: {
-    fontSize: 32,
-    fontWeight: 'bold',
-    color: '#1f2937',
     marginBottom: 4,
   },
   subtitle: {
-    fontSize: 14,
-    color: '#6b7280',
-  },
-  grid: {
-    padding: 16,
-    gap: 12,
+    fontSize: 16,
   },
   card: {
-    backgroundColor: '#fff',
     borderRadius: 12,
-    padding: 20,
+    borderWidth: 1,
+    padding: 16,
+    margin: 0,
+    marginBottom: 20,
+  },
+  cardHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    borderLeftWidth: 4,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-  icon: {
-    fontSize: 40,
-    marginRight: 16,
-  },
-  cardContent: {
-    flex: 1,
-  },
-  cardTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#1f2937',
-    marginBottom: 4,
-  },
-  cardDescription: {
-    fontSize: 14,
-    color: '#6b7280',
-  },
-  arrow: {
-    fontSize: 32,
-    color: '#d1d5db',
-    fontWeight: '300',
-  },
-  footer: {
-    padding: 24,
-    alignItems: 'center',
-  },
-  footerText: {
-    fontSize: 14,
-    color: '#9ca3af',
-    fontStyle: 'italic',
-  },
-  composeSection: {
-    margin: 16,
-    marginTop: 0,
-    backgroundColor: '#fff',
-    borderRadius: 12,
-    padding: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
+    gap: 10,
+    marginBottom: 12,
   },
   sectionTitle: {
     fontSize: 18,
     fontWeight: '600',
-    color: '#1f2937',
-    marginBottom: 12,
   },
-  noteInput: {
-    backgroundColor: '#f9fafb',
+  inputContainer: {
+    paddingHorizontal: 0,
+    marginBottom: 8,
+  },
+  input: {
     borderWidth: 1,
-    borderColor: '#e5e7eb',
     borderRadius: 8,
-    padding: 12,
-    fontSize: 16,
+    paddingHorizontal: 12,
     minHeight: 80,
-    marginBottom: 12,
   },
-  publishButton: {
-    backgroundColor: '#2563eb',
-    padding: 14,
-    borderRadius: 8,
-    alignItems: 'center',
-  },
-  publishButtonText: {
-    color: '#fff',
+  inputText: {
     fontSize: 16,
-    fontWeight: '600',
+    textAlignVertical: 'top',
   },
-  statusText: {
+  buttonContainer: {
+    marginTop: 4,
+  },
+  statusContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
     marginTop: 12,
     padding: 10,
     borderRadius: 8,
+    borderWidth: 1,
+    gap: 8,
+  },
+  statusText: {
     fontSize: 14,
-    textAlign: 'center',
+    flex: 1,
   },
-  statusSuccess: {
-    backgroundColor: '#dcfce7',
-    color: '#166534',
+  grid: {
+    gap: 12,
+    marginBottom: 12,
   },
-  statusError: {
-    backgroundColor: '#fee2e2',
-    color: '#991b1b',
+  menuCard: {
+    borderRadius: 12,
+    borderWidth: 1,
+    padding: 16,
+    margin: 0,
+  },
+  menuCardWrapper: {
+    padding: 0,
+  },
+  menuCardInner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  iconContainer: {
+    width: 48,
+    height: 48,
+    borderRadius: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 14,
+  },
+  menuCardContent: {
+    flex: 1,
+  },
+  menuCardTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    marginBottom: 2,
+  },
+  menuCardDescription: {
+    fontSize: 14,
+  },
+  chevronContainer: {
+    padding: 8,
+  },
+  footer: {
+    paddingVertical: 24,
+    alignItems: 'center',
+  },
+  footerText: {
+    fontSize: 14,
+    fontStyle: 'italic',
   },
 });

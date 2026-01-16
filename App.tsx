@@ -1,8 +1,9 @@
 import 'react-native-get-random-values'; // MUST be first import!
 import { useEffect, useState } from 'react';
+import { Text } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { NavigationContainer } from '@react-navigation/native';
-import { createMaterialTopTabNavigator } from '@react-navigation/material-top-tabs';
+import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { ThemeProvider } from '@rneui/themed';
 import { useNDKInit, useSessionMonitor, useNDKCurrentUser } from '@nostr-dev-kit/mobile';
@@ -16,7 +17,7 @@ import { ndk } from './lib/ndk';
 import { loadRelays } from './lib/relay/storage';
 import { theme, useAppTheme } from './lib/theme';
 
-const Tab = createMaterialTopTabNavigator();
+const Tab = createBottomTabNavigator();
 
 /**
  * Main Navigation with theme-aware tab bar
@@ -28,9 +29,9 @@ function MainNavigation() {
     <NavigationContainer>
       <StatusBar style={isDark ? 'light' : 'dark'} />
       <Tab.Navigator
-        initialRouteName="Menu"
-        tabBarPosition="bottom"
+        initialRouteName="Map"
         screenOptions={{
+          headerShown: false,
           tabBarActiveTintColor: colors.primary,
           tabBarInactiveTintColor: colors.textMuted,
           tabBarLabelStyle: { fontSize: 12, fontWeight: '600' },
@@ -42,33 +43,47 @@ function MainNavigation() {
             borderTopWidth: 1,
             borderTopColor: colors.border,
           },
-          tabBarIndicatorStyle: {
-            backgroundColor: colors.primary,
-            height: 3,
-            top: 0,
-          },
-          swipeEnabled: false,
         }}
       >
         <Tab.Screen
           name="Menu"
           component={MenuScreen}
-          options={{ tabBarLabel: '🏠 Home' }}
+          options={{
+            tabBarLabel: "Home",
+            tabBarIcon: ({ color }) => (
+              <Text style={{ fontSize: 18, color }}>🏠</Text>
+            ),
+          }}
         />
         <Tab.Screen
           name="Relays"
           component={RelayConnectScreen}
-          options={{ tabBarLabel: '🌐 Relays' }}
+          options={{
+            tabBarLabel: "Relays",
+            tabBarIcon: ({ color }) => (
+              <Text style={{ fontSize: 18, color }}>🌐</Text>
+            ),
+          }}
         />
         <Tab.Screen
           name="Map"
           component={MapScreen}
-          options={{ tabBarLabel: '🗺️ Map' }}
+          options={{
+            tabBarLabel: "Map",
+            tabBarIcon: ({ color }) => (
+              <Text style={{ fontSize: 18, color }}>🗺️</Text>
+            ),
+          }}
         />
         <Tab.Screen
           name="Profile"
           component={ProfileScreen}
-          options={{ tabBarLabel: '👤 Profile' }}
+          options={{
+            tabBarLabel: "Profile",
+            tabBarIcon: ({ color }) => (
+              <Text style={{ fontSize: 18, color }}>👤</Text>
+            ),
+          }}
         />
       </Tab.Navigator>
     </NavigationContainer>

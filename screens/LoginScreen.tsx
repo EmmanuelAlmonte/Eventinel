@@ -89,7 +89,8 @@ export default function LoginScreen() {
       await signer.user();
       await login(signer, true);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Invalid private key');
+      // Generic error - don't leak validation details
+      setError('Authentication failed. Please check your key and try again.');
     } finally {
       setIsLoading(false);
     }

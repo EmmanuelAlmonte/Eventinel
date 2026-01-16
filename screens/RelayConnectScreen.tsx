@@ -1,15 +1,44 @@
+/**
+ * RelayConnectScreen
+ *
+ * Manage Nostr relay connections with add/remove functionality.
+ * Uses RNE components with BRAND theme support.
+ */
+
 import { useState, useEffect } from 'react';
-import { StyleSheet, Text, View, TextInput, TouchableOpacity, ScrollView, Alert } from 'react-native';
+import { StyleSheet, View, Alert } from 'react-native';
+import { Text, Button, Input, Card, Icon, ListItem } from '@rneui/themed';
 import { ndk } from '../lib/ndk';
 import { NDKRelayStatus } from '@nostr-dev-kit/mobile';
-import { isConnected, getStatusString, getStatusColor } from '../lib/relay/status';
+import { isConnected, getStatusString } from '../lib/relay/status';
 import { addRelayToStorage, removeRelayFromStorage } from '../lib/relay/storage';
 import type { RelayInfo } from '../types/relay';
+
+import { ScreenContainer } from '../lib/ui';
+import { useAppTheme } from '../lib/theme';
+
+// Map status to semantic colors
+function getStatusColor(status: string, colors: ReturnType<typeof useAppTheme>['colors']): string {
+  switch (status.toLowerCase()) {
+    case 'connected':
+      return colors.success;
+    case 'connecting':
+      return colors.warning;
+    case 'disconnected':
+    case 'disconnecting':
+      return colors.error;
+    default:
+      return colors.textMuted;
+  }
+}
 
 export default function RelayConnectScreen() {
   const [relayUrl, setRelayUrl] = useState('');
   const [relays, setRelays] = useState<RelayInfo[]>([]);
   const [message, setMessage] = useState('');
+
+  // Get theme-aware colors
+  const { colors } = useAppTheme();
 
   // Update relay list from NDK pool
   const updateRelays = () => {
@@ -56,34 +85,34 @@ export default function RelayConnectScreen() {
     }
 
     const url = relayUrl.trim();
-    console.log('🔌 [Relay] User adding relay:', url);
+    console.log('[Relay] User adding relay:', url);
     setMessage(`Connecting to ${url}...`);
 
     try {
       // Add relay to NDK pool
-      console.log('➕ [Relay] Adding to NDK pool:', url);
+      console.log('[Relay] Adding to NDK pool:', url);
       const relay = ndk.addExplicitRelay(url);
 
       // Save to persistent storage immediately
-      console.log('💾 [Relay] Saving to storage:', url);
+      console.log('[Relay] Saving to storage:', url);
       await addRelayToStorage(url);
 
       // Attempt connection
-      console.log('🔄 [Relay] Initiating connection:', url);
+      console.log('[Relay] Initiating connection:', url);
       relay.connect();
 
       // Wait a moment to check actual status
       setTimeout(() => {
         const poolRelay = ndk.pool.relays.get(url);
         if (poolRelay && isConnected(poolRelay.status)) {
-          console.log('✅ [Relay] Connection successful:', url, 'status:', poolRelay.status);
-          setMessage(`✓ Connected to ${url}`);
+          console.log('[Relay] Connection successful:', url, 'status:', poolRelay.status);
+          setMessage(`Connected to ${url}`);
         } else if (poolRelay) {
           const status = getStatusString(poolRelay.status);
-          console.warn('⚠️ [Relay] Connection not established:', url, 'status:', status, 'rawStatus:', poolRelay.status);
-          setMessage(`⚠️ Added ${url} (${status})`);
+          console.warn('[Relay] Connection not established:', url, 'status:', status, 'rawStatus:', poolRelay.status);
+          setMessage(`Added ${url} (${status})`);
         } else {
-          console.warn('⚠️ [Relay] Relay not in pool:', url);
+          console.warn('[Relay] Relay not in pool:', url);
           setMessage(`Added ${url} - attempting connection...`);
         }
       }, 2000);
@@ -92,7 +121,7 @@ export default function RelayConnectScreen() {
 
       // UI updates automatically via event listeners
     } catch (error) {
-      console.error('❌ [Relay] Failed to add relay:', url, error);
+      console.error('[Relay] Failed to add relay:', url, error);
       setMessage(`Failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   };
@@ -108,22 +137,22 @@ export default function RelayConnectScreen() {
           style: 'destructive',
           onPress: async () => {
             try {
-              console.log('🗑️ [Relay] User removing relay:', url);
+              console.log('[Relay] User removing relay:', url);
 
               // Remove from NDK pool
-              console.log('➖ [Relay] Removing from NDK pool:', url);
+              console.log('[Relay] Removing from NDK pool:', url);
               ndk.pool.removeRelay(url);
 
               // Remove from persistent storage
-              console.log('💾 [Relay] Removing from storage:', url);
+              console.log('[Relay] Removing from storage:', url);
               await removeRelayFromStorage(url);
 
-              console.log('✅ [Relay] Successfully removed:', url);
+              console.log('[Relay] Successfully removed:', url);
               setMessage(`Removed ${url}`);
 
               // UI updates automatically via event listeners
             } catch (error) {
-              console.error('❌ [Relay] Failed to remove:', url, error);
+              console.error('[Relay] Failed to remove:', url, error);
               setMessage(`Failed to remove: ${error instanceof Error ? error.message : 'Unknown error'}`);
             }
           },
@@ -132,173 +161,292 @@ export default function RelayConnectScreen() {
     );
   };
 
+  // Count connected relays
+  const connectedCount = relays.filter(r => r.isConnected).length;
+
+  // Determine message styling
+  const isError = message.includes('Failed') || message.includes('must start');
+  const messageColor = isError ? colors.error : colors.success;
+
+  // DEBUG: Log relay info every render
+  console.log('[RelayScreen] Rendering with', relays.length, 'relays');
+  console.log('[RelayScreen] Relay URLs:', relays.map(r => r.url));
+
+  // Check for duplicates
+  const urls = relays.map(r => r.url);
+  const uniqueUrls = new Set(urls);
+  if (urls.length !== uniqueUrls.size) {
+    console.error('[RelayScreen] ⚠️ DUPLICATE RELAY URLS DETECTED!');
+    console.error('[RelayScreen] URLs:', urls);
+    console.error('[RelayScreen] Duplicates:', urls.filter((url, i) => urls.indexOf(url) !== i));
+  } else {
+    console.log('[RelayScreen] ✓ All relay URLs are unique');
+  }
 
   return (
-    <ScrollView style={styles.container}>
-      <Text style={styles.title}>Relay Management</Text>
-
-        <View style={styles.inputContainer}>
-          <TextInput
-            style={styles.input}
-            placeholder="wss://relay.example.com"
-            value={relayUrl}
-            onChangeText={setRelayUrl}
-            autoCapitalize="none"
-            autoCorrect={false}
-          />
-          <TouchableOpacity style={styles.button} onPress={handleConnect}>
-            <Text style={styles.buttonText}>Connect</Text>
-          </TouchableOpacity>
-        </View>
-
-        {message ? (
-          <Text style={[styles.message, message.includes('Failed') ? styles.error : styles.success]}>
-            {message}
-          </Text>
-        ) : null}
-
-        <Text style={styles.subtitle}>
-          Relays ({relays.length}) - {relays.filter(r => r.isConnected).length} connected
+    <ScreenContainer scroll>
+      {/* Header */}
+      <View style={styles.header}>
+        <Text h2 style={[styles.title, { color: colors.text }]}>Relay Management</Text>
+        <Text style={[styles.subtitle, { color: colors.textMuted }]}>
+          {relays.length} relays - {connectedCount} connected
         </Text>
-        <View style={styles.relayListContainer}>
-          {relays.length === 0 ? (
-            <Text style={styles.emptyText}>No relays added</Text>
-          ) : (
-            relays.map((relay, index) => (
-              <View key={index} style={styles.relayItem}>
-                <View
-                  style={[
-                    styles.statusDot,
-                    { backgroundColor: getStatusColor(relay.status) }
-                  ]}
-                />
-                <View style={styles.relayInfo}>
-                  <Text style={styles.relayUrl}>{relay.url}</Text>
-                  <Text style={styles.relayStatus}>{relay.status}</Text>
-                </View>
-                <TouchableOpacity
-                  style={styles.removeButton}
-                  onPress={() => handleDisconnect(relay.url)}
-                >
-                  <Text style={styles.removeButtonText}>✕</Text>
-                </TouchableOpacity>
-              </View>
-            ))
-          )}
+      </View>
+
+      {/* Add Relay Card */}
+      <Card containerStyle={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+        <View style={styles.cardHeader}>
+          <Icon
+            name="add-circle-outline"
+            type="material"
+            size={20}
+            color={colors.primary}
+          />
+          <Text style={[styles.cardTitle, { color: colors.text }]}>Add New Relay</Text>
         </View>
-      </ScrollView>
+
+        <Input
+          placeholder="wss://relay.example.com"
+          value={relayUrl}
+          onChangeText={setRelayUrl}
+          autoCapitalize="none"
+          autoCorrect={false}
+          leftIcon={
+            <Icon
+              name="link"
+              type="material"
+              size={20}
+              color={colors.textMuted}
+            />
+          }
+          containerStyle={styles.inputContainer}
+          inputContainerStyle={[styles.input, { borderColor: colors.border, backgroundColor: colors.background }]}
+          inputStyle={[styles.inputText, { color: colors.text }]}
+          placeholderTextColor={colors.textMuted}
+        />
+
+        <Button
+          title="Connect"
+          onPress={handleConnect}
+          containerStyle={styles.buttonContainer}
+          icon={
+            <Icon
+              name="wifi"
+              type="material"
+              size={20}
+              color="#FFFFFF"
+              style={{ marginRight: 8 }}
+            />
+          }
+        />
+      </Card>
+
+      {/* Status Message */}
+      {message ? (
+        <View style={[
+          styles.messageContainer,
+          { backgroundColor: `${messageColor}15`, borderColor: `${messageColor}40` }
+        ]}>
+          <Icon
+            name={isError ? 'error-outline' : 'check-circle-outline'}
+            type="material"
+            size={18}
+            color={messageColor}
+          />
+          <Text style={[styles.messageText, { color: messageColor }]}>{message}</Text>
+        </View>
+      ) : null}
+
+      {/* Relay List */}
+      <Card containerStyle={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+        <View style={styles.cardHeader}>
+          <Icon
+            name="dns"
+            type="material"
+            size={20}
+            color={colors.primary}
+          />
+          <Text style={[styles.cardTitle, { color: colors.text }]}>Connected Relays</Text>
+        </View>
+
+        {relays.length === 0 ? (
+          <View style={styles.emptyState}>
+            <Icon
+              name="cloud-off"
+              type="material"
+              size={48}
+              color={colors.textMuted}
+            />
+            <Text style={[styles.emptyText, { color: colors.textMuted }]}>No relays added</Text>
+            <Text style={[styles.emptyHint, { color: colors.textMuted }]}>
+              Add a relay URL above to get started
+            </Text>
+          </View>
+        ) : (
+          <View style={styles.relayList}>
+            {relays.map((relay) => {
+              const statusColor = getStatusColor(relay.status, colors);
+              return (
+                <ListItem
+                  key={relay.url}
+                  containerStyle={[
+                    styles.relayItem,
+                    { backgroundColor: colors.background, borderColor: colors.border }
+                  ]}
+                >
+                  <View style={[styles.statusDot, { backgroundColor: statusColor }]} />
+                  <ListItem.Content>
+                    <ListItem.Title style={[styles.relayUrl, { color: colors.text }]}>
+                      {relay.url}
+                    </ListItem.Title>
+                    <ListItem.Subtitle style={[styles.relayStatus, { color: statusColor }]}>
+                      {relay.status}
+                    </ListItem.Subtitle>
+                  </ListItem.Content>
+                  <Icon
+                    name="close"
+                    type="material"
+                    size={20}
+                    color={colors.error}
+                    onPress={() => handleDisconnect(relay.url)}
+                    containerStyle={[styles.removeButton, { backgroundColor: `${colors.error}15` }]}
+                  />
+                </ListItem>
+              );
+            })}
+          </View>
+        )}
+      </Card>
+
+      {/* Info Note */}
+      <View style={[styles.infoContainer, { borderColor: `${colors.info}30` }]}>
+        <Icon
+          name="info-outline"
+          type="material"
+          size={18}
+          color={colors.info}
+        />
+        <Text style={[styles.infoText, { color: colors.info }]}>
+          Relays are saved locally and will reconnect automatically when the app restarts.
+        </Text>
+      </View>
+    </ScreenContainer>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#f5f5f5',
-    padding: 20,
+  header: {
+    marginBottom: 20,
+    marginTop: 8,
   },
   title: {
-    fontSize: 28,
-    fontWeight: 'bold',
-    marginBottom: 20,
-    color: '#1f2937',
-  },
-  inputContainer: {
-    flexDirection: 'column',
-    gap: 10,
-    marginBottom: 20,
-  },
-  input: {
-    backgroundColor: '#fff',
-    borderWidth: 1,
-    borderColor: '#d1d5db',
-    borderRadius: 8,
-    padding: 12,
-    fontSize: 16,
-  },
-  button: {
-    backgroundColor: '#2563eb',
-    padding: 14,
-    borderRadius: 8,
-    alignItems: 'center',
-  },
-  buttonText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  message: {
-    padding: 12,
-    borderRadius: 8,
-    marginBottom: 20,
-    fontSize: 14,
-  },
-  success: {
-    backgroundColor: '#dcfce7',
-    color: '#166534',
-  },
-  error: {
-    backgroundColor: '#fee2e2',
-    color: '#991b1b',
+    marginBottom: 4,
   },
   subtitle: {
-    fontSize: 20,
-    fontWeight: '600',
-    marginBottom: 12,
-    color: '#374151',
+    fontSize: 16,
   },
-  relayListContainer: {
-    marginBottom: 20,
+  card: {
+    borderRadius: 12,
+    borderWidth: 1,
+    padding: 16,
+    margin: 0,
+    marginBottom: 16,
   },
-  emptyText: {
-    color: '#9ca3af',
-    fontSize: 14,
-    fontStyle: 'italic',
-    textAlign: 'center',
-    marginTop: 20,
-  },
-  relayItem: {
+  cardHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#fff',
+    gap: 10,
+    marginBottom: 12,
+  },
+  cardTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  inputContainer: {
+    paddingHorizontal: 0,
+    marginBottom: 8,
+  },
+  input: {
+    borderWidth: 1,
+    borderRadius: 8,
+    paddingHorizontal: 12,
+  },
+  inputText: {
+    fontSize: 14,
+  },
+  buttonContainer: {
+    marginTop: 4,
+  },
+  messageContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
     padding: 12,
     borderRadius: 8,
-    marginBottom: 8,
     borderWidth: 1,
-    borderColor: '#e5e7eb',
+    marginBottom: 16,
+    gap: 10,
+  },
+  messageText: {
+    fontSize: 14,
+    flex: 1,
+  },
+  emptyState: {
+    alignItems: 'center',
+    paddingVertical: 24,
+    gap: 8,
+  },
+  emptyText: {
+    fontSize: 16,
+    fontWeight: '500',
+    marginTop: 8,
+  },
+  emptyHint: {
+    fontSize: 14,
+  },
+  relayList: {
+    gap: 8,
+  },
+  relayItem: {
+    borderRadius: 8,
+    borderWidth: 1,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    marginBottom: 0,
   },
   statusDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: '#10b981',
-    marginRight: 10,
-  },
-  relayInfo: {
-    flex: 1,
-    marginRight: 8,
+    width: 10,
+    height: 10,
+    borderRadius: 5,
   },
   relayUrl: {
     fontSize: 14,
-    color: '#374151',
     fontWeight: '500',
-    marginBottom: 2,
   },
   relayStatus: {
     fontSize: 12,
-    color: '#6b7280',
     textTransform: 'capitalize',
+    marginTop: 2,
   },
   removeButton: {
     width: 32,
     height: 32,
     borderRadius: 16,
-    backgroundColor: '#fee2e2',
     justifyContent: 'center',
     alignItems: 'center',
   },
-  removeButtonText: {
-    color: '#dc2626',
-    fontSize: 18,
-    fontWeight: 'bold',
+  infoContainer: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    backgroundColor: 'rgba(59, 130, 246, 0.1)',
+    padding: 14,
+    borderRadius: 8,
+    borderWidth: 1,
+    gap: 10,
+    marginBottom: 24,
+  },
+  infoText: {
+    flex: 1,
+    fontSize: 13,
+    lineHeight: 18,
   },
 });
