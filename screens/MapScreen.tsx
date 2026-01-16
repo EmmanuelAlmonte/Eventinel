@@ -2,342 +2,47 @@
  * Map Screen
  *
  * Displays a Mapbox map with real-time incident markers from Nostr kind:30911 events.
- * Features:
- * - User location (blue dot) with permission request
- * - Incident markers with severity-based colors
- * - Tap markers to show incident details
- * - Real-time updates via NDK subscription
+ * Uses extracted hooks for location and subscription logic.
  */
 
-import { useState, useEffect, useMemo } from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  Alert,
-  ActivityIndicator,
-  TouchableOpacity,
-  ScrollView,
-  Platform,
-} from 'react-native';
+import { View, Text, StyleSheet, ActivityIndicator } from 'react-native';
+import { useNavigation } from '@react-navigation/native';
 import Mapbox from '@rnmapbox/maps';
-import * as Location from 'expo-location';
-import geohash from 'ngeohash';
-import { useSubscribe } from '@nostr-dev-kit/mobile';
-import type { NDKFilter } from '@nostr-dev-kit/mobile';
-import { parseIncidentEvent } from '../lib/nostr/events/incident';
-import type { ParsedIncident } from '../lib/nostr/events/types';
+
+import { useUserLocation } from '../hooks/useUserLocation';
+import { useIncidentSubscription } from '../hooks/useIncidentSubscription';
 import { IncidentMarker } from '../lib/map/IncidentMarker';
 import { DEFAULT_CAMERA, MAP_STYLES } from '../lib/map/types';
-import { MAPBOX_CONFIG, INCIDENT_LIMITS, USER_LOCATION } from '../lib/map/constants';
-import { DEFAULT_GEOHASH_PRECISION } from '../lib/nostr/config';
-
-// Geohash precision from config (ensures consistency with incident publishing)
-const GEOHASH_PRECISION = DEFAULT_GEOHASH_PRECISION;
-
-// Mapbox token is set via app.config.js - no need to set it here
-// Token comes from MAPBOX_ACCESS_TOKEN env variable
-
-// =============================================================================
-// COMPONENT
-// =============================================================================
+import { MAPBOX_CONFIG, USER_LOCATION, INCIDENT_LIMITS } from '../lib/map/constants';
+import type { ParsedIncident } from '../lib/nostr/events/types';
 
 export default function MapScreen() {
-  // Location state
-  const [userLocation, setUserLocation] = useState<[number, number] | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+  const navigation = useNavigation<any>();
 
-  // Selected incident for details card
-  const [selectedIncident, setSelectedIncident] = useState<ParsedIncident | null>(null);
-
-  // =============================================================================
-  // NDK SUBSCRIPTION (using useSubscribe hook)
-  // =============================================================================
-
-  // Calculate geohashes for NIP-52 filtering (user location + 8 neighbors = ~15km)
-  const geohashes = useMemo(() => {
-    if (!userLocation) return null;
-    
-    const userGeohash = geohash.encode(
-      userLocation[1], // latitude
-      userLocation[0], // longitude
-      GEOHASH_PRECISION
-    );
-    const neighbors = geohash.neighbors(userGeohash);
-    const hashes = [userGeohash, ...Object.values(neighbors)];
-    
-    console.log('MapScreen: Geohash filter calculated:', {
-      center: userGeohash,
-      totalCells: hashes.length,
-    });
-    
-    return hashes;
-  }, [userLocation]);
-
-  // Build filter (false disables subscription until location is ready)
-  const filter = useMemo((): NDKFilter[] | false => {
-    if (!geohashes) return false;
-    
-    const sinceTimestamp = Math.floor(Date.now() / 1000) - INCIDENT_LIMITS.SINCE_DAYS * 86400;
-    
-    return [{
-      kinds: [30911 as number],
-      '#g': geohashes,
-      '#t': ['incident'],
-      since: sinceTimestamp,
-      limit: INCIDENT_LIMITS.FETCH_LIMIT,
-    }];
-  }, [geohashes]);
-
-  // Subscribe with buffering (NDK handles batching and EOSE)
-  const { events: rawEvents, eose } = useSubscribe(filter, {
-    closeOnEose: false,
-    bufferMs: 100, // Batch events for 100ms to reduce re-renders
+  // Get user location with fallback to default
+  const { location: userLocation, isLoading: isLoadingLocation } = useUserLocation({
+    fallback: 'default',
+    defaultLocation: DEFAULT_CAMERA.centerCoordinate,
   });
 
-  // Parse raw events into incidents (memoized to avoid re-parsing)
-  const incidents = useMemo(() => {
-    const incidentMap = new Map<string, ParsedIncident>();
-    const severityCounts = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 };
-    
-    for (const event of rawEvents) {
-      const parsed = parseIncidentEvent(event);
-      if (parsed) {
-        severityCounts[parsed.severity as keyof typeof severityCounts]++;
-        incidentMap.set(parsed.incidentId, parsed);
-      }
-    }
-    
-    if (rawEvents.length > 0) {
-      console.log('MapScreen: Severity distribution:', severityCounts);
-    }
-    
-    // Apply cache limit
-    if (incidentMap.size > INCIDENT_LIMITS.MAX_CACHE) {
-      const entries = Array.from(incidentMap.entries());
-      const limited = entries.slice(-INCIDENT_LIMITS.MAX_CACHE);
-      return new Map(limited);
-    }
-    
-    return incidentMap;
-  }, [rawEvents]);
+  // Subscribe to incidents near user location
+  const {
+    incidents,
+    isInitialLoading,
+    hasReceivedHistory,
+  } = useIncidentSubscription({
+    location: userLocation,
+    enabled: !!userLocation,
+  });
 
-  // Log subscription state changes
-  useEffect(() => {
-    if (eose) {
-      console.log('MapScreen: End of stored events (EOSE)', {
-        incidentCount: incidents.size,
-        rawEventCount: rawEvents.length,
-      });
-    }
-  }, [eose, incidents.size, rawEvents.length]);
-
-  // =============================================================================
-  // LOCATION PERMISSION & FETCH
-  // =============================================================================
-
-  useEffect(() => {
-    // Safety timeout in case everything hangs
-    const timeoutId = setTimeout(() => {
-      console.warn('MapScreen: Location flow taking too long, using default location');
-      setIsLoading(false);
-      setUserLocation(DEFAULT_CAMERA.centerCoordinate);
-    }, 15000);
-
-    // Proper async wrapper pattern for useEffect
-    const fetchLocation = async () => {
-      try {
-        await requestLocationPermission();
-      } catch (error) {
-        console.error('MapScreen: Unexpected error in location flow:', error);
-        setUserLocation(DEFAULT_CAMERA.centerCoordinate);
-        setIsLoading(false);
-      } finally {
-        clearTimeout(timeoutId);
-      }
-    };
-
-    fetchLocation();
-
-    return () => clearTimeout(timeoutId);
-  }, []);
-
-  async function requestLocationPermission() {
-    try {
-      console.log('MapScreen: [1/6] Starting location permission flow...');
-
-      // First, check current permission status without requesting
-      console.log('MapScreen: [2/6] Checking current foreground permission status...');
-      const currentStatus = await Location.getForegroundPermissionsAsync();
-      console.log('MapScreen: [3/6] Current permission status:', {
-        status: currentStatus.status,
-        granted: currentStatus.granted,
-        canAskAgain: currentStatus.canAskAgain,
-      });
-
-      let foregroundResult = currentStatus;
-
-      // Only request if not already granted
-      if (currentStatus.status !== 'granted') {
-        console.log('MapScreen: [4/6] Permission not granted, requesting foreground permission...');
-        foregroundResult = await Location.requestForegroundPermissionsAsync();
-        console.log('MapScreen: Permission request result:', foregroundResult.status);
-      } else {
-        console.log('MapScreen: [4/6] Permission already granted, skipping request');
-      }
-
-      if (foregroundResult.status !== 'granted') {
-        console.log('MapScreen: [X] Foreground permission denied');
-        Alert.alert(
-          'Location Permission Required',
-          'Eventinel needs location access to show incidents near you on the map.',
-          [{ text: 'OK' }]
-        );
-        setIsLoading(false);
-        return;
-      }
-
-      // Background location permission (enables "Always allow" option)
-      // IMPORTANT: On Android 11+ (API 30+), background location cannot be requested
-      // via popup - user must manually enable in Settings. So we skip it on Android
-      // to prevent hanging. iOS works fine with the direct request.
-      if (Platform.OS === 'ios') {
-        try {
-          console.log('MapScreen: [5/6] Checking background location permission (iOS)...');
-          const bgCurrentStatus = await Location.getBackgroundPermissionsAsync();
-          console.log('MapScreen: Background status:', bgCurrentStatus.status);
-
-          // Only request background if not already granted
-          if (bgCurrentStatus.status !== 'granted') {
-            console.log('MapScreen: Requesting background location permission...');
-            const backgroundResult = await Location.requestBackgroundPermissionsAsync();
-            console.log('MapScreen: Background permission result:', backgroundResult.status);
-          } else {
-            console.log('MapScreen: Background permission already granted');
-          }
-        } catch (bgError) {
-          console.warn('MapScreen: Background permission request failed:', bgError);
-          // Continue anyway - foreground permission is sufficient
-        }
-      } else {
-        // Android: Skip background permission request (causes hang on Android 11+)
-        console.log('MapScreen: [5/6] Skipping background permission on Android (requires Settings)');
-      }
-
-      // Get current location - try cached first (instant), then fresh (slow on emulators)
-      console.log('MapScreen: [6/6] Fetching current location...');
-
-      let location: Location.LocationObject | null = null;
-
-      // First, try to get last known position (instant, no GPS needed)
-      try {
-        console.log('MapScreen: Trying getLastKnownPositionAsync (cached)...');
-        location = await Location.getLastKnownPositionAsync({
-          maxAge: 60000, // Accept cached location up to 60 seconds old
-        });
-        if (location) {
-          console.log('MapScreen: Got cached location:', location.coords.latitude, location.coords.longitude);
-        }
-      } catch (cacheError) {
-        console.log('MapScreen: No cached location available');
-      }
-
-      // If no cached location, try to get fresh position with short timeout
-      if (!location) {
-        console.log('MapScreen: Trying getCurrentPositionAsync (fresh)...');
-
-        let timeoutId: ReturnType<typeof setTimeout>;
-        let didTimeout = false;
-
-        try {
-          location = await Promise.race([
-            (async () => {
-              const loc = await Location.getCurrentPositionAsync({
-                accuracy: Location.Accuracy.High, // High accuracy works better on Android
-                // forceAndroidLocationManager bypasses FusedLocationProvider which hangs on emulators
-                ...(Platform.OS === 'android' && {
-                  // @ts-ignore - valid option but not in types
-                  forceAndroidLocationManager: true,
-                }),
-              });
-              if (didTimeout) {
-                console.log('MapScreen: Location arrived after timeout, ignoring');
-                return null;
-              }
-              return loc;
-            })(),
-            new Promise<null>((resolve) => {
-              timeoutId = setTimeout(() => {
-                console.log('MapScreen: ⏱️ Location timeout reached (5s)');
-                didTimeout = true;
-                resolve(null);
-              }, 5000);
-            }),
-          ]) as Location.LocationObject | null;
-
-          clearTimeout(timeoutId!);
-
-          if (location) {
-            console.log('MapScreen: Got fresh location');
-          } else {
-            console.log('MapScreen: Location request timed out');
-          }
-        } catch (err) {
-          console.log('MapScreen: getCurrentPositionAsync error:', err);
-        }
-      }
-
-      // If still no location, throw to trigger fallback
-      if (!location) {
-        throw new Error('Could not get location from device');
-      }
-
-      const userCoordinate: [number, number] = [
-        location.coords.longitude,
-        location.coords.latitude,
-      ];
-
-      console.log('MapScreen: ✅ Location obtained:', {
-        lat: location.coords.latitude,
-        lng: location.coords.longitude,
-        accuracy: location.coords.accuracy,
-      });
-
-      setUserLocation(userCoordinate);
-      setIsLoading(false);
-
-      console.log('MapScreen: ✅ Map ready with user location');
-    } catch (error) {
-      console.log('MapScreen: Location unavailable, using default:', error);
-
-      // Use default location (Philadelphia) if location fetch fails
-      // This is normal for emulators - no alert needed
-      const defaultCoordinate: [number, number] = DEFAULT_CAMERA.centerCoordinate;
-      setUserLocation(defaultCoordinate);
-      setIsLoading(false);
-
-      console.log('MapScreen: ✅ Map ready with default location (Philadelphia)');
-    }
-  }
-
-  // =============================================================================
-  // MARKER INTERACTION
-  // =============================================================================
-
+  // Handle marker press - navigate to detail screen
   function handleMarkerPress(incident: ParsedIncident) {
     console.log('MapScreen: Marker pressed:', incident.incidentId);
-    setSelectedIncident(incident);
+    navigation.navigate('IncidentDetail', { incident });
   }
 
-  function dismissDetails() {
-    setSelectedIncident(null);
-  }
-
-  // =============================================================================
-  // RENDER
-  // =============================================================================
-
-  if (isLoading) {
+  // Loading state
+  if (isLoadingLocation) {
     return (
       <View style={styles.loadingContainer}>
         <ActivityIndicator size="large" color="#2563eb" />
@@ -346,7 +51,7 @@ export default function MapScreen() {
     );
   }
 
-  // Determine camera center (user location or default)
+  // Determine camera center
   const cameraCenter = userLocation || DEFAULT_CAMERA.centerCoordinate;
 
   return (
@@ -367,7 +72,7 @@ export default function MapScreen() {
         )}
 
         {/* Incident markers */}
-        {Array.from(incidents.values()).map((incident) => (
+        {incidents.map((incident) => (
           <IncidentMarker
             key={incident.incidentId}
             incident={incident}
@@ -379,72 +84,13 @@ export default function MapScreen() {
       {/* Stats overlay (top-right) - DEV only */}
       {__DEV__ && (
         <View style={styles.statsOverlay}>
-          <Text style={styles.statsText}>Incidents: {incidents.size}</Text>
-          <Text style={styles.statsText}>Events: {rawEvents.length}</Text>
-          <Text style={styles.statsText}>EOSE: {eose ? '✓' : '...'}</Text>
+          <Text style={styles.statsText}>Incidents: {incidents.length}</Text>
+          <Text style={styles.statsText}>EOSE: {hasReceivedHistory ? '✓' : '...'}</Text>
         </View>
       )}
 
-      {/* Incident details card (bottom) */}
-      {selectedIncident && (
-        <TouchableOpacity
-          style={styles.detailsCard}
-          onPress={dismissDetails}
-          activeOpacity={0.95}
-        >
-          <ScrollView showsVerticalScrollIndicator={false}>
-            <View style={styles.detailsHeader}>
-              <Text style={styles.detailTitle}>{selectedIncident.title}</Text>
-              <View
-                style={[
-                  styles.severityBadge,
-                  {
-                    backgroundColor:
-                      selectedIncident.severity >= 4
-                        ? '#ef4444'
-                        : selectedIncident.severity >= 3
-                          ? '#f97316'
-                          : '#eab308',
-                  },
-                ]}
-              >
-                <Text style={styles.severityBadgeText}>
-                  Severity {selectedIncident.severity}
-                </Text>
-              </View>
-            </View>
-
-            <Text style={styles.detailDescription}>{selectedIncident.description}</Text>
-
-            <View style={styles.detailMeta}>
-              <Text style={styles.detailMetaLabel}>Location:</Text>
-              <Text style={styles.detailMetaValue}>{selectedIncident.location.address}</Text>
-            </View>
-
-            <View style={styles.detailMeta}>
-              <Text style={styles.detailMetaLabel}>Type:</Text>
-              <Text style={styles.detailMetaValue}>{selectedIncident.type}</Text>
-            </View>
-
-            <View style={styles.detailMeta}>
-              <Text style={styles.detailMetaLabel}>Source:</Text>
-              <Text style={styles.detailMetaValue}>{selectedIncident.source}</Text>
-            </View>
-
-            <View style={styles.detailMeta}>
-              <Text style={styles.detailMetaLabel}>Occurred:</Text>
-              <Text style={styles.detailMetaValue}>
-                {selectedIncident.occurredAt.toLocaleString()}
-              </Text>
-            </View>
-
-            <Text style={styles.dismissHint}>Tap to dismiss</Text>
-          </ScrollView>
-        </TouchableOpacity>
-      )}
-
       {/* No incidents message - only show after EOSE */}
-      {!isLoading && eose && incidents.size === 0 && (
+      {!isLoadingLocation && hasReceivedHistory && incidents.length === 0 && (
         <View style={styles.emptyState}>
           <Text style={styles.emptyStateText}>No incidents found</Text>
           <Text style={styles.emptyStateSubtext}>
@@ -456,33 +102,24 @@ export default function MapScreen() {
   );
 }
 
-// =============================================================================
-// STYLES
-// =============================================================================
-
 const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
-
   loadingContainer: {
     flex: 1,
     backgroundColor: '#f0f0f0',
     alignItems: 'center',
     justifyContent: 'center',
   },
-
   loadingText: {
     marginTop: 16,
     fontSize: 16,
     color: '#666',
   },
-
   map: {
     flex: 1,
   },
-
-  // User location marker
   userMarker: {
     width: USER_LOCATION.MARKER_SIZE,
     height: USER_LOCATION.MARKER_SIZE,
@@ -491,8 +128,6 @@ const styles = StyleSheet.create({
     borderWidth: USER_LOCATION.MARKER_BORDER_WIDTH,
     borderColor: USER_LOCATION.MARKER_BORDER_COLOR,
   },
-
-  // Stats overlay
   statsOverlay: {
     position: 'absolute',
     top: 20,
@@ -502,91 +137,11 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     borderRadius: 8,
   },
-
   statsText: {
     color: '#fff',
     fontSize: 12,
     fontWeight: '600',
   },
-
-  // Details card
-  detailsCard: {
-    position: 'absolute',
-    bottom: 20,
-    left: 20,
-    right: 20,
-    maxHeight: 300,
-    backgroundColor: 'white',
-    padding: 16,
-    borderRadius: 12,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 4,
-    elevation: 5,
-  },
-
-  detailsHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    marginBottom: 12,
-  },
-
-  detailTitle: {
-    flex: 1,
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#111',
-    marginRight: 12,
-  },
-
-  severityBadge: {
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 6,
-  },
-
-  severityBadgeText: {
-    color: '#fff',
-    fontSize: 12,
-    fontWeight: '600',
-  },
-
-  detailDescription: {
-    fontSize: 14,
-    color: '#666',
-    marginBottom: 12,
-    lineHeight: 20,
-  },
-
-  detailMeta: {
-    flexDirection: 'row',
-    marginBottom: 8,
-  },
-
-  detailMetaLabel: {
-    fontSize: 13,
-    color: '#999',
-    fontWeight: '600',
-    width: 80,
-  },
-
-  detailMetaValue: {
-    flex: 1,
-    fontSize: 13,
-    color: '#333',
-  },
-
-  dismissHint: {
-    marginTop: 12,
-    fontSize: 12,
-    color: '#999',
-    fontStyle: 'italic',
-    textAlign: 'center',
-  },
-
-  // Empty state
   emptyState: {
     position: 'absolute',
     bottom: 40,
@@ -597,14 +152,12 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     alignItems: 'center',
   },
-
   emptyStateText: {
     color: '#fff',
     fontSize: 16,
     fontWeight: '600',
     marginBottom: 4,
   },
-
   emptyStateSubtext: {
     color: '#ccc',
     fontSize: 13,

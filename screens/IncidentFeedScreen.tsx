@@ -2,11 +2,10 @@
  * IncidentFeedScreen
  *
  * Scrollable list view of incidents as alternative to map view.
- * Uses RNE components with theme support.
- * Reuses NDK subscription pattern from MapScreen.
+ * Uses extracted hooks for location and subscription logic.
  */
 
-import { useState, useEffect, useMemo, useCallback } from 'react';
+import { useCallback } from 'react';
 import {
   View,
   FlatList,
@@ -16,166 +15,43 @@ import {
 } from 'react-native';
 import { Text, Card, Icon, Badge } from '@rneui/themed';
 import { useNavigation } from '@react-navigation/native';
-import * as Location from 'expo-location';
-import geohash from 'ngeohash';
-import { useSubscribe } from '@nostr-dev-kit/mobile';
-import type { NDKFilter } from '@nostr-dev-kit/mobile';
 
-import { parseIncidentEvent } from '../lib/nostr/events/incident';
-import type { ParsedIncident } from '../lib/nostr/events/types';
-import { INCIDENT_LIMITS } from '../lib/map/constants';
-import { DEFAULT_GEOHASH_PRECISION } from '../lib/nostr/config';
+import { useUserLocation } from '../hooks/useUserLocation';
+import { useIncidentSubscription, ProcessedIncident } from '../hooks/useIncidentSubscription';
 import { DEFAULT_CAMERA } from '../lib/map/types';
-
+import { SEVERITY_COLORS, TYPE_CONFIG } from '../lib/nostr/config';
+import { formatRelativeTimeMs } from '../lib/utils/time';
 import { ScreenContainer } from '../lib/ui';
 import { useAppTheme } from '../lib/theme';
-
-// Severity colors matching MVP spec
-const SEVERITY_COLORS: Record<number, string> = {
-  5: '#DC2626', // Critical - red
-  4: '#EA580C', // High - orange-red
-  3: '#F59E0B', // Medium - amber
-  2: '#3B82F6', // Low - blue
-  1: '#6B7280', // Info - gray
-};
-
-// Incident type icons
-const TYPE_ICONS: Record<string, { name: string; color: string }> = {
-  fire: { name: 'local-fire-department', color: '#EF4444' },
-  medical: { name: 'medical-services', color: '#3B82F6' },
-  traffic: { name: 'traffic', color: '#F97316' },
-  violent_crime: { name: 'warning', color: '#8B5CF6' },
-  property_crime: { name: 'home', color: '#8B5CF6' },
-  disturbance: { name: 'volume-up', color: '#F59E0B' },
-  suspicious: { name: 'visibility', color: '#6B7280' },
-  other: { name: 'info', color: '#6B7280' },
-};
-
-// Format relative time
-function formatRelativeTime(date: Date): string {
-  const now = new Date();
-  const diffMs = now.getTime() - date.getTime();
-  const diffMins = Math.floor(diffMs / 60000);
-  const diffHours = Math.floor(diffMins / 60);
-  const diffDays = Math.floor(diffHours / 24);
-
-  if (diffMins < 1) return 'Just now';
-  if (diffMins < 60) return `${diffMins}m ago`;
-  if (diffHours < 24) return `${diffHours}h ago`;
-  if (diffDays < 7) return `${diffDays}d ago`;
-  return date.toLocaleDateString();
-}
 
 export default function IncidentFeedScreen() {
   const navigation = useNavigation<any>();
   const { colors } = useAppTheme();
 
-  // Location state (for geohash filtering)
-  const [userLocation, setUserLocation] = useState<[number, number] | null>(null);
-  const [isLoadingLocation, setIsLoadingLocation] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
-
-  // =============================================================================
-  // LOCATION (simplified from MapScreen)
-  // =============================================================================
-
-  useEffect(() => {
-    async function getLocation() {
-      try {
-        const { status } = await Location.getForegroundPermissionsAsync();
-        if (status === 'granted') {
-          const location = await Location.getLastKnownPositionAsync({ maxAge: 60000 });
-          if (location) {
-            setUserLocation([location.coords.longitude, location.coords.latitude]);
-          }
-        }
-      } catch (error) {
-        console.log('[IncidentFeed] Location error, using default');
-      } finally {
-        // Use default location if none available
-        if (!userLocation) {
-          setUserLocation(DEFAULT_CAMERA.centerCoordinate);
-        }
-        setIsLoadingLocation(false);
-      }
-    }
-
-    getLocation();
-  }, []);
-
-  // =============================================================================
-  // NDK SUBSCRIPTION
-  // =============================================================================
-
-  const geohashes = useMemo(() => {
-    if (!userLocation) return null;
-
-    const userGeohash = geohash.encode(
-      userLocation[1], // latitude
-      userLocation[0], // longitude
-      DEFAULT_GEOHASH_PRECISION
-    );
-    const neighbors = geohash.neighbors(userGeohash);
-    return [userGeohash, ...Object.values(neighbors)];
-  }, [userLocation]);
-
-  const filter = useMemo((): NDKFilter[] | false => {
-    if (!geohashes) return false;
-
-    const sinceTimestamp = Math.floor(Date.now() / 1000) - INCIDENT_LIMITS.SINCE_DAYS * 86400;
-
-    return [{
-      kinds: [30911 as number],
-      '#g': geohashes,
-      '#t': ['incident'],
-      since: sinceTimestamp,
-      limit: INCIDENT_LIMITS.FETCH_LIMIT,
-    }];
-  }, [geohashes]);
-
-  const { events: rawEvents, eose } = useSubscribe(filter, {
-    closeOnEose: false,
-    bufferMs: 100,
+  // Get user location with fallback to default
+  const { location: userLocation, isLoading: isLoadingLocation } = useUserLocation({
+    fallback: 'default',
+    defaultLocation: DEFAULT_CAMERA.centerCoordinate,
   });
 
-  // Parse and sort incidents (newest first)
-  const incidents = useMemo(() => {
-    const incidentMap = new Map<string, ParsedIncident>();
+  // Subscribe to incidents near user location
+  const {
+    incidents,
+    hasReceivedHistory,
+  } = useIncidentSubscription({
+    location: userLocation,
+    enabled: !!userLocation,
+  });
 
-    for (const event of rawEvents) {
-      const parsed = parseIncidentEvent(event);
-      if (parsed) {
-        incidentMap.set(parsed.incidentId, parsed);
-      }
-    }
-
-    // Convert to array and sort by occurredAt (newest first)
-    return Array.from(incidentMap.values()).sort(
-      (a, b) => b.occurredAt.getTime() - a.occurredAt.getTime()
-    );
-  }, [rawEvents]);
-
-  // =============================================================================
-  // HANDLERS
-  // =============================================================================
-
-  const onRefresh = useCallback(() => {
-    setRefreshing(true);
-    // The subscription auto-refreshes, just show feedback
-    setTimeout(() => setRefreshing(false), 1000);
-  }, []);
-
-  const handleIncidentPress = useCallback((incident: ParsedIncident) => {
+  // Handle incident press - navigate to detail
+  const handleIncidentPress = useCallback((incident: ProcessedIncident) => {
     navigation.navigate('IncidentDetail', { incident });
   }, [navigation]);
 
-  // =============================================================================
-  // RENDER ITEM
-  // =============================================================================
-
-  const renderIncidentItem = useCallback(({ item }: { item: ParsedIncident }) => {
+  // Render incident item
+  const renderIncidentItem = useCallback(({ item }: { item: ProcessedIncident }) => {
     const severityColor = SEVERITY_COLORS[item.severity] || SEVERITY_COLORS[1];
-    const typeInfo = TYPE_ICONS[item.type] || TYPE_ICONS.other;
+    const typeConfig = TYPE_CONFIG[item.type] || TYPE_CONFIG.other;
 
     return (
       <Pressable onPress={() => handleIncidentPress(item)}>
@@ -192,12 +68,12 @@ export default function IncidentFeedScreen() {
         >
           <View style={styles.cardRow}>
             {/* Icon */}
-            <View style={[styles.iconContainer, { backgroundColor: `${typeInfo.color}20` }]}>
+            <View style={[styles.iconContainer, { backgroundColor: `${typeConfig.color}20` }]}>
               <Icon
-                name={typeInfo.name}
+                name={typeConfig.icon}
                 type="material"
                 size={24}
-                color={typeInfo.color}
+                color={typeConfig.color}
               />
             </View>
 
@@ -222,7 +98,7 @@ export default function IncidentFeedScreen() {
                 <View style={styles.metaItem}>
                   <Icon name="schedule" type="material" size={14} color={colors.textMuted} />
                   <Text style={[styles.metaText, { color: colors.textMuted }]}>
-                    {formatRelativeTime(item.occurredAt)}
+                    {formatRelativeTimeMs(item.occurredAtMs)}
                   </Text>
                 </View>
                 <View style={styles.metaItem}>
@@ -247,10 +123,6 @@ export default function IncidentFeedScreen() {
     );
   }, [colors, handleIncidentPress]);
 
-  // =============================================================================
-  // RENDER
-  // =============================================================================
-
   // Loading state
   if (isLoadingLocation) {
     return (
@@ -271,7 +143,7 @@ export default function IncidentFeedScreen() {
       <View style={styles.header}>
         <Text h2 style={[styles.title, { color: colors.text }]}>Incidents</Text>
         <Text style={[styles.subtitle, { color: colors.textMuted }]}>
-          {incidents.length} nearby • {eose ? 'Updated' : 'Loading...'}
+          {incidents.length} nearby {hasReceivedHistory ? '• Updated' : '• Loading...'}
         </Text>
       </View>
 
@@ -284,14 +156,14 @@ export default function IncidentFeedScreen() {
         showsVerticalScrollIndicator={false}
         refreshControl={
           <RefreshControl
-            refreshing={refreshing}
-            onRefresh={onRefresh}
+            refreshing={false}
+            onRefresh={() => {}}
             tintColor={colors.primary}
             colors={[colors.primary]}
           />
         }
         ListEmptyComponent={
-          eose ? (
+          hasReceivedHistory ? (
             <View style={styles.emptyState}>
               <Icon name="check-circle" type="material" size={64} color={colors.success} />
               <Text style={[styles.emptyTitle, { color: colors.text }]}>All Clear</Text>
@@ -339,8 +211,6 @@ const styles = StyleSheet.create({
   loadingText: {
     fontSize: 16,
   },
-
-  // Incident Card
   incidentCard: {
     borderRadius: 12,
     borderWidth: 1,
@@ -400,8 +270,6 @@ const styles = StyleSheet.create({
     fontSize: 12,
     flex: 1,
   },
-
-  // Empty State
   emptyState: {
     alignItems: 'center',
     justifyContent: 'center',

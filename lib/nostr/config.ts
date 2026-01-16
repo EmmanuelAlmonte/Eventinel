@@ -242,3 +242,82 @@ export const NIP05_NAMES = {
   /** Alerts account: alerts@eventinel.com */
   ALERTS: 'alerts',
 } as const;
+
+// =============================================================================
+// UI CONFIGURATION (SEVERITY & TYPE DISPLAY)
+// =============================================================================
+
+/**
+ * Severity colors for UI display
+ * Used by SeverityBadge, markers, and cards
+ */
+export const SEVERITY_COLORS: Record<Severity, string> = {
+  5: '#DC2626', // Critical - red
+  4: '#EA580C', // High - orange-red
+  3: '#F59E0B', // Medium - amber
+  2: '#3B82F6', // Low - blue
+  1: '#6B7280', // Info - gray
+};
+
+/**
+ * Incident type configuration for UI display
+ * Includes icon, colors, and display label
+ */
+export const TYPE_CONFIG: Record<
+  IncidentType,
+  {
+    icon: string;
+    color: string;
+    gradient: [string, string];
+    label: string;
+  }
+> = {
+  fire: {
+    icon: 'local-fire-department',
+    color: '#EF4444',
+    gradient: ['#EF4444', '#F97316'],
+    label: 'Fire',
+  },
+  medical: {
+    icon: 'medical-services',
+    color: '#3B82F6',
+    gradient: ['#3B82F6', '#06B6D4'],
+    label: 'Medical',
+  },
+  traffic: {
+    icon: 'traffic',
+    color: '#F97316',
+    gradient: ['#F97316', '#EAB308'],
+    label: 'Traffic',
+  },
+  violent_crime: {
+    icon: 'warning',
+    color: '#8B5CF6',
+    gradient: ['#8B5CF6', '#EC4899'],
+    label: 'Crime',
+  },
+  property_crime: {
+    icon: 'home',
+    color: '#8B5CF6',
+    gradient: ['#8B5CF6', '#6366F1'],
+    label: 'Property Crime',
+  },
+  disturbance: {
+    icon: 'volume-up',
+    color: '#F59E0B',
+    gradient: ['#F59E0B', '#EAB308'],
+    label: 'Disturbance',
+  },
+  suspicious: {
+    icon: 'visibility',
+    color: '#6B7280',
+    gradient: ['#6B7280', '#9CA3AF'],
+    label: 'Suspicious',
+  },
+  other: {
+    icon: 'info',
+    color: '#6B7280',
+    gradient: ['#6B7280', '#9CA3AF'],
+    label: 'Other',
+  },
+};
