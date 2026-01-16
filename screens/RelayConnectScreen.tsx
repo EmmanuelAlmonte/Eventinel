@@ -6,8 +6,8 @@
  */
 
 import { useState, useEffect } from 'react';
-import { StyleSheet, View, Alert } from 'react-native';
-import { Text, Button, Input, Card, Icon, ListItem } from '@rneui/themed';
+import { StyleSheet, View, Alert, Pressable } from 'react-native';
+import { Text, Button, Input, Card, Icon } from '@rneui/themed';
 import { ndk } from '../lib/ndk';
 import { NDKRelayStatus } from '@nostr-dev-kit/mobile';
 import { isConnected, getStatusString } from '../lib/relay/status';
@@ -287,31 +287,45 @@ export default function RelayConnectScreen() {
             {relays.map((relay) => {
               const statusColor = getStatusColor(relay.status, colors);
               return (
-                <ListItem
+                <View
                   key={relay.url}
-                  containerStyle={[
+                  style={[
                     styles.relayItem,
                     { backgroundColor: colors.background, borderColor: colors.border }
                   ]}
                 >
-                  <View style={[styles.statusDot, { backgroundColor: statusColor }]} />
-                  <ListItem.Content>
-                    <ListItem.Title style={[styles.relayUrl, { color: colors.text }]}>
-                      {relay.url}
-                    </ListItem.Title>
-                    <ListItem.Subtitle style={[styles.relayStatus, { color: statusColor }]}>
-                      {relay.status}
-                    </ListItem.Subtitle>
-                  </ListItem.Content>
-                  <Icon
-                    name="close"
-                    type="material"
-                    size={20}
-                    color={colors.error}
+                  {/* Left: dot + text */}
+                  <View style={styles.relayLeft}>
+                    <View style={[styles.statusDot, { backgroundColor: statusColor }]} />
+                    <View style={styles.relayContent}>
+                      <Text
+                        style={[styles.relayUrl, { color: colors.text }]}
+                        numberOfLines={1}
+                        ellipsizeMode="middle"
+                      >
+                        {relay.url}
+                      </Text>
+                      <Text style={[styles.relayStatus, { color: statusColor }]}>
+                        {relay.status}
+                      </Text>
+                    </View>
+                  </View>
+
+                  {/* Right: remove button */}
+                  <Pressable
                     onPress={() => handleDisconnect(relay.url)}
-                    containerStyle={[styles.removeButton, { backgroundColor: `${colors.error}15` }]}
-                  />
-                </ListItem>
+                    hitSlop={10}
+                    style={({ pressed }) => [
+                      styles.removeButton,
+                      { backgroundColor: `${colors.error}15` },
+                      pressed && { opacity: 0.7 },
+                    ]}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Disconnect ${relay.url}`}
+                  >
+                    <Icon name="close" type="material" size={18} color={colors.error} />
+                  </Pressable>
+                </View>
               );
             })}
           </View>
@@ -404,35 +418,50 @@ const styles = StyleSheet.create({
     fontSize: 14,
   },
   relayList: {
-    gap: 8,
+    gap: 10,
   },
   relayItem: {
-    borderRadius: 8,
-    borderWidth: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
     paddingVertical: 12,
-    paddingHorizontal: 14,
-    marginBottom: 0,
+    paddingHorizontal: 12,
+    borderWidth: 1,
+    borderRadius: 12,
+  },
+  relayLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+    minWidth: 0,
   },
   statusDot: {
     width: 10,
     height: 10,
-    borderRadius: 5,
+    borderRadius: 999,
+    marginRight: 10,
+  },
+  relayContent: {
+    flex: 1,
+    minWidth: 0,
   },
   relayUrl: {
     fontSize: 14,
-    fontWeight: '500',
+    fontWeight: '600',
   },
   relayStatus: {
-    fontSize: 12,
-    textTransform: 'capitalize',
     marginTop: 2,
+    fontSize: 12,
+    fontWeight: '600',
+    textTransform: 'capitalize',
   },
   removeButton: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    justifyContent: 'center',
+    width: 36,
+    height: 36,
+    borderRadius: 10,
     alignItems: 'center',
+    justifyContent: 'center',
+    marginLeft: 12,
   },
   infoContainer: {
     flexDirection: 'row',
