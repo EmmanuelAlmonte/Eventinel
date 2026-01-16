@@ -15,6 +15,7 @@ import {
   Pressable,
 } from 'react-native';
 import { Text, Card, Icon, Badge } from '@rneui/themed';
+import { useNavigation } from '@react-navigation/native';
 import * as Location from 'expo-location';
 import geohash from 'ngeohash';
 import { useSubscribe } from '@nostr-dev-kit/mobile';
@@ -66,15 +67,13 @@ function formatRelativeTime(date: Date): string {
 }
 
 export default function IncidentFeedScreen() {
+  const navigation = useNavigation<any>();
   const { colors } = useAppTheme();
 
   // Location state (for geohash filtering)
   const [userLocation, setUserLocation] = useState<[number, number] | null>(null);
   const [isLoadingLocation, setIsLoadingLocation] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-
-  // Selected incident for detail view (inline for now)
-  const [selectedIncident, setSelectedIncident] = useState<ParsedIncident | null>(null);
 
   // =============================================================================
   // LOCATION (simplified from MapScreen)
@@ -167,12 +166,8 @@ export default function IncidentFeedScreen() {
   }, []);
 
   const handleIncidentPress = useCallback((incident: ParsedIncident) => {
-    setSelectedIncident(incident);
-  }, []);
-
-  const dismissDetail = useCallback(() => {
-    setSelectedIncident(null);
-  }, []);
+    navigation.navigate('IncidentDetail', { incident });
+  }, [navigation]);
 
   // =============================================================================
   // RENDER ITEM
@@ -315,52 +310,6 @@ export default function IncidentFeedScreen() {
           )
         }
       />
-
-      {/* Inline Detail Card (temporary until IncidentDetailScreen) */}
-      {selectedIncident && (
-        <Pressable style={styles.detailOverlay} onPress={dismissDetail}>
-          <Card containerStyle={[styles.detailCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-            <View style={styles.detailHeader}>
-              <Text style={[styles.detailTitle, { color: colors.text }]}>{selectedIncident.title}</Text>
-              <Icon name="close" type="material" size={24} color={colors.textMuted} onPress={dismissDetail} />
-            </View>
-
-            <Badge
-              value={selectedIncident.type.replace('_', ' ').toUpperCase()}
-              badgeStyle={{ backgroundColor: TYPE_ICONS[selectedIncident.type]?.color || colors.primary, alignSelf: 'flex-start' }}
-              textStyle={styles.typeBadgeText}
-              containerStyle={styles.typeBadgeContainer}
-            />
-
-            <Text style={[styles.detailDescription, { color: colors.text }]}>
-              {selectedIncident.description}
-            </Text>
-
-            <View style={styles.detailMeta}>
-              <Icon name="location-on" type="material" size={18} color={colors.primary} />
-              <Text style={[styles.detailMetaText, { color: colors.textMuted }]}>
-                {selectedIncident.location.address}
-              </Text>
-            </View>
-
-            <View style={styles.detailMeta}>
-              <Icon name="schedule" type="material" size={18} color={colors.primary} />
-              <Text style={[styles.detailMetaText, { color: colors.textMuted }]}>
-                {selectedIncident.occurredAt.toLocaleString()}
-              </Text>
-            </View>
-
-            <View style={styles.detailMeta}>
-              <Icon name="source" type="material" size={18} color={colors.primary} />
-              <Text style={[styles.detailMetaText, { color: colors.textMuted }]}>
-                Source: {selectedIncident.source}
-              </Text>
-            </View>
-
-            <Text style={[styles.tapHint, { color: colors.textMuted }]}>Tap outside to close</Text>
-          </Card>
-        </Pressable>
-      )}
     </ScreenContainer>
   );
 }
@@ -466,65 +415,5 @@ const styles = StyleSheet.create({
   emptySubtitle: {
     fontSize: 14,
     textAlign: 'center',
-  },
-
-  // Detail Overlay
-  detailOverlay: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    justifyContent: 'center',
-    padding: 16,
-  },
-  detailCard: {
-    borderRadius: 16,
-    borderWidth: 1,
-    padding: 20,
-    margin: 0,
-  },
-  detailHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    marginBottom: 12,
-  },
-  detailTitle: {
-    fontSize: 20,
-    fontWeight: '700',
-    flex: 1,
-    marginRight: 12,
-  },
-  typeBadgeContainer: {
-    alignSelf: 'flex-start',
-    marginBottom: 16,
-  },
-  typeBadgeText: {
-    fontSize: 11,
-    fontWeight: '700',
-    letterSpacing: 0.5,
-  },
-  detailDescription: {
-    fontSize: 15,
-    lineHeight: 22,
-    marginBottom: 20,
-  },
-  detailMeta: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    marginBottom: 12,
-  },
-  detailMetaText: {
-    fontSize: 14,
-    flex: 1,
-  },
-  tapHint: {
-    fontSize: 12,
-    fontStyle: 'italic',
-    textAlign: 'center',
-    marginTop: 16,
   },
 });

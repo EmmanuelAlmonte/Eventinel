@@ -11,6 +11,7 @@ import { useNDKInit, useSessionMonitor, useNDKCurrentUser } from '@nostr-dev-kit
 
 import MapScreen from './screens/MapScreen';
 import IncidentFeedScreen from './screens/IncidentFeedScreen';
+import IncidentDetailScreen from './screens/IncidentDetailScreen';
 import ProfileScreen from './screens/ProfileScreen';
 import RelayConnectScreen from './screens/RelayConnectScreen';
 import LoginScreen from './screens/LoginScreen';
@@ -90,6 +91,7 @@ function MainNavigation() {
       <StatusBar style={isDark ? 'light' : 'dark'} />
       <Stack.Navigator screenOptions={{ headerShown: false }}>
         <Stack.Screen name="Main" component={TabNavigator} />
+        <Stack.Screen name="IncidentDetail" component={IncidentDetailScreen} />
         <Stack.Screen
           name="Relays"
           component={RelayConnectScreen}
