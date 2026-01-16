@@ -34,14 +34,6 @@ const menuItems: MenuItem[] = [
     color: '#3B82F6', // info blue
   },
   {
-    title: 'Private Key',
-    description: 'Set your Nostr identity',
-    icon: 'vpn-key',
-    iconType: 'material',
-    screen: 'Key',
-    color: '#9333EA', // primary purple
-  },
-  {
     title: 'Map',
     description: 'View incidents on map',
     icon: 'map',

@@ -61,7 +61,7 @@ function MainNavigation() {
           options={{
             tabBarLabel: "Relays",
             tabBarIcon: ({ color }) => (
-              <Text style={{ fontSize: 18, color }}>🌐</Text>
+              <Text style={{ fontSize: 18, color }}>📡</Text>
             ),
           }}
         />
