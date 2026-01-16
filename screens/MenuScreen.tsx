@@ -9,29 +9,11 @@ import { useState } from 'react';
 import { StyleSheet, View, KeyboardAvoidingView, Platform } from 'react-native';
 import { Text, Button, Input, Card, Icon } from '@rneui/themed';
 import { useNavigation } from '@react-navigation/native';
-import { ndk } from '../lib/ndk';
-import { NDKEvent, NDKPrivateKeySigner } from '@nostr-dev-kit/mobile';
+import { useNDK, NDKEvent } from '@nostr-dev-kit/mobile';
 import { isConnected } from '../lib/relay/status';
 
 import { ScreenContainer } from '../lib/ui';
 import { useAppTheme } from '../lib/theme';
-
-// Generate or retrieve signer for this session
-let sessionSigner: NDKPrivateKeySigner | null = null;
-
-function getSessionSigner() {
-  // If user set a key via PrivateKeyScreen, use that
-  if (ndk.signer) {
-    return ndk.signer;
-  }
-
-  // Otherwise generate a temporary one
-  if (!sessionSigner) {
-    sessionSigner = NDKPrivateKeySigner.generate();
-    ndk.signer = sessionSigner;
-  }
-  return sessionSigner;
-}
 
 type MenuItem = {
   title: string;
@@ -78,6 +60,7 @@ const menuItems: MenuItem[] = [
 ];
 
 export default function MenuScreen() {
+  const { ndk } = useNDK();
   const navigation = useNavigation<any>();
   const [noteContent, setNoteContent] = useState('');
   const [sendStatus, setSendStatus] = useState('');
@@ -86,6 +69,10 @@ export default function MenuScreen() {
   const { colors } = useAppTheme();
 
   const handleSendNote = async () => {
+    if (!ndk) {
+      setSendStatus('NDK not initialized');
+      return;
+    }
     if (!noteContent.trim()) {
       setSendStatus('Please enter a note');
       return;
@@ -107,28 +94,18 @@ export default function MenuScreen() {
     }
 
     try {
-      // Get or create a signer for this session
-      console.log('🔑 [Note] Getting signer...');
-      const signer = getSessionSigner();
-      console.log('✅ [Note] Signer ready');
-
-      // Create a new note event (kind 1)
+      // Create and publish note event (kind 1)
+      // ndk.signer is set by auth system, publish() signs automatically
       const event = new NDKEvent(ndk);
       event.kind = 1;
       event.content = noteContent.trim();
-      console.log('📄 [Note] Created event, kind:', event.kind);
+      console.log('📤 [Note] Publishing note to', connectedCount, 'relay(s)...');
 
-      // Sign and publish to all connected relays
-      console.log('✍️ [Note] Signing event...');
-      await event.sign();
-      console.log('✅ [Note] Event signed, id:', event.id);
+      // Optimistic publish - don't await (NDK handles retries)
+      event.publish();
 
-      console.log('📤 [Note] Publishing to', connectedCount, 'relay(s)...');
-      const relaySet = await event.publish();
-
-      const published = relaySet.size;
-      console.log('✅ [Note] Published to', published, 'relay(s):', Array.from(relaySet).map(r => r.url));
-      setSendStatus(`Published to ${published} relay(s)!`);
+      console.log('✅ [Note] Note published');
+      setSendStatus('Note published!');
       setNoteContent('');
 
       // Clear status after 3 seconds
