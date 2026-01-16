@@ -18,8 +18,8 @@ import {
 } from '@nostr-dev-kit/mobile';
 import type { SignerAppInfo } from 'expo-nip55';
 
-import { ScreenContainer } from '../lib/ui';
-import { useAppTheme } from '../lib/theme';
+import { ScreenContainer } from '@components/ui';
+import { useAppTheme } from '@hooks';
 
 export default function LoginScreen() {
   const { ndk } = useNDK();

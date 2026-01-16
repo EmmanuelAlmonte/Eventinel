@@ -9,11 +9,11 @@ import { useMemo, useRef, useEffect } from 'react';
 import geohash from 'ngeohash';
 import { useSubscribe } from '@nostr-dev-kit/mobile';
 import type { NDKFilter } from '@nostr-dev-kit/mobile';
-import { parseIncidentEvent } from '../lib/nostr/events/incident';
-import type { ParsedIncident } from '../lib/nostr/events/types';
-import type { Severity } from '../lib/nostr/config';
-import { DEFAULT_GEOHASH_PRECISION } from '../lib/nostr/config';
-import { INCIDENT_LIMITS } from '../lib/map/constants';
+import { parseIncidentEvent } from '@lib/nostr/events/incident';
+import type { ParsedIncident } from '@lib/nostr/events/types';
+import type { Severity } from '@lib/nostr/config';
+import { DEFAULT_GEOHASH_PRECISION } from '@lib/nostr/config';
+import { INCIDENT_LIMITS } from '@lib/map/constants';
 
 /**
  * Extended incident with precomputed timestamps for safe sorting

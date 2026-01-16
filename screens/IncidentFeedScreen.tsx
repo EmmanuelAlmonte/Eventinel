@@ -16,13 +16,11 @@ import {
 import { Text, Card, Icon, Badge } from '@rneui/themed';
 import { useNavigation } from '@react-navigation/native';
 
-import { useUserLocation } from '../hooks/useUserLocation';
-import { useIncidentSubscription, ProcessedIncident } from '../hooks/useIncidentSubscription';
-import { DEFAULT_CAMERA } from '../lib/map/types';
-import { SEVERITY_COLORS, TYPE_CONFIG } from '../lib/nostr/config';
-import { formatRelativeTimeMs } from '../lib/utils/time';
-import { ScreenContainer } from '../lib/ui';
-import { useAppTheme } from '../lib/theme';
+import { useUserLocation, useIncidentSubscription, useAppTheme, ProcessedIncident } from '@hooks';
+import { ScreenContainer } from '@components/ui';
+import { DEFAULT_CAMERA } from '@lib/map/types';
+import { SEVERITY_COLORS, TYPE_CONFIG } from '@lib/nostr/config';
+import { formatRelativeTimeMs } from '@lib/utils/time';
 
 export default function IncidentFeedScreen() {
   const navigation = useNavigation<any>();

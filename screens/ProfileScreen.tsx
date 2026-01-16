@@ -10,8 +10,8 @@ import { Text, Button, Card, Avatar, Icon, Divider, Switch } from '@rneui/themed
 import { useNDKSessionLogout, useNDKCurrentPubkey, useNDKCurrentUser } from '@nostr-dev-kit/mobile';
 import { useNavigation } from '@react-navigation/native';
 
-import { ScreenContainer } from '../lib/ui';
-import { useAppTheme } from '../lib/theme';
+import { ScreenContainer } from '@components/ui';
+import { useAppTheme } from '@hooks';
 
 export default function ProfileScreen() {
   const navigation = useNavigation<any>();

@@ -8,10 +8,10 @@
 import { View, StyleSheet } from 'react-native';
 import { Text, Icon } from '@rneui/themed';
 import { LinearGradient } from 'expo-linear-gradient';
-import { TYPE_CONFIG, SEVERITY_COLORS } from '../../lib/nostr/config';
-import type { IncidentType, Severity } from '../../lib/nostr/config';
-import { useAppTheme } from '../../lib/theme';
-import { formatRelativeTimeMs } from '../../lib/utils/time';
+import { TYPE_CONFIG, SEVERITY_COLORS } from '@lib/nostr/config';
+import type { IncidentType, Severity } from '@lib/nostr/config';
+import { useAppTheme } from '@hooks';
+import { formatRelativeTimeMs } from '@lib/utils/time';
 
 interface IncidentHeaderProps {
   type: IncidentType;

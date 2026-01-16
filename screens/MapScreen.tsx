@@ -9,12 +9,11 @@ import { View, Text, StyleSheet, ActivityIndicator } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import Mapbox from '@rnmapbox/maps';
 
-import { useUserLocation } from '../hooks/useUserLocation';
-import { useIncidentSubscription } from '../hooks/useIncidentSubscription';
-import { IncidentMarker } from '../lib/map/IncidentMarker';
-import { DEFAULT_CAMERA, MAP_STYLES } from '../lib/map/types';
-import { MAPBOX_CONFIG, USER_LOCATION, INCIDENT_LIMITS } from '../lib/map/constants';
-import type { ParsedIncident } from '../lib/nostr/events/types';
+import { useUserLocation, useIncidentSubscription } from '@hooks';
+import { IncidentMarker } from '@components/map';
+import { DEFAULT_CAMERA, MAP_STYLES } from '@lib/map/types';
+import { MAPBOX_CONFIG, USER_LOCATION, INCIDENT_LIMITS } from '@lib/map/constants';
+import type { ParsedIncident } from '@lib/nostr/events/types';
 
 export default function MapScreen() {
   const navigation = useNavigation<any>();

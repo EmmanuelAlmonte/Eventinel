@@ -12,8 +12,8 @@ import { useNavigation } from '@react-navigation/native';
 import { useNDK, NDKEvent } from '@nostr-dev-kit/mobile';
 import { isConnected } from '../lib/relay/status';
 
-import { ScreenContainer } from '../lib/ui';
-import { useAppTheme } from '../lib/theme';
+import { ScreenContainer } from '@components/ui';
+import { useAppTheme } from '@hooks';
 
 type MenuItem = {
   title: string;

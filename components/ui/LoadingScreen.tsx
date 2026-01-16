@@ -7,7 +7,7 @@
 import React from 'react';
 import { StyleSheet, View, ActivityIndicator } from 'react-native';
 import { Text } from '@rneui/themed';
-import { NEUTRAL, PRIMARY } from '../brand/colors';
+import { NEUTRAL, PRIMARY } from '@lib/brand/colors';
 
 interface LoadingScreenProps {
   /** Loading message */

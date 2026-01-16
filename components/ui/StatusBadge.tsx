@@ -7,7 +7,7 @@
 import React from 'react';
 import { StyleSheet, View, ViewStyle } from 'react-native';
 import { Badge, Text } from '@rneui/themed';
-import { SEMANTIC, SEVERITY_COLORS, NEUTRAL } from '../brand/colors';
+import { SEMANTIC, SEVERITY_COLORS, NEUTRAL } from '@lib/brand/colors';
 
 // ============ STATUS BADGE ============
 

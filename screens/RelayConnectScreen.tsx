@@ -14,8 +14,8 @@ import { isConnected, getStatusString } from '../lib/relay/status';
 import { addRelayToStorage, removeRelayFromStorage } from '../lib/relay/storage';
 import type { RelayInfo } from '../types/relay';
 
-import { ScreenContainer } from '../lib/ui';
-import { useAppTheme } from '../lib/theme';
+import { ScreenContainer } from '@components/ui';
+import { useAppTheme } from '@hooks';
 
 // Map status to semantic colors
 function getStatusColor(status: string, colors: ReturnType<typeof useAppTheme>['colors']): string {

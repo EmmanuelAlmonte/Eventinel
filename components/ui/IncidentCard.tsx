@@ -8,7 +8,7 @@
 import React from 'react';
 import { StyleSheet, View, TouchableOpacity } from 'react-native';
 import { Card, Text, Icon } from '@rneui/themed';
-import { NEUTRAL, SEVERITY_COLORS, PRIMARY } from '../brand/colors';
+import { NEUTRAL, SEVERITY_COLORS, PRIMARY } from '@lib/brand/colors';
 import { SeverityBadge } from './StatusBadge';
 
 interface IncidentLocation {

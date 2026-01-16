@@ -8,7 +8,7 @@
 import React from 'react';
 import { View, ScrollView, StyleSheet, ViewStyle, RefreshControl } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useAppTheme } from '../theme';
+import { useAppTheme } from '@hooks';
 
 interface ScreenContainerProps {
   children: React.ReactNode;

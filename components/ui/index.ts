@@ -6,7 +6,7 @@
  *
  * @example
  * ```tsx
- * import { Button, Card, Input, Badge, Avatar, ScreenContainer } from '@eventinel/ui';
+ * import { Button, Card, Input, Badge, Avatar, ScreenContainer } from '../components/ui';
  *
  * function MyScreen() {
  *   return (
@@ -73,5 +73,4 @@ export {
   SkeletonList,
 } from './LoadingScreen';
 
-
-export { BRAND, PRIMARY, SEMANTIC, NEUTRAL } from '../brand';
+export { BRAND, PRIMARY, SEMANTIC, NEUTRAL } from '@lib/brand';

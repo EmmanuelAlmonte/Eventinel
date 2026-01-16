@@ -32,9 +32,9 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Mapbox from '@rnmapbox/maps';
 import { useNDKCurrentUser } from '@nostr-dev-kit/mobile';
 
-import type { ParsedIncident } from '../lib/nostr/events/types';
-import { useAppTheme } from '../lib/theme';
-import { MAP_STYLES } from '../lib/map/types';
+import type { ParsedIncident } from '@lib/nostr/events/types';
+import { useAppTheme } from '@hooks';
+import { MAP_STYLES } from '@lib/map/types';
 
 // Type icons and colors
 const TYPE_CONFIG: Record<string, { icon: string; gradient: [string, string]; color: string }> = {

@@ -13,3 +13,5 @@ export type {
   UseIncidentSubscriptionResult,
   ProcessedIncident,
 } from './useIncidentSubscription';
+
+export { useAppTheme } from './useAppTheme';

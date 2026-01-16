@@ -7,9 +7,9 @@
 
 import { View, Text, StyleSheet } from 'react-native';
 import Mapbox from '@rnmapbox/maps';
-import type { ParsedIncident } from '../nostr/events/types';
-import { incidentToCoordinate, getSeverityColor } from './types';
-import { INCIDENT_MARKER } from './constants';
+import type { ParsedIncident } from '@lib/nostr/events/types';
+import { incidentToCoordinate, getSeverityColor } from '@lib/map/types';
+import { INCIDENT_MARKER } from '@lib/map/constants';
 
 // =============================================================================
 // TYPES

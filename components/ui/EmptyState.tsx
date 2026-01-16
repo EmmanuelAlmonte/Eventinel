@@ -7,7 +7,7 @@
 import React from 'react';
 import { StyleSheet, View } from 'react-native';
 import { Text, Button, Icon } from '@rneui/themed';
-import { NEUTRAL, PRIMARY } from '../brand/colors';
+import { NEUTRAL, PRIMARY } from '@lib/brand/colors';
 
 interface EmptyStateProps {
   /** Main title */

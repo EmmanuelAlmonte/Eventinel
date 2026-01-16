@@ -6,8 +6,8 @@
 
 import { View, StyleSheet } from 'react-native';
 import { Text } from '@rneui/themed';
-import { SEVERITY_COLORS } from '../../lib/nostr/config';
-import type { Severity } from '../../lib/nostr/config';
+import { SEVERITY_COLORS } from '@lib/nostr/config';
+import type { Severity } from '@lib/nostr/config';
 
 interface SeverityBadgeProps {
   severity: Severity;

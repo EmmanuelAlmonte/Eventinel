@@ -17,7 +17,8 @@ import RelayConnectScreen from './screens/RelayConnectScreen';
 import LoginScreen from './screens/LoginScreen';
 import { ndk } from './lib/ndk';
 import { loadRelays } from './lib/relay/storage';
-import { theme, useAppTheme } from './lib/theme';
+import { theme } from './lib/theme';
+import { useAppTheme } from '@hooks';
 
 const Tab = createBottomTabNavigator();
 const Stack = createNativeStackNavigator();

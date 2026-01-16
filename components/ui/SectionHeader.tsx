@@ -7,7 +7,7 @@
 import React from 'react';
 import { StyleSheet, View, TouchableOpacity } from 'react-native';
 import { Text, Icon } from '@rneui/themed';
-import { NEUTRAL, PRIMARY } from '../brand/colors';
+import { NEUTRAL, PRIMARY } from '@lib/brand/colors';
 
 interface SectionHeaderProps {
   title: string;
