@@ -5,20 +5,26 @@
  * Includes theme toggle for light/dark mode.
  */
 
-import { StyleSheet, View, Alert, Platform } from 'react-native';
+import { StyleSheet, View, Alert, Platform, Pressable } from 'react-native';
 import { Text, Button, Card, Avatar, Icon, Divider, Switch } from '@rneui/themed';
 import { useNDKSessionLogout, useNDKCurrentPubkey, useNDKCurrentUser } from '@nostr-dev-kit/mobile';
+import { useNavigation } from '@react-navigation/native';
 
 import { ScreenContainer } from '../lib/ui';
 import { useAppTheme } from '../lib/theme';
 
 export default function ProfileScreen() {
+  const navigation = useNavigation<any>();
   const logout = useNDKSessionLogout();
   const currentPubkey = useNDKCurrentPubkey();
   const currentUser = useNDKCurrentUser();
 
   // Get theme-aware colors and toggle
   const { colors, isDark, toggleMode } = useAppTheme();
+
+  const handleRelaySettings = () => {
+    navigation.navigate('Relays');
+  };
 
   const handleLogout = () => {
     Alert.alert(
@@ -157,11 +163,53 @@ export default function ProfileScreen() {
         </View>
       </Card>
 
-      {/* Account Actions */}
+      {/* Settings */}
       <Card containerStyle={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
         <View style={styles.cardHeader}>
           <Icon
             name="settings"
+            type="material"
+            size={20}
+            color={colors.primary}
+          />
+          <Text style={[styles.cardTitle, { color: colors.text }]}>Settings</Text>
+        </View>
+
+        <Pressable
+          onPress={handleRelaySettings}
+          style={({ pressed }) => [
+            styles.settingRow,
+            pressed && { opacity: 0.7 },
+          ]}
+        >
+          <View style={styles.settingInfo}>
+            <Icon
+              name="dns"
+              type="material"
+              size={24}
+              color={colors.textMuted}
+            />
+            <View style={styles.settingText}>
+              <Text style={[styles.settingLabel, { color: colors.text }]}>Relay Settings</Text>
+              <Text style={[styles.settingDescription, { color: colors.textMuted }]}>
+                Manage Nostr relay connections
+              </Text>
+            </View>
+          </View>
+          <Icon
+            name="chevron-right"
+            type="material"
+            size={24}
+            color={colors.textMuted}
+          />
+        </Pressable>
+      </Card>
+
+      {/* Account Actions */}
+      <Card containerStyle={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+        <View style={styles.cardHeader}>
+          <Icon
+            name="person"
             type="material"
             size={20}
             color={colors.textMuted}

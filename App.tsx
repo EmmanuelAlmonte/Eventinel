@@ -4,12 +4,13 @@ import { Text } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { NavigationContainer } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
+import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { ThemeProvider } from '@rneui/themed';
 import { useNDKInit, useSessionMonitor, useNDKCurrentUser } from '@nostr-dev-kit/mobile';
 
-import MenuScreen from './screens/MenuScreen';
 import MapScreen from './screens/MapScreen';
+import IncidentFeedScreen from './screens/IncidentFeedScreen';
 import ProfileScreen from './screens/ProfileScreen';
 import RelayConnectScreen from './screens/RelayConnectScreen';
 import LoginScreen from './screens/LoginScreen';
@@ -18,74 +19,89 @@ import { loadRelays } from './lib/relay/storage';
 import { theme, useAppTheme } from './lib/theme';
 
 const Tab = createBottomTabNavigator();
+const Stack = createNativeStackNavigator();
 
 /**
- * Main Navigation with theme-aware tab bar
+ * Tab Navigator - 3 main tabs: Map, Incidents, Profile
+ */
+function TabNavigator() {
+  const { colors } = useAppTheme();
+
+  return (
+    <Tab.Navigator
+      initialRouteName="Map"
+      screenOptions={{
+        headerShown: false,
+        tabBarActiveTintColor: colors.primary,
+        tabBarInactiveTintColor: colors.textMuted,
+        tabBarLabelStyle: { fontSize: 12, fontWeight: '600' },
+        tabBarStyle: {
+          backgroundColor: colors.background,
+          height: 60,
+          paddingBottom: 8,
+          paddingTop: 8,
+          borderTopWidth: 1,
+          borderTopColor: colors.border,
+        },
+      }}
+    >
+      <Tab.Screen
+        name="Map"
+        component={MapScreen}
+        options={{
+          tabBarLabel: "Map",
+          tabBarIcon: ({ color }) => (
+            <Text style={{ fontSize: 18, color }}>🗺️</Text>
+          ),
+        }}
+      />
+      <Tab.Screen
+        name="Incidents"
+        component={IncidentFeedScreen}
+        options={{
+          tabBarLabel: "Incidents",
+          tabBarIcon: ({ color }) => (
+            <Text style={{ fontSize: 18, color }}>📋</Text>
+          ),
+        }}
+      />
+      <Tab.Screen
+        name="Profile"
+        component={ProfileScreen}
+        options={{
+          tabBarLabel: "Profile",
+          tabBarIcon: ({ color }) => (
+            <Text style={{ fontSize: 18, color }}>👤</Text>
+          ),
+        }}
+      />
+    </Tab.Navigator>
+  );
+}
+
+/**
+ * Main Navigation with Stack (for modal screens like Relays)
  */
 function MainNavigation() {
-  const { colors, isDark } = useAppTheme();
+  const { isDark, colors } = useAppTheme();
 
   return (
     <NavigationContainer>
       <StatusBar style={isDark ? 'light' : 'dark'} />
-      <Tab.Navigator
-        initialRouteName="Map"
-        screenOptions={{
-          headerShown: false,
-          tabBarActiveTintColor: colors.primary,
-          tabBarInactiveTintColor: colors.textMuted,
-          tabBarLabelStyle: { fontSize: 12, fontWeight: '600' },
-          tabBarStyle: {
-            backgroundColor: colors.background,
-            height: 60,
-            paddingBottom: 8,
-            paddingTop: 8,
-            borderTopWidth: 1,
-            borderTopColor: colors.border,
-          },
-        }}
-      >
-        <Tab.Screen
-          name="Menu"
-          component={MenuScreen}
-          options={{
-            tabBarLabel: "Home",
-            tabBarIcon: ({ color }) => (
-              <Text style={{ fontSize: 18, color }}>🏠</Text>
-            ),
-          }}
-        />
-        <Tab.Screen
+      <Stack.Navigator screenOptions={{ headerShown: false }}>
+        <Stack.Screen name="Main" component={TabNavigator} />
+        <Stack.Screen
           name="Relays"
           component={RelayConnectScreen}
           options={{
-            tabBarLabel: "Relays",
-            tabBarIcon: ({ color }) => (
-              <Text style={{ fontSize: 18, color }}>📡</Text>
-            ),
+            presentation: 'modal',
+            headerShown: true,
+            headerTitle: 'Relay Settings',
+            headerStyle: { backgroundColor: colors.background },
+            headerTintColor: colors.text,
           }}
         />
-        <Tab.Screen
-          name="Map"
-          component={MapScreen}
-          options={{
-            tabBarLabel: "Map",
-            tabBarIcon: ({ color }) => (
-              <Text style={{ fontSize: 18, color }}>🗺️</Text>
-            ),
-          }}
-        />
-        <Tab.Screen
-          name="Profile"
-          component={ProfileScreen}
-          options={{
-            tabBarLabel: "Profile",
-            tabBarIcon: ({ color }) => (
-              <Text style={{ fontSize: 18, color }}>👤</Text>
-            ),
-          }}
-        />
-      </Tab.Navigator>
+      </Stack.Navigator>
     </NavigationContainer>
   );
 }
@@ -143,7 +159,7 @@ export default function App() {
         console.log('📥 [App] Loaded', savedRelays.length, 'saved relays:', savedRelays);
 
         if (savedRelays.length === 0) {
-          console.warn('⚠️ [App] No saved relays found. Add relays in the Relays tab.');
+          console.warn('⚠️ [App] No saved relays found. Add relays in Profile > Relay Settings.');
         }
 
         // Add them to NDK pool
