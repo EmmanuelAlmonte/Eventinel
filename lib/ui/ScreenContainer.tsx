@@ -2,13 +2,13 @@
  * ScreenContainer
  *
  * Base container for all app screens with proper safe area handling,
- * dark background, and optional scroll behavior.
+ * theme-aware background, and optional scroll behavior.
  */
 
 import React from 'react';
 import { View, ScrollView, StyleSheet, ViewStyle, RefreshControl } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { NEUTRAL } from '../brand/colors';
+import { useAppTheme } from '../theme';
 
 interface ScreenContainerProps {
   children: React.ReactNode;
@@ -21,7 +21,7 @@ interface ScreenContainerProps {
   style?: ViewStyle;
   /** Apply safe area padding (default: true) */
   safeArea?: boolean;
-  /** Background color (default: NEUTRAL.dark) */
+  /** Override background color (uses theme background by default) */
   backgroundColor?: string;
   /** Horizontal padding (default: 16) */
   paddingHorizontal?: number;
@@ -36,15 +36,19 @@ export function ScreenContainer({
   onRefresh,
   style,
   safeArea = true,
-  backgroundColor = NEUTRAL.dark,
+  backgroundColor,
   paddingHorizontal = 16,
   centerContent = false,
 }: ScreenContainerProps) {
   const insets = useSafeAreaInsets();
+  const { colors } = useAppTheme();
+
+  // Use provided backgroundColor or theme background
+  const bgColor = backgroundColor ?? colors.background;
 
   const containerStyle: ViewStyle = {
     flex: 1,
-    backgroundColor,
+    backgroundColor: bgColor,
     paddingTop: safeArea ? insets.top : 0,
     paddingBottom: safeArea ? insets.bottom : 0,
     paddingHorizontal,
@@ -55,7 +59,7 @@ export function ScreenContainer({
   if (scroll) {
     return (
       <ScrollView
-        style={[styles.scrollView, { backgroundColor }]}
+        style={[styles.scrollView, { backgroundColor: bgColor }]}
         contentContainerStyle={[
           styles.scrollContent,
           {
@@ -73,8 +77,8 @@ export function ScreenContainer({
             <RefreshControl
               refreshing={refreshing ?? false}
               onRefresh={onRefresh}
-              tintColor={NEUTRAL.textMuted}
-              colors={[NEUTRAL.textMuted]}
+              tintColor={colors.textMuted}
+              colors={[colors.textMuted]}
             />
           ) : undefined
         }

@@ -25,6 +25,37 @@ npm run ios
 npm run web
 ```
 
+## NDK Mobile Rules (Critical)
+
+**Package:** `@nostr-dev-kit/ndk-mobile` (ONLY this package)
+
+### Single Package Rule
+```typescript
+// ✅ ALWAYS use ndk-mobile (re-exports everything from core)
+import { useNDK, NDKEvent, NDKNip55Signer } from '@nostr-dev-kit/ndk-mobile';
+
+// ❌ NEVER import from these (causes errors)
+import { ... } from '@nostr-dev-kit/ndk';      // Version conflicts
+import { ... } from '@nostr-dev-kit/react';    // Web only - doesn't work
+```
+
+### Mobile-Specific Patterns
+| Do | Don't |
+|----|-------|
+| `useSessionMonitor()` | `<NDKHeadless>` (web only) |
+| `NDKNip55Signer` | `NDKNip07Signer` (browser only) |
+| `await cacheAdapter.initialize()` | Use cache without init |
+| NDK at module level | `new NDK()` inside component |
+
+### Universal Rules
+- `login(signer, true)` — second param is boolean, NOT options object
+- Timestamps in seconds: `Math.floor(Date.now() / 1000)`
+- Filters use hex pubkeys, not bech32 (npub)
+
+**For detailed rules:** `.claude/skills/ndk-mobile/SKILL.md`
+
+---
+
 ## Architecture
 
 ### Tech Stack
@@ -156,9 +187,31 @@ This suggests Jest was intended but not fully configured.
 - Phone only (no tablet support)
 - ITSAppUsesNonExemptEncryption: false
 
+## Available Agents
+
+| Agent | Use For |
+|-------|---------|
+| `library-api-verifier` | Verify imports exist in type definitions |
+| `plan-validator` | Validate implementation plans against NDK APIs |
+| `api-signature-checker` | Find exact function signatures |
+| `example-finder` | Discover real-world usage patterns |
+
+### Commands
+
+| Command | Purpose |
+|---------|---------|
+| `/check-export <name>` | Verify function/type exists in package |
+| `/check-export-simple <name>` | Quick export verification |
+
+## Key Documentation Locations
+
+- **Mobile source:** `ndk-docs/mobile/src/`
+- **Mobile docs:** `ndk-docs/mobile/docs/`
+- **Core (universal):** `ndk-docs/core/`
+- ~~React (web):~~ `ndk-docs/react/` — NOT APPLICABLE
+
 ## Important Notes
 
 - **No README.md exists** - this is the primary documentation
-- **No git history yet** - all files are untracked (new project)
 - **TypeScript strict mode** is enabled
 - **EAS Project ID**: 1a58dec9-3386-4d0f-822e-48bf0ee5a852

@@ -32,6 +32,8 @@ module.exports = {
           RNMapboxMapsAccessToken: process.env.MAPBOX_ACCESS_TOKEN,
         },
       ],
+      // Custom plugin to create mapbox_access_token.xml (required for Android native SDK)
+      ['./plugins/withMapboxToken', process.env.MAPBOX_ACCESS_TOKEN],
       'expo-sqlite',
       [
         'expo-build-properties',

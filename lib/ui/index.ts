@@ -74,5 +74,14 @@ export {
 } from './LoadingScreen';
 
 // Export theme utilities
-export { theme, spacing, radius, statusColors, SEVERITY_COLORS } from '../theme';
+export {
+  theme,
+  spacing,
+  radius,
+  statusColors,
+  SEVERITY_COLORS,
+  useAppTheme,
+  useTheme,
+  useThemeMode,
+} from '../theme';
 export { BRAND, PRIMARY, SEMANTIC, NEUTRAL } from '../brand';

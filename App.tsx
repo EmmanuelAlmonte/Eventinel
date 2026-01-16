@@ -14,10 +14,80 @@ import RelayConnectScreen from './screens/RelayConnectScreen';
 import LoginScreen from './screens/LoginScreen';
 import { ndk } from './lib/ndk';
 import { loadRelays } from './lib/relay/storage';
-import { theme } from './lib/theme';
-import { PRIMARY, NEUTRAL } from './lib/brand/colors';
+import { theme, useAppTheme } from './lib/theme';
 
 const Tab = createMaterialTopTabNavigator();
+
+/**
+ * Main Navigation with theme-aware tab bar
+ */
+function MainNavigation() {
+  const { colors, isDark } = useAppTheme();
+
+  return (
+    <NavigationContainer>
+      <StatusBar style={isDark ? 'light' : 'dark'} />
+      <Tab.Navigator
+        initialRouteName="Menu"
+        tabBarPosition="bottom"
+        screenOptions={{
+          tabBarActiveTintColor: colors.primary,
+          tabBarInactiveTintColor: colors.textMuted,
+          tabBarLabelStyle: { fontSize: 12, fontWeight: '600' },
+          tabBarStyle: {
+            backgroundColor: colors.background,
+            height: 60,
+            paddingBottom: 8,
+            paddingTop: 8,
+            borderTopWidth: 1,
+            borderTopColor: colors.border,
+          },
+          tabBarIndicatorStyle: {
+            backgroundColor: colors.primary,
+            height: 3,
+            top: 0,
+          },
+          swipeEnabled: false,
+        }}
+      >
+        <Tab.Screen
+          name="Menu"
+          component={MenuScreen}
+          options={{ tabBarLabel: '🏠 Home' }}
+        />
+        <Tab.Screen
+          name="Relays"
+          component={RelayConnectScreen}
+          options={{ tabBarLabel: '🌐 Relays' }}
+        />
+        <Tab.Screen
+          name="Map"
+          component={MapScreen}
+          options={{ tabBarLabel: '🗺️ Map' }}
+        />
+        <Tab.Screen
+          name="Profile"
+          component={ProfileScreen}
+          options={{ tabBarLabel: '👤 Profile' }}
+        />
+      </Tab.Navigator>
+    </NavigationContainer>
+  );
+}
+
+/**
+ * Login wrapper with theme-aware status bar
+ */
+function LoginWrapper() {
+  const { isDark } = useAppTheme();
+
+  return (
+    <>
+      <StatusBar style={isDark ? 'light' : 'dark'} />
+      <LoginScreen />
+    </>
+  );
+}
 
 /**
  * Eventinel Mobile App
@@ -93,8 +163,7 @@ export default function App() {
     return (
       <SafeAreaProvider>
         <ThemeProvider theme={theme}>
-          <StatusBar style="light" />
-          <LoginScreen />
+          <LoginWrapper />
         </ThemeProvider>
       </SafeAreaProvider>
     );
@@ -103,53 +172,7 @@ export default function App() {
   return (
     <SafeAreaProvider>
       <ThemeProvider theme={theme}>
-        <NavigationContainer>
-          <StatusBar style="light" />
-          <Tab.Navigator
-            initialRouteName="Menu"
-            tabBarPosition="bottom"
-            screenOptions={{
-              tabBarActiveTintColor: PRIMARY.DEFAULT,
-              tabBarInactiveTintColor: NEUTRAL.textMuted,
-              tabBarLabelStyle: { fontSize: 12, fontWeight: '600' },
-              tabBarStyle: {
-                backgroundColor: NEUTRAL.dark,
-                height: 60,
-                paddingBottom: 8,
-                paddingTop: 8,
-                borderTopWidth: 1,
-                borderTopColor: NEUTRAL.darkBorder,
-              },
-              tabBarIndicatorStyle: {
-                backgroundColor: PRIMARY.DEFAULT,
-                height: 3,
-                top: 0,
-              },
-              swipeEnabled: false,
-            }}
-          >
-            <Tab.Screen
-              name="Menu"
-              component={MenuScreen}
-              options={{ tabBarLabel: '🏠 Home' }}
-            />
-            <Tab.Screen
-              name="Relays"
-              component={RelayConnectScreen}
-              options={{ tabBarLabel: '🌐 Relays' }}
-            />
-            <Tab.Screen
-              name="Map"
-              component={MapScreen}
-              options={{ tabBarLabel: '🗺️ Map' }}
-            />
-            <Tab.Screen
-              name="Profile"
-              component={ProfileScreen}
-              options={{ tabBarLabel: '👤 Profile' }}
-            />
-          </Tab.Navigator>
-        </NavigationContainer>
+        <MainNavigation />
       </ThemeProvider>
     </SafeAreaProvider>
   );
