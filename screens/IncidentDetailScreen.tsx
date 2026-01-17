@@ -96,6 +96,9 @@ export default function IncidentDetailScreen() {
 
   // Cache miss timeout - show loading briefly, then error
   const [showNotFound, setShowNotFound] = useState(false);
+
+  // Delay map render until container has valid dimensions (fixes iOS 64x64 fallback)
+  const [mapReady, setMapReady] = useState(false);
   useEffect(() => {
     if (incidentId && !incident) {
       console.log('[IncidentDetail] Cache miss for:', incidentId, 'version:', version);
@@ -250,30 +253,43 @@ export default function IncidentDetailScreen() {
         contentContainerStyle={[styles.scrollContent, { paddingBottom: 100 + insets.bottom }]}
         showsVerticalScrollIndicator={false}
       >
-        {/* Mini Map */}
-        <View style={styles.mapContainer}>
-          <Mapbox.MapView
-            style={styles.miniMap}
-            styleURL={MAP_STYLES.DARK}
-            scrollEnabled={false}
-            pitchEnabled={false}
-            rotateEnabled={false}
-            zoomEnabled={false}
-          >
-            <Mapbox.Camera
-              zoomLevel={15}
-              centerCoordinate={[incident.location.lng, incident.location.lat]}
-              animationDuration={0}
-            />
-            <Mapbox.PointAnnotation
-              id="incident-marker"
-              coordinate={[incident.location.lng, incident.location.lat]}
+        {/* Mini Map - onLayout delays render until container has valid size (iOS fix) */}
+        <View
+          style={styles.mapContainer}
+          onLayout={(e) => {
+            if (e.nativeEvent.layout.width > 0 && !mapReady) {
+              setMapReady(true);
+            }
+          }}
+        >
+          {mapReady ? (
+            <Mapbox.MapView
+              style={styles.miniMap}
+              styleURL={MAP_STYLES.DARK}
+              scrollEnabled={false}
+              pitchEnabled={false}
+              rotateEnabled={false}
+              zoomEnabled={false}
             >
-              <View style={[styles.mapMarker, { backgroundColor: typeConfig.color }]}>
-                <RNText style={styles.mapMarkerGlyph}>{typeConfig.glyph}</RNText>
-              </View>
-            </Mapbox.PointAnnotation>
-          </Mapbox.MapView>
+              <Mapbox.Camera
+                zoomLevel={15}
+                centerCoordinate={[incident.location.lng, incident.location.lat]}
+                animationDuration={0}
+              />
+              <Mapbox.PointAnnotation
+                id="incident-marker"
+                coordinate={[incident.location.lng, incident.location.lat]}
+              >
+                <View style={[styles.mapMarker, { backgroundColor: typeConfig.color }]}>
+                  <RNText style={styles.mapMarkerGlyph}>{typeConfig.glyph}</RNText>
+                </View>
+              </Mapbox.PointAnnotation>
+            </Mapbox.MapView>
+          ) : (
+            <View style={[styles.miniMap, styles.mapPlaceholder]}>
+              <ActivityIndicator size="small" color={colors.textMuted} />
+            </View>
+          )}
         </View>
 
         {/* Incident Header Card */}
@@ -531,6 +547,11 @@ const styles = StyleSheet.create({
   },
   miniMap: {
     flex: 1,
+  },
+  mapPlaceholder: {
+    backgroundColor: '#1a1a2e',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   mapMarker: {
     width: 32,
