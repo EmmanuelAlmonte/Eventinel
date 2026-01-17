@@ -24,6 +24,7 @@ import {
   TextInput,
   KeyboardAvoidingView,
   ActivityIndicator,
+  Text as RNText,
 } from 'react-native';
 import { Text, Card, Icon, Button, Avatar, Divider } from '@rneui/themed';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -34,18 +35,19 @@ import { useNDKCurrentUser } from '@nostr-dev-kit/mobile';
 
 import type { ParsedIncident } from '@lib/nostr/events/types';
 import { useAppTheme } from '@hooks';
+import { useIncidentCache } from '@contexts';
 import { MAP_STYLES } from '@lib/map/types';
 
-// Type icons and colors
-const TYPE_CONFIG: Record<string, { icon: string; gradient: [string, string]; color: string }> = {
-  fire: { icon: 'local-fire-department', gradient: ['#EF4444', '#F97316'], color: '#EF4444' },
-  medical: { icon: 'medical-services', gradient: ['#3B82F6', '#06B6D4'], color: '#3B82F6' },
-  traffic: { icon: 'traffic', gradient: ['#F97316', '#EAB308'], color: '#F97316' },
-  violent_crime: { icon: 'warning', gradient: ['#8B5CF6', '#EC4899'], color: '#8B5CF6' },
-  property_crime: { icon: 'home', gradient: ['#8B5CF6', '#6366F1'], color: '#8B5CF6' },
-  disturbance: { icon: 'volume-up', gradient: ['#F59E0B', '#EAB308'], color: '#F59E0B' },
-  suspicious: { icon: 'visibility', gradient: ['#6B7280', '#9CA3AF'], color: '#6B7280' },
-  other: { icon: 'info', gradient: ['#6B7280', '#9CA3AF'], color: '#6B7280' },
+// Type icons and colors (glyph is for Mapbox PointAnnotation - plain text only)
+const TYPE_CONFIG: Record<string, { icon: string; glyph: string; gradient: [string, string]; color: string }> = {
+  fire: { icon: 'local-fire-department', glyph: '🔥', gradient: ['#EF4444', '#F97316'], color: '#EF4444' },
+  medical: { icon: 'medical-services', glyph: '🏥', gradient: ['#3B82F6', '#06B6D4'], color: '#3B82F6' },
+  traffic: { icon: 'traffic', glyph: '🚗', gradient: ['#F97316', '#EAB308'], color: '#F97316' },
+  violent_crime: { icon: 'warning', glyph: '⚠️', gradient: ['#8B5CF6', '#EC4899'], color: '#8B5CF6' },
+  property_crime: { icon: 'home', glyph: '🏠', gradient: ['#8B5CF6', '#6366F1'], color: '#8B5CF6' },
+  disturbance: { icon: 'volume-up', glyph: '📢', gradient: ['#F59E0B', '#EAB308'], color: '#F59E0B' },
+  suspicious: { icon: 'visibility', glyph: '👁', gradient: ['#6B7280', '#9CA3AF'], color: '#6B7280' },
+  other: { icon: 'info', glyph: 'ℹ️', gradient: ['#6B7280', '#9CA3AF'], color: '#6B7280' },
 };
 
 // Severity colors
@@ -57,10 +59,10 @@ const SEVERITY_COLORS: Record<number, string> = {
   1: '#6B7280',
 };
 
-// Route params type
+// Route params type - now uses incidentId only (no serialization warning)
 type DetailRouteParams = {
   IncidentDetail: {
-    incident: ParsedIncident;
+    incidentId: string;
   };
 };
 
@@ -85,9 +87,25 @@ export default function IncidentDetailScreen() {
   const insets = useSafeAreaInsets();
   const { colors, isDark } = useAppTheme();
   const currentUser = useNDKCurrentUser();
+  const { getIncident, version } = useIncidentCache();
 
-  // Get incident from route params
-  const incident = route.params?.incident;
+  // Get incident from cache using incidentId
+  // Re-lookup when version changes (cache updated after mount)
+  const incidentId = route.params?.incidentId;
+  const incident = incidentId ? getIncident(incidentId) : undefined;
+
+  // Cache miss timeout - show loading briefly, then error
+  const [showNotFound, setShowNotFound] = useState(false);
+  useEffect(() => {
+    if (incidentId && !incident) {
+      console.log('[IncidentDetail] Cache miss for:', incidentId, 'version:', version);
+      // Wait 2s for cache to populate before showing error
+      const timer = setTimeout(() => setShowNotFound(true), 2000);
+      return () => clearTimeout(timer);
+    } else {
+      setShowNotFound(false);
+    }
+  }, [incidentId, incident, version]);
 
   // Animation for live indicator pulse
   const pulseAnim = useRef(new Animated.Value(1)).current;
@@ -161,7 +179,7 @@ export default function IncidentDetailScreen() {
     }, 1000);
   }, [commentText, isSubmitting]);
 
-  // Error state if no incident
+  // Loading/error state if no incident
   if (!incident) {
     return (
       <View style={[styles.container, { backgroundColor: colors.background }]}>
@@ -172,9 +190,21 @@ export default function IncidentDetailScreen() {
           </Pressable>
         </View>
         <View style={styles.errorContainer}>
-          <Icon name="error-outline" type="material" size={64} color={colors.error} />
-          <Text style={[styles.errorTitle, { color: colors.text }]}>Couldn't load incident</Text>
-          <Button title="Go Back" onPress={() => navigation.goBack()} />
+          {showNotFound ? (
+            <>
+              <Icon name="error-outline" type="material" size={64} color={colors.error} />
+              <Text style={[styles.errorTitle, { color: colors.text }]}>Incident not available</Text>
+              <Text style={[styles.errorSubtitle, { color: colors.textMuted }]}>
+                Return to map or feed to find incidents
+              </Text>
+              <Button title="Go Back" onPress={() => navigation.goBack()} />
+            </>
+          ) : (
+            <>
+              <ActivityIndicator size="large" color={colors.primary} />
+              <Text style={[styles.errorTitle, { color: colors.text }]}>Loading incident...</Text>
+            </>
+          )}
         </View>
       </View>
     );
@@ -240,7 +270,7 @@ export default function IncidentDetailScreen() {
               coordinate={[incident.location.lng, incident.location.lat]}
             >
               <View style={[styles.mapMarker, { backgroundColor: typeConfig.color }]}>
-                <Icon name={typeConfig.icon} type="material" size={16} color="#FFFFFF" />
+                <RNText style={styles.mapMarkerGlyph}>{typeConfig.glyph}</RNText>
               </View>
             </Mapbox.PointAnnotation>
           </Mapbox.MapView>
@@ -510,6 +540,10 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     borderWidth: 3,
     borderColor: '#0F172A',
+  },
+  mapMarkerGlyph: {
+    fontSize: 14,
+    textAlign: 'center',
   },
 
   // Cards
@@ -790,5 +824,10 @@ const styles = StyleSheet.create({
   errorTitle: {
     fontSize: 18,
     fontWeight: '600',
+  },
+  errorSubtitle: {
+    fontSize: 14,
+    textAlign: 'center',
+    paddingHorizontal: 32,
   },
 });

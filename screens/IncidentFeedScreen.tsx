@@ -5,7 +5,7 @@
  * Uses extracted hooks for location and subscription logic.
  */
 
-import { useCallback } from 'react';
+import { useCallback, useEffect } from 'react';
 import {
   View,
   FlatList,
@@ -17,6 +17,7 @@ import { Text, Card, Icon, Badge } from '@rneui/themed';
 import { useNavigation } from '@react-navigation/native';
 
 import { useUserLocation, useIncidentSubscription, useAppTheme, ProcessedIncident } from '@hooks';
+import { useIncidentCache } from '@contexts';
 import { ScreenContainer } from '@components/ui';
 import { DEFAULT_CAMERA } from '@lib/map/types';
 import { SEVERITY_COLORS, TYPE_CONFIG } from '@lib/nostr/config';
@@ -25,6 +26,7 @@ import { formatRelativeTimeMs } from '@lib/utils/time';
 export default function IncidentFeedScreen() {
   const navigation = useNavigation<any>();
   const { colors } = useAppTheme();
+  const { upsertMany } = useIncidentCache();
 
   // Get user location with fallback to default
   const { location: userLocation, isLoading: isLoadingLocation } = useUserLocation({
@@ -41,9 +43,16 @@ export default function IncidentFeedScreen() {
     enabled: !!userLocation,
   });
 
-  // Handle incident press - navigate to detail
+  // Cache incidents for Detail screen lookup
+  useEffect(() => {
+    if (incidents.length > 0) {
+      upsertMany(incidents);
+    }
+  }, [incidents, upsertMany]);
+
+  // Handle incident press - navigate with incidentId only (no serialization warning)
   const handleIncidentPress = useCallback((incident: ProcessedIncident) => {
-    navigation.navigate('IncidentDetail', { incident });
+    navigation.navigate('IncidentDetail', { incidentId: incident.incidentId });
   }, [navigation]);
 
   // Render incident item

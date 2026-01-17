@@ -5,11 +5,13 @@
  * Uses extracted hooks for location and subscription logic.
  */
 
+import { useEffect } from 'react';
 import { View, Text, StyleSheet, ActivityIndicator } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import Mapbox from '@rnmapbox/maps';
 
 import { useUserLocation, useIncidentSubscription } from '@hooks';
+import { useIncidentCache } from '@contexts';
 import { IncidentMarker } from '@components/map';
 import { DEFAULT_CAMERA, MAP_STYLES } from '@lib/map/types';
 import { MAPBOX_CONFIG, USER_LOCATION, INCIDENT_LIMITS } from '@lib/map/constants';
@@ -17,6 +19,7 @@ import type { ParsedIncident } from '@lib/nostr/events/types';
 
 export default function MapScreen() {
   const navigation = useNavigation<any>();
+  const { upsertMany } = useIncidentCache();
 
   // Get user location with fallback to default
   const { location: userLocation, isLoading: isLoadingLocation } = useUserLocation({
@@ -34,10 +37,17 @@ export default function MapScreen() {
     enabled: !!userLocation,
   });
 
-  // Handle marker press - navigate to detail screen
+  // Cache incidents for Detail screen lookup
+  useEffect(() => {
+    if (incidents.length > 0) {
+      upsertMany(incidents);
+    }
+  }, [incidents, upsertMany]);
+
+  // Handle marker press - navigate with incidentId only (no serialization warning)
   function handleMarkerPress(incident: ParsedIncident) {
     console.log('MapScreen: Marker pressed:', incident.incidentId);
-    navigation.navigate('IncidentDetail', { incident });
+    navigation.navigate('IncidentDetail', { incidentId: incident.incidentId });
   }
 
   // Loading state

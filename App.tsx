@@ -19,6 +19,7 @@ import { ndk } from './lib/ndk';
 import { loadRelays } from './lib/relay/storage';
 import { theme } from './lib/theme';
 import { useAppTheme } from '@hooks';
+import { IncidentCacheProvider } from '@contexts';
 
 const Tab = createBottomTabNavigator();
 const Stack = createNativeStackNavigator();
@@ -206,7 +207,9 @@ export default function App() {
   return (
     <SafeAreaProvider>
       <ThemeProvider theme={theme}>
-        <MainNavigation />
+        <IncidentCacheProvider>
+          <MainNavigation />
+        </IncidentCacheProvider>
       </ThemeProvider>
     </SafeAreaProvider>
   );
