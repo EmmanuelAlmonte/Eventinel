@@ -276,14 +276,13 @@ export default function IncidentDetailScreen() {
                 centerCoordinate={[incident.location.lng, incident.location.lat]}
                 animationDuration={0}
               />
-              <Mapbox.PointAnnotation
-                id="incident-marker"
+              <Mapbox.MarkerView
                 coordinate={[incident.location.lng, incident.location.lat]}
               >
                 <View style={[styles.mapMarker, { backgroundColor: typeConfig.color }]}>
                   <RNText style={styles.mapMarkerGlyph}>{typeConfig.glyph}</RNText>
                 </View>
-              </Mapbox.PointAnnotation>
+              </Mapbox.MarkerView>
             </Mapbox.MapView>
           ) : (
             <View style={[styles.miniMap, styles.mapPlaceholder]}>

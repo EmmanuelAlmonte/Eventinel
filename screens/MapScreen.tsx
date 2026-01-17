@@ -5,7 +5,7 @@
  * Uses extracted hooks for location and subscription logic.
  */
 
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, ActivityIndicator } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import Mapbox from '@rnmapbox/maps';
@@ -20,6 +20,9 @@ import type { ParsedIncident } from '@lib/nostr/events/types';
 export default function MapScreen() {
   const navigation = useNavigation<any>();
   const { upsertMany } = useIncidentCache();
+
+  // Delay map render until container has valid dimensions (fixes iOS 64x64 fallback)
+  const [mapReady, setMapReady] = useState(false);
 
   // Get user location with fallback to default
   const { location: userLocation, isLoading: isLoadingLocation } = useUserLocation({
@@ -65,30 +68,46 @@ export default function MapScreen() {
 
   return (
     <View style={styles.container}>
-      <Mapbox.MapView style={styles.map} styleURL={MAP_STYLES.DARK}>
-        {/* Camera */}
-        <Mapbox.Camera
-          zoomLevel={MAPBOX_CONFIG.DEFAULT_ZOOM}
-          centerCoordinate={cameraCenter}
-          animationDuration={0}
-        />
+      {/* Map container - onLayout delays render until valid dimensions (iOS fix) */}
+      <View
+        style={styles.mapContainer}
+        onLayout={(e) => {
+          if (e.nativeEvent.layout.width > 0 && !mapReady) {
+            setMapReady(true);
+          }
+        }}
+      >
+        {mapReady ? (
+          <Mapbox.MapView style={styles.map} styleURL={MAP_STYLES.DARK}>
+            {/* Camera */}
+            <Mapbox.Camera
+              zoomLevel={MAPBOX_CONFIG.DEFAULT_ZOOM}
+              centerCoordinate={cameraCenter}
+              animationDuration={0}
+            />
 
-        {/* User location marker (blue dot) */}
-        {userLocation && (
-          <Mapbox.PointAnnotation id="user-location" coordinate={userLocation}>
-            <View style={styles.userMarker} />
-          </Mapbox.PointAnnotation>
+            {/* User location marker (blue dot) */}
+            {userLocation && (
+              <Mapbox.PointAnnotation id="user-location" coordinate={userLocation}>
+                <View style={styles.userMarker} />
+              </Mapbox.PointAnnotation>
+            )}
+
+            {/* Incident markers */}
+            {incidents.map((incident) => (
+              <IncidentMarker
+                key={incident.incidentId}
+                incident={incident}
+                onPress={handleMarkerPress}
+              />
+            ))}
+          </Mapbox.MapView>
+        ) : (
+          <View style={styles.mapPlaceholder}>
+            <ActivityIndicator size="large" color="#2563eb" />
+          </View>
         )}
-
-        {/* Incident markers */}
-        {incidents.map((incident) => (
-          <IncidentMarker
-            key={incident.incidentId}
-            incident={incident}
-            onPress={handleMarkerPress}
-          />
-        ))}
-      </Mapbox.MapView>
+      </View>
 
       {/* Stats overlay (top-right) - DEV only */}
       {__DEV__ && (
@@ -126,8 +145,17 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#666',
   },
+  mapContainer: {
+    flex: 1,
+  },
   map: {
     flex: 1,
+  },
+  mapPlaceholder: {
+    flex: 1,
+    backgroundColor: '#1a1a2e',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   userMarker: {
     width: USER_LOCATION.MARKER_SIZE,

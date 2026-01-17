@@ -5,7 +5,7 @@
  * with severity-based color coding.
  */
 
-import { View, Text, StyleSheet } from 'react-native';
+import { View, Text, StyleSheet, Pressable } from 'react-native';
 import Mapbox from '@rnmapbox/maps';
 import type { ParsedIncident } from '@lib/nostr/events/types';
 import { incidentToCoordinate, getSeverityColor } from '@lib/map/types';
@@ -55,18 +55,16 @@ export function IncidentMarker({ incident, onPress }: IncidentMarkerProps) {
     onPress?.(incident);
   };
 
+  // Use MarkerView instead of PointAnnotation to avoid "max 1 subview" error
+  // on RN 0.76+ with New Architecture (view tree flattening issue)
   return (
-    <Mapbox.PointAnnotation
-      id={incident.incidentId}
-      coordinate={coordinate}
-      onSelected={handlePress}
-    >
-      <View style={styles.container}>
+    <Mapbox.MarkerView coordinate={coordinate} allowOverlap>
+      <Pressable onPress={handlePress}>
         <View style={[styles.pin, { backgroundColor: color }]}>
           <Text style={styles.severityText}>{incident.severity}</Text>
         </View>
-      </View>
-    </Mapbox.PointAnnotation>
+      </Pressable>
+    </Mapbox.MarkerView>
   );
 }
 
@@ -75,11 +73,6 @@ export function IncidentMarker({ incident, onPress }: IncidentMarkerProps) {
 // =============================================================================
 
 const styles = StyleSheet.create({
-  container: {
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-
   pin: {
     width: INCIDENT_MARKER.PIN_SIZE,
     height: INCIDENT_MARKER.PIN_SIZE,
