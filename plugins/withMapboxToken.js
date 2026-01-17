@@ -1,9 +1,9 @@
 /**
  * Expo Config Plugin: withMapboxToken
  *
- * Automatically creates the mapbox_access_token.xml Android resource file
- * during `expo prebuild`. This is required because the @rnmapbox/maps plugin
- * doesn't create this file automatically.
+ * Handles Mapbox access token configuration for both platforms:
+ * - Android: Creates mapbox_access_token.xml resource file
+ * - iOS: Adds MBXAccessToken to Info.plist
  *
  * Usage in app.config.js:
  *   plugins: [
@@ -11,16 +11,11 @@
  *   ]
  */
 
-const { withAndroidManifest, withDangerousMod } = require('expo/config-plugins');
+const { withDangerousMod, withInfoPlist } = require('expo/config-plugins');
 const fs = require('fs');
 const path = require('path');
 
-function withMapboxToken(config, token) {
-  if (!token) {
-    console.warn('⚠️  [withMapboxToken] No Mapbox token provided, skipping...');
-    return config;
-  }
-
+function withMapboxTokenAndroid(config, token) {
   return withDangerousMod(config, [
     'android',
     async (config) => {
@@ -46,11 +41,32 @@ function withMapboxToken(config, token) {
 `;
 
       fs.writeFileSync(tokenFilePath, tokenFileContent);
-      console.log('✅ [withMapboxToken] Created mapbox_access_token.xml');
+      console.log('✅ [withMapboxToken] Created mapbox_access_token.xml (Android)');
 
       return config;
     },
   ]);
+}
+
+function withMapboxTokenIOS(config, token) {
+  return withInfoPlist(config, (config) => {
+    config.modResults.MBXAccessToken = token;
+    console.log('✅ [withMapboxToken] Added MBXAccessToken to Info.plist (iOS)');
+    return config;
+  });
+}
+
+function withMapboxToken(config, token) {
+  if (!token) {
+    console.warn('⚠️  [withMapboxToken] No Mapbox token provided, skipping...');
+    return config;
+  }
+
+  // Apply both platform modifications
+  config = withMapboxTokenAndroid(config, token);
+  config = withMapboxTokenIOS(config, token);
+
+  return config;
 }
 
 module.exports = withMapboxToken;
