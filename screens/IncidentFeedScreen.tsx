@@ -18,7 +18,7 @@ import { useNavigation } from '@react-navigation/native';
 
 import { useIncidentSubscription, useAppTheme, ProcessedIncident } from '@hooks';
 import { useIncidentCache, useSharedLocation } from '@contexts';
-import { ScreenContainer } from '@components/ui';
+import { ScreenContainer, SkeletonList } from '@components/ui';
 import { DEFAULT_CAMERA } from '@lib/map/types';
 import { SEVERITY_COLORS, TYPE_CONFIG } from '@lib/nostr/config';
 import { formatRelativeTimeMs } from '@lib/utils/time';
@@ -127,16 +127,17 @@ export default function IncidentFeedScreen() {
     );
   }, [colors, handleIncidentPress]);
 
-  // Loading state
+  // Loading state - show animated skeleton cards
   if (isLoadingLocation) {
     return (
       <ScreenContainer>
-        <View style={styles.centerContainer}>
-          <Icon name="radar" type="material-community" size={48} color={colors.primary} />
-          <Text style={[styles.loadingText, { color: colors.textMuted }]}>
+        <View style={styles.header}>
+          <Text h2 style={[styles.title, { color: colors.text }]}>Incidents</Text>
+          <Text style={[styles.subtitle, { color: colors.textMuted }]}>
             Finding your location...
           </Text>
         </View>
+        <SkeletonList count={4} />
       </ScreenContainer>
     );
   }
@@ -205,15 +206,6 @@ const styles = StyleSheet.create({
   listContent: {
     paddingHorizontal: 16,
     paddingBottom: 24,
-  },
-  centerContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    gap: 16,
-  },
-  loadingText: {
-    fontSize: 16,
   },
   incidentCard: {
     borderRadius: 12,

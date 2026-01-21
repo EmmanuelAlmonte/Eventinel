@@ -6,12 +6,13 @@
  */
 
 import { useEffect, useState, useCallback } from 'react';
-import { View, Text, StyleSheet, ActivityIndicator, Pressable } from 'react-native';
+import { View, Text, StyleSheet, Pressable, ActivityIndicator } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import Mapbox from '@rnmapbox/maps';
 import { Icon } from '@rneui/themed';
 
 import { useIncidentSubscription } from '@hooks';
+import { MapSkeleton } from '@components/ui';
 import { useIncidentCache, useSharedLocation } from '@contexts';
 import { IncidentMarker } from '@components/map';
 import { DEFAULT_CAMERA, MAP_STYLES } from '@lib/map/types';
@@ -82,14 +83,9 @@ export default function MapScreen() {
     navigation.navigate('IncidentDetail', { incidentId: incident.incidentId });
   }
 
-  // Loading state
+  // Loading state - show animated skeleton
   if (isLoadingLocation) {
-    return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#2563eb" />
-        <Text style={styles.loadingText}>Loading map...</Text>
-      </View>
-    );
+    return <MapSkeleton />;
   }
 
   // Determine effective camera center (fallback to default if not set)
@@ -183,17 +179,6 @@ export default function MapScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-  },
-  loadingContainer: {
-    flex: 1,
-    backgroundColor: '#f0f0f0',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  loadingText: {
-    marginTop: 16,
-    fontSize: 16,
-    color: '#666',
   },
   mapContainer: {
     flex: 1,

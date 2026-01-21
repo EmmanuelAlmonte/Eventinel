@@ -2,11 +2,12 @@
  * LoadingScreen
  *
  * Full-screen loading indicator with optional message.
+ * Includes animated skeleton components for content placeholders.
  */
 
 import React from 'react';
 import { StyleSheet, View, ActivityIndicator } from 'react-native';
-import { Text } from '@rneui/themed';
+import { Text, Skeleton } from '@rneui/themed';
 import { NEUTRAL, PRIMARY } from '@lib/brand/colors';
 
 interface LoadingScreenProps {
@@ -72,41 +73,98 @@ export function SigningIn() {
 // ============ SKELETON PLACEHOLDER ============
 
 interface SkeletonCardProps {
+  /** Number of description lines to show */
   lines?: number;
+  /** Animation type */
+  animation?: 'pulse' | 'wave' | 'none';
 }
 
-export function SkeletonCard({ lines = 3 }: SkeletonCardProps) {
+/**
+ * Animated skeleton card that mimics incident card layout.
+ * Uses RNE Skeleton for smooth pulse/wave animations.
+ */
+export function SkeletonCard({ lines = 2, animation = 'pulse' }: SkeletonCardProps) {
   return (
     <View style={styles.skeletonCard}>
-      <View style={styles.skeletonHeader}>
-        <View style={[styles.skeletonBadge, styles.shimmer]} />
-        <View style={[styles.skeletonBadgeSmall, styles.shimmer]} />
-      </View>
-      <View style={[styles.skeletonTitle, styles.shimmer]} />
-      {Array.from({ length: lines - 1 }).map((_, i) => (
-        <View
-          key={i}
-          style={[
-            styles.skeletonLine,
-            styles.shimmer,
-            { width: `${85 - i * 15}%` },
-          ]}
+      {/* Row: Icon + Content + Chevron */}
+      <View style={styles.skeletonRow}>
+        {/* Icon placeholder */}
+        <Skeleton
+          animation={animation}
+          width={48}
+          height={48}
+          style={styles.skeletonIcon}
         />
-      ))}
-      <View style={styles.skeletonFooter}>
-        <View style={[styles.skeletonMeta, styles.shimmer]} />
-        <View style={[styles.skeletonMetaSmall, styles.shimmer]} />
+
+        {/* Content area */}
+        <View style={styles.skeletonContent}>
+          {/* Title row with badge */}
+          <View style={styles.skeletonTitleRow}>
+            <Skeleton animation={animation} width="65%" height={16} />
+            <Skeleton animation={animation} width={50} height={20} style={styles.skeletonBadge} />
+          </View>
+
+          {/* Description lines */}
+          {Array.from({ length: lines }).map((_, i) => (
+            <Skeleton
+              key={i}
+              animation={animation}
+              width={`${90 - i * 15}%`}
+              height={12}
+              style={styles.skeletonLine}
+            />
+          ))}
+
+          {/* Meta row */}
+          <View style={styles.skeletonMetaRow}>
+            <Skeleton animation={animation} width={80} height={10} />
+            <Skeleton animation={animation} width={100} height={10} />
+          </View>
+        </View>
+
+        {/* Chevron placeholder */}
+        <Skeleton animation={animation} width={24} height={24} />
       </View>
     </View>
   );
 }
 
-export function SkeletonList({ count = 3 }: { count?: number }) {
+interface SkeletonListProps {
+  /** Number of skeleton cards to show */
+  count?: number;
+  /** Animation type */
+  animation?: 'pulse' | 'wave' | 'none';
+}
+
+/**
+ * List of skeleton cards for loading states.
+ */
+export function SkeletonList({ count = 3, animation = 'pulse' }: SkeletonListProps) {
   return (
-    <View>
+    <View style={styles.skeletonListContainer}>
       {Array.from({ length: count }).map((_, i) => (
-        <SkeletonCard key={i} />
+        <SkeletonCard key={i} animation={animation} />
       ))}
+    </View>
+  );
+}
+
+/**
+ * Map loading skeleton - shows a large placeholder for the map area.
+ */
+export function MapSkeleton({ animation = 'pulse' }: { animation?: 'pulse' | 'wave' | 'none' }) {
+  return (
+    <View style={styles.mapSkeletonContainer}>
+      <Skeleton
+        animation={animation}
+        width="100%"
+        height="100%"
+        style={styles.mapSkeleton}
+      />
+      <View style={styles.mapSkeletonOverlay}>
+        <Skeleton animation={animation} circle width={48} height={48} />
+        <Text style={styles.mapSkeletonText}>Loading map...</Text>
+      </View>
     </View>
   );
 }
@@ -137,63 +195,70 @@ const styles = StyleSheet.create({
     fontSize: 14,
   },
 
-  // Skeleton styles
+  // Skeleton card styles (mimics incident card layout)
   skeletonCard: {
     backgroundColor: NEUTRAL.darkElevated,
     borderRadius: 12,
     borderWidth: 1,
     borderColor: NEUTRAL.darkBorder,
-    padding: 14,
+    borderLeftWidth: 4,
+    borderLeftColor: NEUTRAL.darkBorder,
+    padding: 16,
     marginBottom: 12,
   },
-  skeletonHeader: {
+  skeletonRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  skeletonIcon: {
+    borderRadius: 12,
+    marginRight: 14,
+  },
+  skeletonContent: {
+    flex: 1,
+  },
+  skeletonTitleRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginBottom: 12,
-  },
-  skeletonBadge: {
-    width: 80,
-    height: 24,
-    borderRadius: 6,
-    backgroundColor: NEUTRAL.darkBorder,
-  },
-  skeletonBadgeSmall: {
-    width: 60,
-    height: 24,
-    borderRadius: 6,
-    backgroundColor: NEUTRAL.darkBorder,
-  },
-  skeletonTitle: {
-    width: '90%',
-    height: 18,
-    borderRadius: 4,
-    backgroundColor: NEUTRAL.darkBorder,
+    alignItems: 'center',
     marginBottom: 8,
   },
-  skeletonLine: {
-    height: 14,
-    borderRadius: 4,
-    backgroundColor: NEUTRAL.darkBorder,
-    marginBottom: 6,
+  skeletonBadge: {
+    borderRadius: 6,
   },
-  skeletonFooter: {
+  skeletonLine: {
+    marginBottom: 6,
+    borderRadius: 4,
+  },
+  skeletonMetaRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     marginTop: 8,
   },
-  skeletonMeta: {
-    width: 120,
-    height: 12,
-    borderRadius: 4,
-    backgroundColor: NEUTRAL.darkBorder,
+  skeletonListContainer: {
+    paddingHorizontal: 0,
   },
-  skeletonMetaSmall: {
-    width: 60,
-    height: 12,
-    borderRadius: 4,
-    backgroundColor: NEUTRAL.darkBorder,
+
+  // Map skeleton styles
+  mapSkeletonContainer: {
+    flex: 1,
+    backgroundColor: NEUTRAL.dark,
   },
-  shimmer: {
-    opacity: 0.5,
+  mapSkeleton: {
+    borderRadius: 0,
+  },
+  mapSkeletonOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 16,
+  },
+  mapSkeletonText: {
+    color: NEUTRAL.textMuted,
+    fontSize: 16,
   },
 });
