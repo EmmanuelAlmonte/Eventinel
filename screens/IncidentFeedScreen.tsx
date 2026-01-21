@@ -16,8 +16,8 @@ import {
 import { Text, Card, Icon, Badge } from '@rneui/themed';
 import { useNavigation } from '@react-navigation/native';
 
-import { useUserLocation, useIncidentSubscription, useAppTheme, ProcessedIncident } from '@hooks';
-import { useIncidentCache } from '@contexts';
+import { useIncidentSubscription, useAppTheme, ProcessedIncident } from '@hooks';
+import { useIncidentCache, useSharedLocation } from '@contexts';
 import { ScreenContainer } from '@components/ui';
 import { DEFAULT_CAMERA } from '@lib/map/types';
 import { SEVERITY_COLORS, TYPE_CONFIG } from '@lib/nostr/config';
@@ -28,11 +28,8 @@ export default function IncidentFeedScreen() {
   const { colors } = useAppTheme();
   const { upsertMany } = useIncidentCache();
 
-  // Get user location with fallback to default
-  const { location: userLocation, isLoading: isLoadingLocation } = useUserLocation({
-    fallback: 'default',
-    defaultLocation: DEFAULT_CAMERA.centerCoordinate,
-  });
+  // Get shared user location (fetched once in LocationProvider)
+  const { location: userLocation, isLoading: isLoadingLocation } = useSharedLocation();
 
   // Subscribe to incidents near user location
   const {

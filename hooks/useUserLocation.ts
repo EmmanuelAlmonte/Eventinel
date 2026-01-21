@@ -56,6 +56,13 @@ export function useUserLocation(options: UseUserLocationOptions = {}): UseUserLo
     setIsLoading(true);
     setError(null);
 
+    // Set default location IMMEDIATELY if available (UI shows instantly)
+    if (fallback === 'default' && defaultLocation && !location) {
+      setLocation(defaultLocation);
+      setSource('default');
+      setIsLoading(false); // Map shows immediately while we fetch real location in background
+    }
+
     try {
       // Check/request permission
       let { status } = await Location.getForegroundPermissionsAsync();
@@ -72,10 +79,11 @@ export function useUserLocation(options: UseUserLocationOptions = {}): UseUserLo
         if (fallback === 'default' && defaultLocation) {
           setLocation(defaultLocation);
           setSource('default');
+          setIsLoading(false); // UI shows immediately with default location
         } else {
           setSource('none');
+          setIsLoading(false);
         }
-        setIsLoading(false);
         return;
       }
 
@@ -85,6 +93,7 @@ export function useUserLocation(options: UseUserLocationOptions = {}): UseUserLo
         if (cached) {
           setLocation([cached.coords.longitude, cached.coords.latitude]);
           setSource('cached');
+          setIsLoading(false); // UI shows immediately with cached location
           console.log('[useUserLocation] Got cached location');
         }
       } catch (cacheError) {
@@ -114,12 +123,14 @@ export function useUserLocation(options: UseUserLocationOptions = {}): UseUserLo
         if (fresh && !didTimeout) {
           setLocation([fresh.coords.longitude, fresh.coords.latitude]);
           setSource('fresh');
+          setIsLoading(false); // UI shows/updates with fresh location
           console.log('[useUserLocation] Got fresh location');
         } else if (!location) {
-          // No cached location and fresh timed out
+          // No cached location and fresh timed out - use fallback
           if (fallback === 'default' && defaultLocation) {
             setLocation(defaultLocation);
             setSource('default');
+            setIsLoading(false); // UI shows immediately with default
           }
         }
       } catch (freshError) {
@@ -128,6 +139,7 @@ export function useUserLocation(options: UseUserLocationOptions = {}): UseUserLo
         if (!location && fallback === 'default' && defaultLocation) {
           setLocation(defaultLocation);
           setSource('default');
+          setIsLoading(false); // UI shows with fallback
         }
       }
     } catch (err) {
@@ -137,8 +149,10 @@ export function useUserLocation(options: UseUserLocationOptions = {}): UseUserLo
       if (fallback === 'default' && defaultLocation) {
         setLocation(defaultLocation);
         setSource('default');
+        setIsLoading(false); // UI shows with fallback
       }
     } finally {
+      // Ensure loading is always false at the end (safety net)
       setIsLoading(false);
     }
   }, [fallback, defaultLocation, accuracy, timeout, location]);

@@ -1,6 +1,6 @@
 import 'react-native-get-random-values'; // MUST be first import!
 import { useEffect, useState } from 'react';
-import { Text } from 'react-native';
+import { Text, Pressable } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { NavigationContainer } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
@@ -19,7 +19,8 @@ import { ndk } from './lib/ndk';
 import { loadRelays } from './lib/relay/storage';
 import { theme } from './lib/theme';
 import { useAppTheme } from '@hooks';
-import { IncidentCacheProvider } from '@contexts';
+import { IncidentCacheProvider, LocationProvider } from '@contexts';
+import { ToastProvider, ErrorBoundary } from '@components/ui';
 
 const Tab = createBottomTabNavigator();
 const Stack = createNativeStackNavigator();
@@ -97,13 +98,22 @@ function MainNavigation() {
         <Stack.Screen
           name="Relays"
           component={RelayConnectScreen}
-          options={{
+          options={({ navigation }) => ({
             presentation: 'modal',
             headerShown: true,
             headerTitle: 'Relay Settings',
             headerStyle: { backgroundColor: colors.background },
             headerTintColor: colors.text,
-          }}
+            headerLeft: () => (
+              <Pressable
+                onPress={() => navigation.goBack()}
+                style={{ paddingHorizontal: 16 }}
+                hitSlop={8}
+              >
+                <Text style={{ fontSize: 22, color: colors.text }}>✕</Text>
+              </Pressable>
+            ),
+          })}
         />
       </Stack.Navigator>
     </NavigationContainer>
@@ -198,7 +208,10 @@ export default function App() {
     return (
       <SafeAreaProvider>
         <ThemeProvider theme={theme}>
-          <LoginWrapper />
+          <ErrorBoundary>
+            <LoginWrapper />
+          </ErrorBoundary>
+          <ToastProvider />
         </ThemeProvider>
       </SafeAreaProvider>
     );
@@ -207,9 +220,14 @@ export default function App() {
   return (
     <SafeAreaProvider>
       <ThemeProvider theme={theme}>
-        <IncidentCacheProvider>
-          <MainNavigation />
-        </IncidentCacheProvider>
+        <ErrorBoundary>
+          <LocationProvider>
+            <IncidentCacheProvider>
+              <MainNavigation />
+            </IncidentCacheProvider>
+          </LocationProvider>
+        </ErrorBoundary>
+        <ToastProvider />
       </ThemeProvider>
     </SafeAreaProvider>
   );

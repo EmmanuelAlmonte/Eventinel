@@ -73,4 +73,19 @@ export {
   SkeletonList,
 } from './LoadingScreen';
 
+// Toast notification system
+export {
+  ToastProvider,
+  showToast,
+  useToastConfig,
+} from './Toast';
+
+// Error boundaries
+export {
+  ErrorBoundary,
+  ScreenErrorFallback,
+  CardErrorFallback,
+  InlineErrorFallback,
+} from './ErrorBoundary';
+
 export { BRAND, PRIMARY, SEMANTIC, NEUTRAL } from '@lib/brand';

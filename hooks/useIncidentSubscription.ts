@@ -5,15 +5,18 @@
  * sorting, and severity counting.
  */
 
-import { useMemo, useRef, useEffect } from 'react';
+import { useMemo, useRef, useEffect, useCallback } from 'react';
 import geohash from 'ngeohash';
-import { useSubscribe } from '@nostr-dev-kit/mobile';
+import { useSubscribe, NDKSubscriptionCacheUsage } from '@nostr-dev-kit/mobile';
 import type { NDKFilter } from '@nostr-dev-kit/mobile';
 import { parseIncidentEvent } from '@lib/nostr/events/incident';
 import type { ParsedIncident } from '@lib/nostr/events/types';
 import type { Severity } from '@lib/nostr/config';
 import { DEFAULT_GEOHASH_PRECISION } from '@lib/nostr/config';
 import { INCIDENT_LIMITS } from '@lib/map/constants';
+
+// Debug flag - set to true to enable cache debugging logs
+const DEBUG_CACHE = __DEV__;
 
 /**
  * Extended incident with precomputed timestamps for safe sorting
@@ -71,7 +74,15 @@ export function useIncidentSubscription({
       DEFAULT_GEOHASH_PRECISION
     );
     const neighbors = geohash.neighbors(userGeohash);
-    return [userGeohash, ...Object.values(neighbors)];
+    const allGeohashes = [userGeohash, ...Object.values(neighbors)];
+
+    if (DEBUG_CACHE) {
+      console.log(`🗺️ [IncidentSub] User location: [${location[0].toFixed(4)}, ${location[1].toFixed(4)}]`);
+      console.log(`🗺️ [IncidentSub] User geohash: ${userGeohash} (precision: ${DEFAULT_GEOHASH_PRECISION})`);
+      console.log(`🗺️ [IncidentSub] Query geohashes: ${allGeohashes.join(', ')}`);
+    }
+
+    return allGeohashes;
   }, [location]);
 
   // Build NDK filter
@@ -91,11 +102,55 @@ export function useIncidentSubscription({
     ];
   }, [enabled, geohashes, sinceDays]);
 
-  // Subscribe
+  // Subscribe with explicit CACHE_FIRST to ensure cached events load immediately
+  // WORKAROUND: ndk-mobile cache has a bug where events.id uses tagAddress format
+  // but event_tags.event_id uses actual event ID for replaceable events (kind 30911).
+  // This breaks tag-based queries. We use cacheUnconstrainFilter to remove tag
+  // filters for cache queries, falling back to kinds-only query which works.
+  // The relay query still uses full filters including geohash tags.
   const { events, eose } = useSubscribe(filter, {
     closeOnEose: false,
     bufferMs: 100,
+    cacheUsage: NDKSubscriptionCacheUsage.CACHE_FIRST,
+    cacheUnconstrainFilter: ['#g', '#t', 'since', 'limit'], // Query cache by kinds only
   });
+
+  // Debug: Track event count changes to see cache vs relay timing
+  const prevEventCountForDebug = useRef(0);
+  const subscriptionStartTime = useRef(Date.now());
+
+  useEffect(() => {
+    if (!DEBUG_CACHE) return;
+
+    if (filter && prevEventCountForDebug.current === 0 && events.length === 0) {
+      subscriptionStartTime.current = Date.now();
+      console.log('🔍 [IncidentSub] Subscription started, waiting for events...');
+    }
+
+    if (events.length > prevEventCountForDebug.current) {
+      const elapsed = Date.now() - subscriptionStartTime.current;
+      const newEvents = events.length - prevEventCountForDebug.current;
+      const source = !eose ? 'CACHE (pre-EOSE)' : 'RELAY (post-EOSE)';
+
+      console.log(`📥 [IncidentSub] +${newEvents} events (total: ${events.length}) from ${source} @ ${elapsed}ms`);
+
+      if (!eose && events.length > 0) {
+        console.log('   ✅ Cache is working! Events loaded before relay EOSE');
+      }
+    }
+
+    prevEventCountForDebug.current = events.length;
+  }, [events.length, eose, filter]);
+
+  // Debug: Log when EOSE is received
+  useEffect(() => {
+    if (!DEBUG_CACHE) return;
+
+    if (eose) {
+      const elapsed = Date.now() - subscriptionStartTime.current;
+      console.log(`✅ [IncidentSub] EOSE received @ ${elapsed}ms (${events.length} total events)`);
+    }
+  }, [eose, events.length]);
 
   // Parse, dedup, sort, slice, then count
   const result = useMemo(() => {

@@ -18,7 +18,7 @@ import {
 } from '@nostr-dev-kit/mobile';
 import type { SignerAppInfo } from 'expo-nip55';
 
-import { ScreenContainer } from '@components/ui';
+import { ScreenContainer, showToast } from '@components/ui';
 import { useAppTheme } from '@hooks';
 
 export default function LoginScreen() {
@@ -28,7 +28,6 @@ export default function LoginScreen() {
   const [manualKey, setManualKey] = useState('');
   const [bunkerUrl, setBunkerUrl] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState('');
 
   // Get theme-aware colors
   const { colors, isDark } = useAppTheme();
@@ -39,13 +38,12 @@ export default function LoginScreen() {
   // Handle NIP-55 login (Android only)
   const handleNip55Login = async (app: SignerAppInfo) => {
     setIsLoading(true);
-    setError('');
     try {
       const signer = new NDKNip55Signer(app.packageName);
       await signer.blockUntilReady();
       await login(signer, true);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'NIP-55 login failed');
+      showToast.error('Login Failed', err instanceof Error ? err.message : 'NIP-55 login failed');
     } finally {
       setIsLoading(false);
     }
@@ -54,22 +52,21 @@ export default function LoginScreen() {
   // Handle NIP-46 bunker login (iOS primary, Android optional)
   const handleBunkerLogin = async () => {
     if (!bunkerUrl.trim()) {
-      setError('Please enter a bunker URL');
+      showToast.warning('Missing URL', 'Please enter a bunker URL');
       return;
     }
     if (!ndk) {
-      setError('NDK not initialized');
+      showToast.error('Error', 'NDK not initialized');
       return;
     }
 
     setIsLoading(true);
-    setError('');
     try {
       const signer = new NDKNip46Signer(ndk, bunkerUrl.trim());
       await signer.blockUntilReady();
       await login(signer, true);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Bunker connection failed');
+      showToast.error('Connection Failed', err instanceof Error ? err.message : 'Bunker connection failed');
     } finally {
       setIsLoading(false);
     }
@@ -78,19 +75,18 @@ export default function LoginScreen() {
   // Handle manual key login (fallback for both platforms)
   const handleManualLogin = async () => {
     if (!manualKey.trim()) {
-      setError('Please enter a private key');
+      showToast.warning('Missing Key', 'Please enter a private key');
       return;
     }
 
     setIsLoading(true);
-    setError('');
     try {
       const signer = new NDKPrivateKeySigner(manualKey.trim());
       await signer.user();
       await login(signer, true);
     } catch (err) {
       // Generic error - don't leak validation details
-      setError('Authentication failed. Please check your key and try again.');
+      showToast.error('Login Failed', 'Please check your key and try again');
     } finally {
       setIsLoading(false);
     }
@@ -292,19 +288,6 @@ export default function LoginScreen() {
         />
       </Card>
 
-      {/* Error Display */}
-      {error ? (
-        <View style={[styles.errorContainer, { borderColor: `${colors.error}40` }]}>
-          <Icon
-            name="error-outline"
-            type="material"
-            size={20}
-            color={colors.error}
-          />
-          <Text style={[styles.errorText, { color: colors.error }]}>{error}</Text>
-        </View>
-      ) : null}
-
       {/* Security Warning */}
       <Card containerStyle={[styles.warningCard, { borderColor: `${colors.warning}40` }]}>
         <View style={styles.cardHeader}>
@@ -412,20 +395,6 @@ const styles = StyleSheet.create({
   },
   buttonContainer: {
     marginTop: 4,
-  },
-  errorContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'rgba(220, 38, 38, 0.1)',
-    padding: 12,
-    borderRadius: 8,
-    marginBottom: 16,
-    gap: 10,
-    borderWidth: 1,
-  },
-  errorText: {
-    fontSize: 14,
-    flex: 1,
   },
   warningCard: {
     backgroundColor: 'rgba(245, 158, 11, 0.1)',

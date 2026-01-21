@@ -17,7 +17,7 @@ export const MAPBOX_CONFIG = {
    * Default zoom level when centering on user location
    * Range: 0 (world) to 22 (building)
    */
-  DEFAULT_ZOOM: 12,
+  DEFAULT_ZOOM: 14,
 
   /**
    * Minimum zoom level (prevent zooming out too far)
