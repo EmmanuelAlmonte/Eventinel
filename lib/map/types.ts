@@ -42,14 +42,14 @@ export const MAP_STYLES = {
 // =============================================================================
 
 /**
- * Default camera position centered on Philadelphia, PA
- * (Eventinel's primary target city)
+ * Default camera position centered on the geographic center of the USA
+ * (Near Lebanon, Kansas)
  *
  * IMPORTANT: Mapbox uses [longitude, latitude] order (NOT lat/lng)
  */
 export const DEFAULT_CAMERA = {
-  centerCoordinate: [-75.1652, 39.9526] as [number, number], // [lng, lat]
-  zoomLevel: 12,
+  centerCoordinate: [-98.5795, 39.8283] as [number, number], // [lng, lat] - Center of USA
+  zoomLevel: 4,
   animationDuration: 1000,
 };
 

@@ -36,14 +36,14 @@ export default function MapScreen() {
   const [animationDuration, setAnimationDuration] = useState(0);
 
   // Get shared user location (fetched once in LocationProvider)
-  const { location: userLocation, isLoading: isLoadingLocation } = useSharedLocation();
+  const { location: userLocation, isLoading: isLoadingLocation, source: locationSource, permission } = useSharedLocation();
 
-  // Initialize camera center when user location is available
+  // Update camera center when user location changes (including from default to real GPS)
   useEffect(() => {
-    if (userLocation && !cameraCenter) {
+    if (userLocation) {
       setCameraCenter(userLocation);
     }
-  }, [userLocation, cameraCenter]);
+  }, [userLocation]);
 
   // Fly to user's current location
   const handleFlyToUser = useCallback(() => {
@@ -163,6 +163,26 @@ export default function MapScreen() {
         </View>
       )}
 
+      {/* Location debug overlay (top-left) - DEV only */}
+      {__DEV__ && (
+        <View style={styles.locationDebugOverlay}>
+          <Text style={[
+            styles.locationSourceText,
+            locationSource === 'fresh' && styles.locationSourceFresh,
+            locationSource === 'cached' && styles.locationSourceCached,
+            locationSource === 'default' && styles.locationSourceDefault,
+          ]}>
+            📍 {locationSource?.toUpperCase() || 'NONE'}
+          </Text>
+          <Text style={styles.locationDebugText}>Perm: {permission}</Text>
+          {userLocation && (
+            <Text style={styles.locationDebugText} numberOfLines={1}>
+              {userLocation[1].toFixed(4)}, {userLocation[0].toFixed(4)}
+            </Text>
+          )}
+        </View>
+      )}
+
       {/* No incidents message - only show after EOSE */}
       {!isLoadingLocation && hasReceivedHistory && incidents.length === 0 && (
         <View style={styles.emptyState}>
@@ -254,5 +274,36 @@ const styles = StyleSheet.create({
   flyToButtonPressed: {
     opacity: 0.8,
     transform: [{ scale: 0.95 }],
+  },
+  // Location debug overlay styles
+  locationDebugOverlay: {
+    position: 'absolute',
+    top: 20,
+    left: 20,
+    backgroundColor: 'rgba(0, 0, 0, 0.85)',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 8,
+    minWidth: 120,
+  },
+  locationSourceText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '700',
+    marginBottom: 4,
+  },
+  locationSourceFresh: {
+    color: '#22c55e', // green - GPS is working!
+  },
+  locationSourceCached: {
+    color: '#eab308', // yellow - using cached
+  },
+  locationSourceDefault: {
+    color: '#ef4444', // red - stuck on default!
+  },
+  locationDebugText: {
+    color: '#aaa',
+    fontSize: 11,
+    fontFamily: 'monospace',
   },
 });

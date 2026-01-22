@@ -27,6 +27,20 @@ module.exports = {
     plugins: [
       'expo-secure-store',
       [
+        'expo-location',
+        {
+          // Foreground service: Allows location while app is minimized (notification tray)
+          // Required for: reliable emulator GPS, real-time alerts when backgrounded
+          // Permissions added: FOREGROUND_SERVICE, FOREGROUND_SERVICE_LOCATION
+          isAndroidForegroundServiceEnabled: true,
+
+          // Background location: Allows location when app is CLOSED (requires Play Store review)
+          // Enable later if needed for: geofence alerts, passive incident tracking
+          // Permissions added: ACCESS_BACKGROUND_LOCATION
+          isAndroidBackgroundLocationEnabled: false,
+        },
+      ],
+      [
         '@rnmapbox/maps',
         {
           RNMapboxMapsAccessToken: process.env.MAPBOX_ACCESS_TOKEN,
