@@ -6,22 +6,10 @@
  */
 
 import type { ParsedIncident } from '../nostr/events/types';
+import { SEVERITY_COLORS } from '../nostr/config';
 
-// =============================================================================
-// SEVERITY COLORS
-// =============================================================================
-
-/**
- * Color mapping for incident severity levels (1-5)
- * Used for marker pins to provide visual urgency indication
- */
-export const SEVERITY_COLORS = {
-  1: '#22c55e', // Green - Low/Info
-  2: '#eab308', // Yellow - Moderate
-  3: '#f97316', // Orange - Significant
-  4: '#ef4444', // Red - High
-  5: '#7c2d12', // Dark Red - Critical
-} as const;
+// Re-export SEVERITY_COLORS for backward compatibility
+export { SEVERITY_COLORS };
 
 // =============================================================================
 // MAP STYLES

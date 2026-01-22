@@ -34,30 +34,11 @@ import Mapbox from '@rnmapbox/maps';
 import { useNDKCurrentUser } from '@nostr-dev-kit/mobile';
 
 import type { ParsedIncident } from '@lib/nostr/events/types';
+import { TYPE_CONFIG, SEVERITY_COLORS, type IncidentType } from '@lib/nostr/config';
+import { formatRelativeTime } from '@lib/utils/time';
 import { useAppTheme } from '@hooks';
 import { useIncidentCache } from '@contexts';
 import { MAP_STYLES } from '@lib/map/types';
-
-// Type icons and colors (glyph is for Mapbox PointAnnotation - plain text only)
-const TYPE_CONFIG: Record<string, { icon: string; glyph: string; gradient: [string, string]; color: string }> = {
-  fire: { icon: 'local-fire-department', glyph: '🔥', gradient: ['#EF4444', '#F97316'], color: '#EF4444' },
-  medical: { icon: 'medical-services', glyph: '🏥', gradient: ['#3B82F6', '#06B6D4'], color: '#3B82F6' },
-  traffic: { icon: 'traffic', glyph: '🚗', gradient: ['#F97316', '#EAB308'], color: '#F97316' },
-  violent_crime: { icon: 'warning', glyph: '⚠️', gradient: ['#8B5CF6', '#EC4899'], color: '#8B5CF6' },
-  property_crime: { icon: 'home', glyph: '🏠', gradient: ['#8B5CF6', '#6366F1'], color: '#8B5CF6' },
-  disturbance: { icon: 'volume-up', glyph: '📢', gradient: ['#F59E0B', '#EAB308'], color: '#F59E0B' },
-  suspicious: { icon: 'visibility', glyph: '👁', gradient: ['#6B7280', '#9CA3AF'], color: '#6B7280' },
-  other: { icon: 'info', glyph: 'ℹ️', gradient: ['#6B7280', '#9CA3AF'], color: '#6B7280' },
-};
-
-// Severity colors
-const SEVERITY_COLORS: Record<number, string> = {
-  5: '#DC2626',
-  4: '#EA580C',
-  3: '#F59E0B',
-  2: '#3B82F6',
-  1: '#6B7280',
-};
 
 // Route params type - now uses incidentId only (no serialization warning)
 type DetailRouteParams = {
@@ -65,21 +46,6 @@ type DetailRouteParams = {
     incidentId: string;
   };
 };
-
-// Format relative time
-function formatRelativeTime(date: Date): string {
-  const now = new Date();
-  const diffMs = now.getTime() - date.getTime();
-  const diffMins = Math.floor(diffMs / 60000);
-  const diffHours = Math.floor(diffMins / 60);
-  const diffDays = Math.floor(diffHours / 24);
-
-  if (diffMins < 1) return 'Just now';
-  if (diffMins < 60) return `${diffMins}m ago`;
-  if (diffHours < 24) return `${diffHours}h ago`;
-  if (diffDays < 7) return `${diffDays}d ago`;
-  return date.toLocaleDateString();
-}
 
 export default function IncidentDetailScreen() {
   const navigation = useNavigation();
