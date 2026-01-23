@@ -14,9 +14,9 @@
     "test:auth": "jest --testPathPattern='__tests__/(screens|auth|App)'"
   },
   "dependencies": {
-    "@cashu/cashu-ts": "^2.1",
-    "@nostr-dev-kit/mobile": "0.9.3-beta.70",
-    "@nostr-dev-kit/sync": "^1.0.0-beta.70",
+    "@nostr-dev-kit/ndk-mobile": "0.8.43",
+    "@nostr-dev-kit/sync": "0.3.6",
+    "@cashu/cashu-ts": "2.4.2",
     "@react-native-async-storage/async-storage": "^2.2.0",
     "@react-navigation/bottom-tabs": "^7.9.1",
     "@react-navigation/native": "^7.1.27",
