@@ -8,6 +8,7 @@
  */
 
 import 'react-native-gesture-handler/jestSetup';
+import '@testing-library/react-native/extend-expect';
 
 // Silence console warnings during tests (optional)
 // console.warn = jest.fn();

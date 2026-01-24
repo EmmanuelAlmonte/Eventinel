@@ -54,3 +54,6 @@ package-lock.json
 package-lock.json
  .env.local
 /MObileDOCS
+/docs/tasks
+/docs/tasks
+ndk-metro-release-bug.md
