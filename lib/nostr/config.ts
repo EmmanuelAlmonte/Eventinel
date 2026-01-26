@@ -267,6 +267,7 @@ export const TYPE_CONFIG: Record<
   IncidentType,
   {
     icon: string;
+    glyph: string;
     color: string;
     gradient: [string, string];
     label: string;
@@ -274,48 +275,56 @@ export const TYPE_CONFIG: Record<
 > = {
   fire: {
     icon: 'local-fire-department',
+    glyph: '🔥',
     color: '#EF4444',
     gradient: ['#EF4444', '#F97316'],
     label: 'Fire',
   },
   medical: {
     icon: 'medical-services',
+    glyph: '🏥',
     color: '#3B82F6',
     gradient: ['#3B82F6', '#06B6D4'],
     label: 'Medical',
   },
   traffic: {
     icon: 'traffic',
+    glyph: '🚗',
     color: '#F97316',
     gradient: ['#F97316', '#EAB308'],
     label: 'Traffic',
   },
   violent_crime: {
     icon: 'warning',
+    glyph: '⚠️',
     color: '#8B5CF6',
     gradient: ['#8B5CF6', '#EC4899'],
     label: 'Crime',
   },
   property_crime: {
     icon: 'home',
+    glyph: '🏠',
     color: '#8B5CF6',
     gradient: ['#8B5CF6', '#6366F1'],
     label: 'Property Crime',
   },
   disturbance: {
     icon: 'volume-up',
+    glyph: '📢',
     color: '#F59E0B',
     gradient: ['#F59E0B', '#EAB308'],
     label: 'Disturbance',
   },
   suspicious: {
     icon: 'visibility',
+    glyph: '👁',
     color: '#6B7280',
     gradient: ['#6B7280', '#9CA3AF'],
     label: 'Suspicious',
   },
   other: {
     icon: 'info',
+    glyph: 'ℹ️',
     color: '#6B7280',
     gradient: ['#6B7280', '#9CA3AF'],
     label: 'Other',
