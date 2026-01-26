@@ -71,7 +71,7 @@ export const INCIDENT_LIMITS = {
    * How many days back to fetch incident events
    * Events older than this will not be requested
    */
-  SINCE_DAYS: 7,
+  SINCE_DAYS: 30,
 
   /**
    * Minimum time between subscription refreshes (milliseconds)
