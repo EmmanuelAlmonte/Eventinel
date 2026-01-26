@@ -15,7 +15,7 @@ const RELAY_STORAGE_KEY = 'eventinel:saved-relays';
  * These are reliable, well-maintained relays.
  */
 export const DEFAULT_RELAYS = [
-  'ws://10.0.0.197:8085'
+  'ws://10.0.0.197:8085', 'ws://10.0.0.2:8085'
 ];
 
 /**

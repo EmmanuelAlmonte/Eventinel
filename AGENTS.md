@@ -1,0 +1,36 @@
+# Repository Guidelines
+
+## Project Structure & Module Organization
+- `App.tsx` boots the app, handles NDK init, and wires navigation; `index.ts` is the Expo entrypoint.
+- UI lives in `screens/` (Map, IncidentFeed, Profile, RelayConnect, Login) with shared primitives in `components/ui` (ScreenContainer, ErrorBoundary, Toast) plus `components/map` and `components/incident` widgets.
+- Domain/data: `lib/ndk.ts` defines the NDK singleton + SQLite cache; `lib/nostr/` holds Nostr config/events; `lib/relay/` tracks relay persistence/status; `lib/map/` stores map constants/types; `lib/theme` and `lib/brand` provide tokens; `hooks/` host subscriptions/theme/location hooks; `contexts/` expose incident cache and location providers.
+- Assets live in `assets/`; Expo config in `app.config.js`; scripts/templates in `scripts/` and `templates/DeveloperProtocol.md`.
+- Tests live in `__tests__` with supporting mocks in `__mocks__`; build outputs in `dist/` (exclude from commits).
+
+## Build, Test, and Development Commands
+- `npm install` – install dependencies.
+- `npm start` – launch Expo Metro; `npm run android|ios|web` to run on targets.
+- `npx tsc --noEmit` – TypeScript type-check.
+- `npm test`, `npm run test:watch`, `npm run test:coverage`, `npm run test:auth` – Jest (jest-expo) suites; `test:auth` scopes to auth flows.
+
+## Coding Style & Naming Conventions
+- TypeScript with strict mode; prefer functional components + hooks. Use 2-space indentation consistent with existing files.
+- Respect path aliases (`@components`, `@hooks`, `@lib`, etc.) defined in `tsconfig.json`/`babel.config.js`.
+- NDK rules: import only from `@nostr-dev-kit/mobile`; keep `react-native-get-random-values` as the first import; use the module-level `ndk` from `lib/ndk.ts`; timestamps in seconds and hex pubkeys; `login(signer, true)`; avoid web-only patterns (`NDKHeadless`, `NDKNip07Signer`, `localStorage`).
+- UI: pull RNE components from `@rneui/themed`, theme via `useAppTheme`, wrap screens in `ScreenContainer` for layout/padding.
+- Naming: components/screens in PascalCase `.tsx`; utilities/hooks in `camelCase.ts`; tests as `*.test.ts(x)` inside `__tests__`; mocks mirror module names in `__mocks__`.
+
+## Testing Guidelines
+- Framework: Jest with `jest-expo` + `@testing-library/react-native`; setup/mocks live in `jest.setup.js` and `__mocks__/`.
+- Coverage targets: global 50% minimum; `screens/LoginScreen.tsx` enforces 70% (branches/functions/lines/statements).
+- Prefer render + assert patterns from Testing Library; rely on existing mocks for RN/NDK heavy modules instead of ad-hoc stubs.
+- Run `npm run test:auth` when touching auth code, and `npm run test:coverage` before PRs that modify screens/lib/App.
+
+## Commit & Pull Request Guidelines
+- Follow Conventional Commit style seen in history (`feat:`, `fix:`, `chore:`, `refactor:`, `test:`). Example: `feat: add relay reconnect banner`.
+- PRs should include a brief summary, linked issue, commands/tests run, and screenshots or screen recordings for UI-visible changes. Call out adherence to NDK mobile rules and any env vars touched.
+- Keep changes focused; update docs or templates (e.g., `templates/DeveloperProtocol.md`) when altering workflows.
+
+## Security & Configuration Tips
+- Copy `.env.example` to `.env.local`; keep secrets out of VCS. `app.config.js` loads `.env.local` and requires `MAPBOX_ACCESS_TOKEN` for Mapbox.
+- Sensitive data persists via `expo-secure-store`; never use browser-only storage. Avoid committing build artifacts from `dist/`, `android/`, or `ios/`.
