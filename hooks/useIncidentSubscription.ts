@@ -108,11 +108,15 @@ export function useIncidentSubscription({
   // This breaks tag-based queries. We use cacheUnconstrainFilter to remove tag
   // filters for cache queries, falling back to kinds-only query which works.
   // The relay query still uses full filters including geohash tags.
+  //
+  // groupable: false - Prevents NDK timer race condition that causes "No filters to merge"
+  // error when subscription is stopped before EOSE (see NDK removeItem bug).
   const { events, eose } = useSubscribe(filter, {
     closeOnEose: false,
     bufferMs: 100,
     cacheUsage: NDKSubscriptionCacheUsage.CACHE_FIRST,
     cacheUnconstrainFilter: ['#g', '#t', 'since', 'limit'], // Query cache by kinds only
+    groupable: false, // Execute immediately, avoid timer race on cleanup
   });
 
   // Debug: Track event count changes to see cache vs relay timing

@@ -19,7 +19,7 @@ import { ndk } from './lib/ndk';
 import { loadRelays } from './lib/relay/storage';
 import { theme } from './lib/theme';
 import { useAppTheme } from '@hooks';
-import { IncidentCacheProvider, LocationProvider, LocationGate, IncidentSubscriptionProvider } from '@contexts';
+import { IncidentCacheProvider, LocationProvider, IncidentSubscriptionProvider } from '@contexts';
 import { ToastProvider, ErrorBoundary } from '@components/ui';
 
 const Tab = createBottomTabNavigator();
@@ -228,13 +228,9 @@ export default function App() {
         <ErrorBoundary>
           <LocationProvider>
             <IncidentCacheProvider>
-              {/* LocationGate prevents subscription from mounting before GPS ready */}
-              {/* Workaround for NDK bug: useSubscribe(false) causes "No filters to merge" */}
-              <LocationGate>
-                <IncidentSubscriptionProvider>
-                  <MainNavigation />
-                </IncidentSubscriptionProvider>
-              </LocationGate>
+              <IncidentSubscriptionProvider>
+                <MainNavigation />
+              </IncidentSubscriptionProvider>
             </IncidentCacheProvider>
           </LocationProvider>
         </ErrorBoundary>
