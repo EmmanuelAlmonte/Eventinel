@@ -11,9 +11,8 @@ import { useNavigation } from '@react-navigation/native';
 import Mapbox from '@rnmapbox/maps';
 import { Icon } from '@rneui/themed';
 
-import { useIncidentSubscription } from '@hooks';
 import { MapSkeleton } from '@components/ui';
-import { useIncidentCache, useSharedLocation } from '@contexts';
+import { useSharedLocation, useSharedIncidents } from '@contexts';
 import { IncidentMarker } from '@components/map';
 import { DEFAULT_CAMERA, MAP_STYLES } from '@lib/map/types';
 import { MAPBOX_CONFIG, USER_LOCATION, INCIDENT_LIMITS } from '@lib/map/constants';
@@ -25,7 +24,6 @@ const FLY_TO_DURATION = 1500; // ms
 
 export default function MapScreen() {
   const navigation = useNavigation<any>();
-  const { upsertMany } = useIncidentCache();
 
   // Delay map render until container has valid dimensions (fixes iOS 64x64 fallback)
   const [mapReady, setMapReady] = useState(false);
@@ -60,22 +58,12 @@ export default function MapScreen() {
     }, FLY_TO_DURATION + 100);
   }, [userLocation]);
 
-  // Subscribe to incidents near user location
+  // Get shared incidents (single subscription from IncidentSubscriptionProvider)
   const {
     incidents,
     isInitialLoading,
     hasReceivedHistory,
-  } = useIncidentSubscription({
-    location: userLocation,
-    enabled: !!userLocation,
-  });
-
-  // Cache incidents for Detail screen lookup
-  useEffect(() => {
-    if (incidents.length > 0) {
-      upsertMany(incidents);
-    }
-  }, [incidents, upsertMany]);
+  } = useSharedIncidents();
 
   // Handle marker press - navigate with incidentId only (no serialization warning)
   function handleMarkerPress(incident: ParsedIncident) {

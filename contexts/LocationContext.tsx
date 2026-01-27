@@ -20,7 +20,6 @@
 import React, { createContext, useContext } from 'react';
 import { useUserLocation } from '../hooks/useUserLocation';
 import type { UseUserLocationResult } from '../hooks/useUserLocation';
-import { DEFAULT_CAMERA } from '../lib/map/types';
 
 const LocationContext = createContext<UseUserLocationResult | null>(null);
 
@@ -32,9 +31,10 @@ const LocationContext = createContext<UseUserLocationResult | null>(null);
  */
 export function LocationProvider({ children }: { children: React.ReactNode }) {
   // Called ONCE when provider mounts - shared to all children
+  // Using 'none' fallback - wait for real GPS instead of showing default location
+  // This prevents race conditions where screens get different locations (default vs GPS)
   const locationState = useUserLocation({
-    fallback: 'default',
-    defaultLocation: DEFAULT_CAMERA.centerCoordinate,
+    fallback: 'none',
   });
 
   return (

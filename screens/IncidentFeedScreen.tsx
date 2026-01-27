@@ -5,7 +5,7 @@
  * Uses extracted hooks for location and subscription logic.
  */
 
-import { useCallback, useEffect } from 'react';
+import { useCallback } from 'react';
 import {
   View,
   FlatList,
@@ -16,36 +16,25 @@ import {
 import { Text, Card, Icon, Badge } from '@rneui/themed';
 import { useNavigation } from '@react-navigation/native';
 
-import { useIncidentSubscription, useAppTheme, ProcessedIncident } from '@hooks';
-import { useIncidentCache, useSharedLocation } from '@contexts';
+import { useAppTheme } from '@hooks';
+import type { ProcessedIncident } from '@hooks';
+import { useSharedLocation, useSharedIncidents } from '@contexts';
 import { ScreenContainer, SkeletonList } from '@components/ui';
-import { DEFAULT_CAMERA } from '@lib/map/types';
 import { SEVERITY_COLORS, TYPE_CONFIG } from '@lib/nostr/config';
 import { formatRelativeTimeMs } from '@lib/utils/time';
 
 export default function IncidentFeedScreen() {
   const navigation = useNavigation<any>();
   const { colors } = useAppTheme();
-  const { upsertMany } = useIncidentCache();
 
   // Get shared user location (fetched once in LocationProvider)
   const { location: userLocation, isLoading: isLoadingLocation } = useSharedLocation();
 
-  // Subscribe to incidents near user location
+  // Get shared incidents (single subscription from IncidentSubscriptionProvider)
   const {
     incidents,
     hasReceivedHistory,
-  } = useIncidentSubscription({
-    location: userLocation,
-    enabled: !!userLocation,
-  });
-
-  // Cache incidents for Detail screen lookup
-  useEffect(() => {
-    if (incidents.length > 0) {
-      upsertMany(incidents);
-    }
-  }, [incidents, upsertMany]);
+  } = useSharedIncidents();
 
   // Handle incident press - navigate with incidentId only (no serialization warning)
   const handleIncidentPress = useCallback((incident: ProcessedIncident) => {

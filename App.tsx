@@ -5,7 +5,7 @@ import { StatusBar } from 'expo-status-bar';
 import { NavigationContainer } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
-import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ThemeProvider } from '@rneui/themed';
 import { useNDKInit, useSessionMonitor, useNDKCurrentUser } from '@nostr-dev-kit/mobile';
 
@@ -19,7 +19,7 @@ import { ndk } from './lib/ndk';
 import { loadRelays } from './lib/relay/storage';
 import { theme } from './lib/theme';
 import { useAppTheme } from '@hooks';
-import { IncidentCacheProvider, LocationProvider } from '@contexts';
+import { IncidentCacheProvider, LocationProvider, IncidentSubscriptionProvider } from '@contexts';
 import { ToastProvider, ErrorBoundary } from '@components/ui';
 
 const Tab = createBottomTabNavigator();
@@ -30,6 +30,11 @@ const Stack = createNativeStackNavigator();
  */
 function TabNavigator() {
   const { colors } = useAppTheme();
+  const insets = useSafeAreaInsets();
+
+  // Add bottom inset to tab bar height for iPhones with home indicator
+  const TAB_BAR_BASE_HEIGHT = 60;
+  const tabBarHeight = TAB_BAR_BASE_HEIGHT + insets.bottom;
 
   return (
     <Tab.Navigator
@@ -41,8 +46,8 @@ function TabNavigator() {
         tabBarLabelStyle: { fontSize: 12, fontWeight: '600' },
         tabBarStyle: {
           backgroundColor: colors.background,
-          height: 60,
-          paddingBottom: 8,
+          height: tabBarHeight,
+          paddingBottom: insets.bottom + 8,
           paddingTop: 8,
           borderTopWidth: 1,
           borderTopColor: colors.border,
@@ -223,7 +228,9 @@ export default function App() {
         <ErrorBoundary>
           <LocationProvider>
             <IncidentCacheProvider>
-              <MainNavigation />
+              <IncidentSubscriptionProvider>
+                <MainNavigation />
+              </IncidentSubscriptionProvider>
             </IncidentCacheProvider>
           </LocationProvider>
         </ErrorBoundary>
