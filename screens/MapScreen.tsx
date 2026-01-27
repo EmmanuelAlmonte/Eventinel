@@ -5,11 +5,11 @@
  * Uses extracted hooks for location and subscription logic.
  */
 
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { View, Text, StyleSheet, Pressable, ActivityIndicator } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import Mapbox from '@rnmapbox/maps';
+import Mapbox, { type MapState } from '@rnmapbox/maps';
 import { Icon } from '@rneui/themed';
 
 import { MapSkeleton } from '@components/ui';
@@ -22,6 +22,7 @@ import type { ParsedIncident } from '@lib/nostr/events/types';
 // Camera animation modes
 type CameraAnimationMode = 'flyTo' | 'easeTo' | 'linearTo' | 'moveTo' | 'none';
 const FLY_TO_DURATION = 1500; // ms
+const AUTO_RESUME_DELAY_MS = 20000;
 
 export default function MapScreen() {
   const navigation = useNavigation<any>();
@@ -34,31 +35,114 @@ export default function MapScreen() {
   const [cameraCenter, setCameraCenter] = useState<[number, number] | null>(null);
   const [animationMode, setAnimationMode] = useState<CameraAnimationMode>('none');
   const [animationDuration, setAnimationDuration] = useState(0);
+  const [followUser, setFollowUser] = useState(true);
+  const [isAnimating, setIsAnimating] = useState(false);
+  const animationResetTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const autoResumeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const isAnimatingRef = useRef(false);
 
   // Get shared user location (fetched once in LocationProvider)
   const { location: userLocation, isLoading: isLoadingLocation, source: locationSource, permission } = useSharedLocation();
 
   // Update camera center when user location changes (including from default to real GPS)
   useEffect(() => {
-    if (userLocation) {
+    if (userLocation && followUser) {
       setCameraCenter(userLocation);
     }
-  }, [userLocation]);
+  }, [userLocation, followUser]);
 
-  // Fly to user's current location
-  const handleFlyToUser = useCallback(() => {
-    if (!userLocation) return;
+  useEffect(() => {
+    return () => {
+      if (animationResetTimerRef.current) {
+        clearTimeout(animationResetTimerRef.current);
+        animationResetTimerRef.current = null;
+      }
+      if (autoResumeTimerRef.current) {
+        clearTimeout(autoResumeTimerRef.current);
+        autoResumeTimerRef.current = null;
+      }
+    };
+  }, []);
+
+  const clearAutoResumeTimer = useCallback(() => {
+    if (autoResumeTimerRef.current) {
+      clearTimeout(autoResumeTimerRef.current);
+      autoResumeTimerRef.current = null;
+    }
+  }, []);
+
+  const startFlyTo = useCallback((target: [number, number]) => {
+    if (isAnimatingRef.current) {
+      return false;
+    }
+
+    isAnimatingRef.current = true;
+    setIsAnimating(true);
+
+    if (animationResetTimerRef.current) {
+      clearTimeout(animationResetTimerRef.current);
+    }
 
     setAnimationMode('flyTo');
     setAnimationDuration(FLY_TO_DURATION);
-    setCameraCenter(userLocation);
+    setCameraCenter(target);
 
-    // Reset animation mode after completion to allow future animations
-    setTimeout(() => {
+    animationResetTimerRef.current = setTimeout(() => {
       setAnimationMode('none');
       setAnimationDuration(0);
+      isAnimatingRef.current = false;
+      setIsAnimating(false);
+      animationResetTimerRef.current = null;
     }, FLY_TO_DURATION + 100);
-  }, [userLocation]);
+
+    return true;
+  }, []);
+
+  const scheduleAutoResume = useCallback(() => {
+    clearAutoResumeTimer();
+
+    autoResumeTimerRef.current = setTimeout(() => {
+      autoResumeTimerRef.current = null;
+      if (!userLocation || isAnimatingRef.current) {
+        return;
+      }
+      setFollowUser(true);
+      startFlyTo(userLocation);
+    }, AUTO_RESUME_DELAY_MS);
+  }, [clearAutoResumeTimer, startFlyTo, userLocation]);
+
+  // Fly to user's current location
+  const handleFlyToUser = useCallback(() => {
+    if (!userLocation || isAnimatingRef.current) return;
+
+    clearAutoResumeTimer();
+    setFollowUser(true);
+    startFlyTo(userLocation);
+  }, [userLocation, clearAutoResumeTimer, startFlyTo]);
+
+  const handleCameraChanged = useCallback((state: MapState) => {
+    if (!state?.gestures?.isGestureActive) {
+      return;
+    }
+
+    if (animationResetTimerRef.current) {
+      clearTimeout(animationResetTimerRef.current);
+      animationResetTimerRef.current = null;
+    }
+
+    if (isAnimatingRef.current) {
+      isAnimatingRef.current = false;
+      setIsAnimating(false);
+      setAnimationMode('none');
+      setAnimationDuration(0);
+    }
+
+    if (followUser) {
+      setFollowUser(false);
+    }
+
+    scheduleAutoResume();
+  }, [followUser, scheduleAutoResume]);
 
   // Get shared incidents (single subscription from IncidentSubscriptionProvider)
   const {
@@ -80,6 +164,7 @@ export default function MapScreen() {
 
   // Determine effective camera center (fallback to default if not set)
   const effectiveCameraCenter = cameraCenter || userLocation || DEFAULT_CAMERA.centerCoordinate;
+  const cameraCenterCoordinate = followUser ? effectiveCameraCenter : undefined;
 
   return (
     <View style={styles.container}>
@@ -93,11 +178,15 @@ export default function MapScreen() {
         }}
       >
         {mapReady ? (
-          <Mapbox.MapView style={styles.map} styleURL={MAP_STYLES.DARK}>
+          <Mapbox.MapView
+            style={styles.map}
+            styleURL={MAP_STYLES.DARK}
+            onCameraChanged={handleCameraChanged}
+          >
             {/* Camera with flyTo support */}
             <Mapbox.Camera
               zoomLevel={MAPBOX_CONFIG.DEFAULT_ZOOM}
-              centerCoordinate={effectiveCameraCenter}
+              centerCoordinate={cameraCenterCoordinate}
               animationMode={animationMode !== 'none' ? animationMode : undefined}
               animationDuration={animationDuration}
             />
@@ -133,9 +222,11 @@ export default function MapScreen() {
             { bottom: 100 + insets.bottom },
             pressed && styles.flyToButtonPressed,
           ]}
+          disabled={isAnimating}
           onPress={handleFlyToUser}
           accessibilityLabel="Fly to my location"
           accessibilityRole="button"
+          accessibilityState={{ disabled: isAnimating }}
         >
           <Icon
             name="my-location"

@@ -60,3 +60,24 @@ export function useSharedLocation(): UseUserLocationResult {
   }
   return context;
 }
+
+/**
+ * LocationGate
+ *
+ * Only renders children when location is available (not null).
+ * Use this to prevent components that depend on location from mounting
+ * before GPS data is ready.
+ *
+ * This works around an NDK bug where useSubscribe(false) can cause
+ * "No filters to merge" errors due to timer race conditions.
+ */
+export function LocationGate({ children }: { children: React.ReactNode }) {
+  const { location, isLoading } = useSharedLocation();
+
+  // Don't render children until we have a location
+  if (!location || isLoading) {
+    return null;
+  }
+
+  return <>{children}</>;
+}

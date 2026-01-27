@@ -6,7 +6,7 @@
  */
 
 import { useState } from 'react';
-import { View, StyleSheet, Platform } from 'react-native';
+import { View, StyleSheet, Platform, KeyboardAvoidingView } from 'react-native';
 import { Text, Button, Input, Card, Icon, Overlay } from '@rneui/themed';
 import {
   useNip55,
@@ -108,7 +108,11 @@ export default function LoginScreen() {
   };
 
   return (
-    <ScreenContainer scroll>
+    <KeyboardAvoidingView
+      style={{ flex: 1, backgroundColor: colors.background }}
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+    >
+      <ScreenContainer scroll>
       {/* Header */}
       <View style={styles.header}>
         <Text h1 style={[styles.title, { color: colors.text }]}>Welcome to Eventinel</Text>
@@ -308,7 +312,8 @@ export default function LoginScreen() {
           • Keys are encrypted and stored securely
         </Text>
       </Card>
-    </ScreenContainer>
+      </ScreenContainer>
+    </KeyboardAvoidingView>
   );
 }
 

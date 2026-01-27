@@ -214,4 +214,4 @@ This suggests Jest was intended but not fully configured.
 
 - **No README.md exists** - this is the primary documentation
 - **TypeScript strict mode** is enabled
-- **EAS Project ID**: 1a58dec9-3386-4d0f-822e-48bf0ee5a852
+- **EAS Project ID**: 095741fd-0726-4560-9b50-528a8e167252
