@@ -45,6 +45,7 @@ import React from 'react';
 import { View, Text, StyleSheet, Pressable } from 'react-native';
 import ToastLib, { BaseToast, ErrorToast, ToastConfig, ToastShowParams } from 'react-native-toast-message';
 import { Icon } from '@rneui/themed';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAppTheme } from '@hooks';
 import { PRIMARY, SEMANTIC } from '@lib/brand/colors';
 
@@ -182,12 +183,16 @@ export function useToastConfig(): ToastConfig {
  */
 export function ToastProvider() {
   const config = useToastConfig();
+  const insets = useSafeAreaInsets();
+
+  // Add safe area inset to ensure toast appears below notch/Dynamic Island
+  const topOffset = insets.top + 16;
 
   return (
     <ToastLib
       config={config}
       position="top"
-      topOffset={60}
+      topOffset={topOffset}
       visibilityTime={3000}
     />
   );

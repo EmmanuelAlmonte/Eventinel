@@ -8,6 +8,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import { View, Text, StyleSheet, Pressable, ActivityIndicator } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Mapbox from '@rnmapbox/maps';
 import { Icon } from '@rneui/themed';
 
@@ -24,6 +25,7 @@ const FLY_TO_DURATION = 1500; // ms
 
 export default function MapScreen() {
   const navigation = useNavigation<any>();
+  const insets = useSafeAreaInsets();
 
   // Delay map render until container has valid dimensions (fixes iOS 64x64 fallback)
   const [mapReady, setMapReady] = useState(false);
@@ -128,6 +130,7 @@ export default function MapScreen() {
         <Pressable
           style={({ pressed }) => [
             styles.flyToButton,
+            { bottom: 100 + insets.bottom },
             pressed && styles.flyToButtonPressed,
           ]}
           onPress={handleFlyToUser}
@@ -145,7 +148,7 @@ export default function MapScreen() {
 
       {/* Stats overlay (top-right) - DEV only */}
       {__DEV__ && (
-        <View style={styles.statsOverlay}>
+        <View style={[styles.statsOverlay, { top: 20 + insets.top }]}>
           <Text style={styles.statsText}>Incidents: {incidents.length}</Text>
           <Text style={styles.statsText}>EOSE: {hasReceivedHistory ? '✓' : '...'}</Text>
         </View>
@@ -153,7 +156,7 @@ export default function MapScreen() {
 
       {/* Location debug overlay (top-left) - DEV only */}
       {__DEV__ && (
-        <View style={styles.locationDebugOverlay}>
+        <View style={[styles.locationDebugOverlay, { top: 20 + insets.top }]}>
           <Text style={[
             styles.locationSourceText,
             locationSource === 'fresh' && styles.locationSourceFresh,
@@ -173,7 +176,7 @@ export default function MapScreen() {
 
       {/* No incidents message - only show after EOSE */}
       {!isLoadingLocation && hasReceivedHistory && incidents.length === 0 && (
-        <View style={styles.emptyState}>
+        <View style={[styles.emptyState, { bottom: 40 + insets.bottom }]}>
           <Text style={styles.emptyStateText}>No incidents found</Text>
           <Text style={styles.emptyStateSubtext}>
             Incidents from the last {INCIDENT_LIMITS.SINCE_DAYS} days will appear here
@@ -210,7 +213,7 @@ const styles = StyleSheet.create({
   },
   statsOverlay: {
     position: 'absolute',
-    top: 20,
+    // top is set dynamically with insets.top
     right: 20,
     backgroundColor: 'rgba(0, 0, 0, 0.7)',
     paddingHorizontal: 12,
@@ -224,7 +227,7 @@ const styles = StyleSheet.create({
   },
   emptyState: {
     position: 'absolute',
-    bottom: 40,
+    // bottom is set dynamically with insets.bottom
     left: 20,
     right: 20,
     backgroundColor: 'rgba(0, 0, 0, 0.7)',
@@ -245,7 +248,7 @@ const styles = StyleSheet.create({
   },
   flyToButton: {
     position: 'absolute',
-    bottom: 100,
+    // bottom is set dynamically with insets.bottom
     right: 20,
     width: 56,
     height: 56,
@@ -266,7 +269,7 @@ const styles = StyleSheet.create({
   // Location debug overlay styles
   locationDebugOverlay: {
     position: 'absolute',
-    top: 20,
+    // top is set dynamically with insets.top
     left: 20,
     backgroundColor: 'rgba(0, 0, 0, 0.85)',
     paddingHorizontal: 12,
