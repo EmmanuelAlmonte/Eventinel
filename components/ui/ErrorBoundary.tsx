@@ -36,7 +36,7 @@
 import React, { Component, ReactNode } from 'react';
 import { View, Text, StyleSheet, Pressable, ScrollView } from 'react-native';
 import { Icon, Button } from '@rneui/themed';
-import { PRIMARY, SEMANTIC, NEUTRAL } from '@lib/brand/colors';
+import { useAppTheme } from '@hooks';
 
 // ============================================================================
 // Types
@@ -157,9 +157,10 @@ function DefaultErrorFallback({
   showDetails,
 }: DefaultErrorFallbackProps) {
   const [expanded, setExpanded] = React.useState(false);
+  const { colors } = useAppTheme();
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { backgroundColor: colors.background }]}>
       <View style={styles.content}>
         {/* Error Icon */}
         <View style={styles.iconContainer}>
@@ -167,13 +168,13 @@ function DefaultErrorFallback({
             name="error-outline"
             type="material"
             size={64}
-            color={SEMANTIC.error}
+            color={colors.error}
           />
         </View>
 
         {/* Error Message */}
-        <Text style={styles.title}>Something went wrong</Text>
-        <Text style={styles.message}>
+        <Text style={[styles.title, { color: colors.text }]}>Something went wrong</Text>
+        <Text style={[styles.message, { color: colors.textMuted }]}>
           We're sorry, but something unexpected happened.{'\n'}
           Please try again.
         </Text>
@@ -183,7 +184,7 @@ function DefaultErrorFallback({
           title="Try Again"
           onPress={onRetry}
           containerStyle={styles.buttonContainer}
-          buttonStyle={styles.button}
+          buttonStyle={[styles.button, { backgroundColor: colors.primary }]}
           icon={
             <Icon
               name="refresh"
@@ -197,26 +198,26 @@ function DefaultErrorFallback({
 
         {/* Error Details (Dev Mode) */}
         {showDetails && error && (
-          <View style={styles.detailsContainer}>
+          <View style={[styles.detailsContainer, { backgroundColor: colors.surface }]}>
             <Pressable
               onPress={() => setExpanded(!expanded)}
-              style={styles.detailsHeader}
+              style={[styles.detailsHeader, { borderBottomColor: colors.border }]}
             >
-              <Text style={styles.detailsTitle}>Error Details</Text>
+              <Text style={[styles.detailsTitle, { color: colors.textMuted }]}>Error Details</Text>
               <Icon
                 name={expanded ? 'expand-less' : 'expand-more'}
                 type="material"
                 size={20}
-                color={NEUTRAL.gray400}
+                color={colors.textMuted}
               />
             </Pressable>
 
             {expanded && (
               <ScrollView style={styles.detailsScroll}>
-                <Text style={styles.errorName}>{error.name}</Text>
-                <Text style={styles.errorMessage}>{error.message}</Text>
+                <Text style={[styles.errorName, { color: colors.error }]}>{error.name}</Text>
+                <Text style={[styles.errorMessage, { color: colors.textMuted }]}>{error.message}</Text>
                 {errorInfo && (
-                  <Text style={styles.stackTrace}>
+                  <Text style={[styles.stackTrace, { color: colors.textMuted }]}>
                     {errorInfo.componentStack}
                   </Text>
                 )}
@@ -238,16 +239,18 @@ function DefaultErrorFallback({
  * Use this when wrapping entire screens.
  */
 export function ScreenErrorFallback({ onRetry }: { onRetry?: () => void }) {
+  const { colors } = useAppTheme();
+
   return (
-    <View style={styles.screenFallback}>
+    <View style={[styles.screenFallback, { backgroundColor: colors.background }]}>
       <Icon
         name="cloud-off"
         type="material"
         size={80}
-        color={NEUTRAL.gray400}
+        color={colors.textMuted}
       />
-      <Text style={styles.screenTitle}>Unable to load screen</Text>
-      <Text style={styles.screenMessage}>
+      <Text style={[styles.screenTitle, { color: colors.text }]}>Unable to load screen</Text>
+      <Text style={[styles.screenMessage, { color: colors.textMuted }]}>
         Something went wrong while loading this screen.
       </Text>
       {onRetry && (
@@ -267,18 +270,23 @@ export function ScreenErrorFallback({ onRetry }: { onRetry?: () => void }) {
  * Use this when wrapping individual cards or widgets.
  */
 export function CardErrorFallback({ onRetry }: { onRetry?: () => void }) {
+  const { colors } = useAppTheme();
+
   return (
-    <View style={styles.cardFallback}>
+    <View style={[styles.cardFallback, {
+      backgroundColor: `${colors.warning}10`,
+      borderColor: `${colors.warning}30`,
+    }]}>
       <Icon
         name="warning"
         type="material"
         size={32}
-        color={SEMANTIC.warning}
+        color={colors.warning}
       />
-      <Text style={styles.cardMessage}>Failed to load</Text>
+      <Text style={[styles.cardMessage, { color: colors.textMuted }]}>Failed to load</Text>
       {onRetry && (
         <Pressable onPress={onRetry} style={styles.cardRetry}>
-          <Text style={styles.cardRetryText}>Tap to retry</Text>
+          <Text style={[styles.cardRetryText, { color: colors.primary }]}>Tap to retry</Text>
         </Pressable>
       )}
     </View>
@@ -290,23 +298,24 @@ export function CardErrorFallback({ onRetry }: { onRetry?: () => void }) {
  * Use this for non-critical components.
  */
 export function InlineErrorFallback() {
+  const { colors } = useAppTheme();
+
   return (
     <View style={styles.inlineFallback}>
-      <Icon name="error" type="material" size={16} color={SEMANTIC.error} />
-      <Text style={styles.inlineMessage}>Error loading content</Text>
+      <Icon name="error" type="material" size={16} color={colors.error} />
+      <Text style={[styles.inlineMessage, { color: colors.error }]}>Error loading content</Text>
     </View>
   );
 }
 
 // ============================================================================
-// Styles
+// Styles (static, theme-independent)
 // ============================================================================
 
 const styles = StyleSheet.create({
   // Default Fallback
   container: {
     flex: 1,
-    backgroundColor: NEUTRAL.gray900,
     justifyContent: 'center',
     alignItems: 'center',
     padding: 24,
@@ -321,13 +330,11 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 22,
     fontWeight: '700',
-    color: NEUTRAL.gray100,
     marginBottom: 12,
     textAlign: 'center',
   },
   message: {
     fontSize: 15,
-    color: NEUTRAL.gray400,
     textAlign: 'center',
     lineHeight: 22,
     marginBottom: 32,
@@ -337,7 +344,6 @@ const styles = StyleSheet.create({
     marginBottom: 24,
   },
   button: {
-    backgroundColor: PRIMARY.main,
     borderRadius: 8,
     paddingVertical: 14,
   },
@@ -345,7 +351,6 @@ const styles = StyleSheet.create({
   // Error Details
   detailsContainer: {
     width: '100%',
-    backgroundColor: NEUTRAL.gray800,
     borderRadius: 8,
     overflow: 'hidden',
   },
@@ -355,12 +360,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     padding: 12,
     borderBottomWidth: 1,
-    borderBottomColor: NEUTRAL.gray700,
   },
   detailsTitle: {
     fontSize: 13,
     fontWeight: '600',
-    color: NEUTRAL.gray400,
   },
   detailsScroll: {
     maxHeight: 200,
@@ -369,25 +372,21 @@ const styles = StyleSheet.create({
   errorName: {
     fontSize: 14,
     fontWeight: '700',
-    color: SEMANTIC.error,
     marginBottom: 4,
   },
   errorMessage: {
     fontSize: 13,
-    color: NEUTRAL.gray300,
     marginBottom: 12,
   },
   stackTrace: {
     fontSize: 11,
     fontFamily: 'monospace',
-    color: NEUTRAL.gray500,
     lineHeight: 16,
   },
 
   // Screen Fallback
   screenFallback: {
     flex: 1,
-    backgroundColor: NEUTRAL.gray900,
     justifyContent: 'center',
     alignItems: 'center',
     padding: 32,
@@ -395,13 +394,11 @@ const styles = StyleSheet.create({
   screenTitle: {
     fontSize: 20,
     fontWeight: '600',
-    color: NEUTRAL.gray100,
     marginTop: 24,
     marginBottom: 8,
   },
   screenMessage: {
     fontSize: 15,
-    color: NEUTRAL.gray400,
     textAlign: 'center',
     marginBottom: 24,
   },
@@ -414,14 +411,11 @@ const styles = StyleSheet.create({
     padding: 24,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: `${SEMANTIC.warning}10`,
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: `${SEMANTIC.warning}30`,
   },
   cardMessage: {
     fontSize: 14,
-    color: NEUTRAL.gray400,
     marginTop: 8,
   },
   cardRetry: {
@@ -431,7 +425,6 @@ const styles = StyleSheet.create({
   },
   cardRetryText: {
     fontSize: 13,
-    color: PRIMARY.main,
     fontWeight: '500',
   },
 
@@ -444,7 +437,6 @@ const styles = StyleSheet.create({
   },
   inlineMessage: {
     fontSize: 13,
-    color: SEMANTIC.error,
   },
 });
 

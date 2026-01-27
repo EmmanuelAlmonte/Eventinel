@@ -168,19 +168,15 @@ export default function RelayConnectScreen() {
   const isError = message.includes('Failed') || message.includes('must start');
   const messageColor = isError ? colors.error : colors.success;
 
-  // DEBUG: Log relay info every render
-  console.log('[RelayScreen] Rendering with', relays.length, 'relays');
-  console.log('[RelayScreen] Relay URLs:', relays.map(r => r.url));
-
-  // Check for duplicates
-  const urls = relays.map(r => r.url);
-  const uniqueUrls = new Set(urls);
-  if (urls.length !== uniqueUrls.size) {
-    console.error('[RelayScreen] ⚠️ DUPLICATE RELAY URLS DETECTED!');
-    console.error('[RelayScreen] URLs:', urls);
-    console.error('[RelayScreen] Duplicates:', urls.filter((url, i) => urls.indexOf(url) !== i));
-  } else {
-    console.log('[RelayScreen] ✓ All relay URLs are unique');
+  // DEV-only: Log relay info and check for duplicates
+  if (__DEV__) {
+    console.log('[RelayScreen] Rendering with', relays.length, 'relays');
+    const urls = relays.map(r => r.url);
+    const uniqueUrls = new Set(urls);
+    if (urls.length !== uniqueUrls.size) {
+      console.error('[RelayScreen] ⚠️ DUPLICATE RELAY URLS DETECTED!');
+      console.error('[RelayScreen] Duplicates:', urls.filter((url, i) => urls.indexOf(url) !== i));
+    }
   }
 
   return (

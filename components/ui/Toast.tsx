@@ -47,7 +47,6 @@ import ToastLib, { BaseToast, ErrorToast, ToastConfig, ToastShowParams } from 'r
 import { Icon } from '@rneui/themed';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAppTheme } from '@hooks';
-import { PRIMARY, SEMANTIC } from '@lib/brand/colors';
 
 // ============================================================================
 // Toast Configuration (Theme-aware)
@@ -149,13 +148,13 @@ export function useToastConfig(): ToastConfig {
     network: (props) => (
       <BaseToast
         {...props}
-        style={[baseStyle, { borderLeftColor: PRIMARY.main }]}
+        style={[baseStyle, { borderLeftColor: colors.primary }]}
         contentContainerStyle={styles.contentContainer}
         text1Style={text1Style}
         text2Style={text2Style}
         renderLeadingIcon={() => (
           <View style={styles.iconContainer}>
-            <Icon name="wifi" type="material" size={24} color={PRIMARY.main} />
+            <Icon name="wifi" type="material" size={24} color={colors.primary} />
           </View>
         )}
       />

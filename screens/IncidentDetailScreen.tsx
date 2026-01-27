@@ -83,11 +83,12 @@ export default function IncidentDetailScreen() {
   const [commentText, setCommentText] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Mock comments for now (will be fetched from Nostr later)
-  const [comments] = useState([
-    { id: '1', author: 'Sarah M.', time: '45 min ago', text: 'I can see smoke from my window, looks contained now' },
-    { id: '2', author: 'Mike J.', time: '1 hr ago', text: 'Hope everyone is safe! Heard sirens earlier' },
-    { id: '3', author: 'Local Resident', time: '2 hrs ago', text: 'Heavy smoke visible from Spring Garden' },
+  // TODO: Fetch real comments from Nostr (kind:1 replies referencing incident event)
+  // Mock comments commented out until real implementation
+  const [comments] = useState<Array<{ id: string; author: string; time: string; text: string }>>([
+    // { id: '1', author: 'Sarah M.', time: '45 min ago', text: 'I can see smoke from my window, looks contained now' },
+    // { id: '2', author: 'Mike J.', time: '1 hr ago', text: 'Hope everyone is safe! Heard sirens earlier' },
+    // { id: '3', author: 'Local Resident', time: '2 hrs ago', text: 'Heavy smoke visible from Spring Garden' },
   ]);
   const [showAllComments, setShowAllComments] = useState(false);
 

@@ -38,9 +38,6 @@ if (__DEV__) {
   }, 100);
 }
 
-// Determine if we're in development mode
-const isDevelopment = __DEV__; // React Native's built-in dev flag
-
 // Initialize NDK with SQLite cache (no default relays - loaded from storage)
 export const ndk = new NDK({
   explicitRelayUrls: [],
@@ -53,9 +50,7 @@ export const ndk = new NDK({
   // relays stored in user's kind:10002 event (relay.damus.io, relay.primal.net, etc.)
   autoConnectUserRelays: false,
 
-  // Enable AI Guardrails in development to catch common mistakes
-  // Automatically disabled in production builds for zero performance impact
-  aiGuardrails: isDevelopment,
+  // NOTE: aiGuardrails was removed - not available in stable NDK 0.8.x
 });
 
 // Set bidirectional reference for cache adapter
@@ -79,14 +74,7 @@ if (__DEV__) {
   };
 }
 
-// Log AI Guardrails status
-if (isDevelopment) {
-  console.log('🛡️ [NDK] AI Guardrails: ENABLED');
-  console.log('   → Catching common mistakes during development');
-  console.log('   → Automatically disabled in production builds');
-} else {
-  console.log('🛡️ [NDK] AI Guardrails: DISABLED (production build)');
-}
+// NOTE: AI Guardrails removed - not available in stable NDK 0.8.x
 
 // Add global relay event logging with detailed WebSocket info
 ndk.pool.on('relay:connect', (relay) => {
