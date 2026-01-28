@@ -81,6 +81,9 @@ export const NOSTR_KINDS = {
   /** Standard text note for alerts/announcements */
   ALERT: 1,
 
+  /** Event deletion (NIP-09) */
+  EVENT_DELETION: 5,
+
   /** User metadata/profile */
   METADATA: 0,
 } as const;

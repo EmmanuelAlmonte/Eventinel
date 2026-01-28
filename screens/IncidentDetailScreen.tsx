@@ -17,6 +17,7 @@ import {
   ScrollView,
   StyleSheet,
   Pressable,
+  Alert,
   Linking,
   Platform,
   Animated,
@@ -36,7 +37,7 @@ import { useNDKCurrentUser } from '@nostr-dev-kit/mobile';
 import type { ParsedIncident } from '@lib/nostr/events/types';
 import { TYPE_CONFIG, SEVERITY_COLORS, type IncidentType } from '@lib/nostr/config';
 import { formatRelativeTime, formatRelativeTimeMs } from '@lib/utils/time';
-import { useAppTheme, useIncidentComments } from '@hooks';
+import { useAppTheme, useIncidentComments, type IncidentComment } from '@hooks';
 import { useIncidentCache } from '@contexts';
 import { MAP_STYLES } from '@lib/map/types';
 import { showToast } from '@components/ui';
@@ -47,6 +48,21 @@ type DetailRouteParams = {
     incidentId: string;
   };
 };
+
+const MAX_RELAY_LABELS = 2;
+
+function formatRelayList(relays: string[]): string {
+  if (!relays || relays.length === 0) return '';
+  const cleaned = relays
+    .map((relay) => relay.replace(/^wss?:\/\//, ''))
+    .filter((relay) => relay.length > 0);
+
+  if (cleaned.length <= MAX_RELAY_LABELS) {
+    return cleaned.join(', ');
+  }
+
+  return `${cleaned.slice(0, MAX_RELAY_LABELS).join(', ')} +${cleaned.length - MAX_RELAY_LABELS} more`;
+}
 
 export default function IncidentDetailScreen() {
   const navigation = useNavigation();
@@ -91,8 +107,13 @@ export default function IncidentDetailScreen() {
     isStale: commentsAreStale,
     retry: retryComments,
     postComment,
+    deleteComment,
+    recentDeletions,
   } = useIncidentComments(incident);
   const [showAllComments, setShowAllComments] = useState(false);
+  const [deletingCommentId, setDeletingCommentId] = useState<string | null>(null);
+  const lastDeletionNoticeRef = useRef<string | null>(null);
+  const hasMountedRef = useRef(false);
 
   // Start pulse animation
   useEffect(() => {
@@ -154,6 +175,54 @@ export default function IncidentDetailScreen() {
       setIsSubmitting(false);
     }
   }, [commentText, isSubmitting, postComment]);
+
+  useEffect(() => {
+    if (!hasMountedRef.current) {
+      hasMountedRef.current = true;
+      return;
+    }
+
+    const latest = recentDeletions[0];
+    if (!latest || latest.id === lastDeletionNoticeRef.current) return;
+
+    lastDeletionNoticeRef.current = latest.id;
+    const relayLabel = formatRelayList(latest.relays);
+    showToast.info(
+      'Comment deleted',
+      relayLabel ? `Relays: ${relayLabel}` : undefined
+    );
+  }, [recentDeletions]);
+
+  const confirmDeleteComment = useCallback(
+    (comment: IncidentComment) => {
+      if (!currentUser || currentUser.pubkey !== comment.authorPubkey) return;
+
+      Alert.alert(
+        'Delete comment?',
+        'This will request deletion on your connected relays.',
+        [
+          { text: 'Cancel', style: 'cancel' },
+          {
+            text: 'Delete',
+            style: 'destructive',
+            onPress: async () => {
+              setDeletingCommentId(comment.id);
+              try {
+                await deleteComment(comment);
+              } catch (error) {
+                console.warn('[Comments] Failed to delete comment:', error);
+                showToast.error('Failed to delete comment', 'Please try again');
+              } finally {
+                setDeletingCommentId((current) => (current === comment.id ? null : current));
+              }
+            },
+          },
+        ],
+        { cancelable: true }
+      );
+    },
+    [currentUser, deleteComment]
+  );
 
   // Loading/error state if no incident
   if (!incident) {
@@ -370,6 +439,18 @@ export default function IncidentDetailScreen() {
             </View>
           ) : null}
 
+          {recentDeletions.length > 0 ? (
+            <View style={styles.commentsBanner}>
+              <Icon name="delete-outline" type="material" size={16} color={colors.textMuted} />
+              <Text style={[styles.commentsBannerText, { color: colors.textMuted }]}>
+                {recentDeletions.length === 1 ? '1 comment deleted' : `${recentDeletions.length} comments deleted`}
+                {recentDeletions[0]?.relays?.length
+                  ? ` on ${formatRelayList(recentDeletions[0].relays)}`
+                  : ''}
+              </Text>
+            </View>
+          ) : null}
+
           {isLoadingComments && comments.length === 0 ? (
             <View style={styles.emptyComments}>
               <ActivityIndicator size="small" color={colors.primary} />
@@ -391,24 +472,49 @@ export default function IncidentDetailScreen() {
                   key={comment.id}
                   containerStyle={[styles.commentCard, { backgroundColor: colors.surface, borderColor: colors.border }]}
                 >
-                  <View style={styles.comment}>
-                    <Avatar
-                      rounded
-                      size={36}
-                      title={comment.displayName.charAt(0)}
-                      source={comment.avatarUrl ? { uri: comment.avatarUrl } : undefined}
-                      containerStyle={[styles.commentAvatar, { backgroundColor: colors.primary }]}
-                    />
-                    <View style={styles.commentContent}>
-                      <View style={styles.commentHeader}>
-                        <Text style={[styles.commentAuthor, { color: colors.text }]}>{comment.displayName}</Text>
-                        <Text style={[styles.commentTime, { color: colors.textMuted }]}>
-                          {formatRelativeTimeMs(comment.createdAtMs)}
-                        </Text>
+                  <Pressable
+                    onLongPress={() => confirmDeleteComment(comment)}
+                    disabled={
+                      !currentUser ||
+                      currentUser.pubkey !== comment.authorPubkey ||
+                      deletingCommentId === comment.id
+                    }
+                  >
+                    <View style={styles.comment}>
+                      <Avatar
+                        rounded
+                        size={36}
+                        title={comment.displayName.charAt(0)}
+                        source={comment.avatarUrl ? { uri: comment.avatarUrl } : undefined}
+                        containerStyle={[styles.commentAvatar, { backgroundColor: colors.primary }]}
+                      />
+                      <View style={styles.commentContent}>
+                        <View style={styles.commentHeader}>
+                          <Text style={[styles.commentAuthor, { color: colors.text }]}>{comment.displayName}</Text>
+                          <View style={styles.commentMetaRow}>
+                            <Text style={[styles.commentTime, { color: colors.textMuted }]}>
+                              {formatRelativeTimeMs(comment.createdAtMs)}
+                            </Text>
+                            {currentUser && currentUser.pubkey === comment.authorPubkey ? (
+                              <Pressable
+                                onPress={() => confirmDeleteComment(comment)}
+                                style={styles.commentMenuButton}
+                                hitSlop={8}
+                                disabled={deletingCommentId === comment.id}
+                              >
+                                {deletingCommentId === comment.id ? (
+                                  <ActivityIndicator size="small" color={colors.textMuted} />
+                                ) : (
+                                  <Icon name="more-vert" type="material" size={18} color={colors.textMuted} />
+                                )}
+                              </Pressable>
+                            ) : null}
+                          </View>
+                        </View>
+                        <Text style={[styles.commentText, { color: colors.text }]}>{comment.content}</Text>
                       </View>
-                      <Text style={[styles.commentText, { color: colors.text }]}>{comment.content}</Text>
                     </View>
-                  </View>
+                  </Pressable>
                 </Card>
               ))}
 
@@ -750,6 +856,14 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     marginBottom: 4,
+  },
+  commentMetaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  commentMenuButton: {
+    padding: 2,
   },
   commentsBanner: {
     flexDirection: 'row',

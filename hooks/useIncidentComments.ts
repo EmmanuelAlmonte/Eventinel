@@ -21,6 +21,13 @@ export type IncidentComment = {
   createdAtMs: number;
   displayName: string;
   avatarUrl?: string;
+  deletedOnRelays?: string[];
+};
+
+export type CommentDeletionNotice = {
+  id: string;
+  relays: string[];
+  timestampMs: number;
 };
 
 type ProfileSummary = {
@@ -35,6 +42,8 @@ export type UseIncidentCommentsResult = {
   isStale: boolean;
   retry: () => void;
   postComment: (content: string, replyTo?: IncidentComment) => Promise<void>;
+  deleteComment: (comment: IncidentComment) => Promise<void>;
+  recentDeletions: CommentDeletionNotice[];
 };
 
 function buildIncidentAddress(incident: ParsedIncident): string {
@@ -77,6 +86,33 @@ function getDisplayName(pubkey: string, profile?: ProfileSummary): string {
   );
 }
 
+function getRelayUrls(event: NDKEventType): string[] {
+  const relays = event.onRelays?.length
+    ? event.onRelays
+    : event.relay
+      ? [event.relay]
+      : [];
+
+  const urls = relays
+    .map((relay) => relay.url)
+    .filter((url): url is string => Boolean(url));
+
+  return Array.from(new Set(urls));
+}
+
+function getDeletedEventIds(event: NDKEventType): string[] {
+  if (event.kind !== NOSTR_KINDS.EVENT_DELETION) return [];
+
+  const ids = (event.tags || [])
+    .filter((tag) => tag[0] === 'e' && typeof tag[1] === 'string')
+    .map((tag) => tag[1]);
+
+  return Array.from(new Set(ids));
+}
+
+const RECENT_DELETION_TTL_MS = 5 * 60 * 1000;
+const MAX_RECENT_DELETIONS = 3;
+
 export function useIncidentComments(
   incident?: ParsedIncident | null
 ): UseIncidentCommentsResult {
@@ -102,12 +138,42 @@ export function useIncidentComments(
     groupable: false,
   });
 
+  const commentEventIds = useMemo(() => {
+    const ids: string[] = [];
+    for (const event of events) {
+      if (event.kind === NOSTR_KINDS.ALERT && event.id) {
+        ids.push(event.id);
+      }
+    }
+    return ids;
+  }, [events]);
+
+  const deletionFilters = useMemo((): NDKFilter[] | false => {
+    if (!incident || commentEventIds.length === 0) return false;
+
+    return [
+      {
+        kinds: [NOSTR_KINDS.EVENT_DELETION],
+        '#e': commentEventIds,
+      },
+    ];
+  }, [commentEventIds, incident, retryToken]);
+
+  const { events: deletionEvents } = useSubscribe(deletionFilters, {
+    closeOnEose: false,
+    bufferMs: 200,
+    cacheUsage: NDKSubscriptionCacheUsage.CACHE_FIRST,
+    groupable: false,
+  });
+
   const [profiles, setProfiles] = useState<Record<string, ProfileSummary>>({});
   const fetchedProfilesRef = useRef<Set<string>>(new Set());
   const [didTimeout, setDidTimeout] = useState(false);
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [deletedRelaysById, setDeletedRelaysById] = useState<Record<string, string[]>>({});
+  const [recentDeletions, setRecentDeletions] = useState<CommentDeletionNotice[]>([]);
 
-  const comments = useMemo(() => {
+  const allComments = useMemo(() => {
     const map = new Map<string, IncidentComment>();
 
     for (const event of events) {
@@ -116,6 +182,7 @@ export function useIncidentComments(
       const createdAt = event.created_at ?? Math.floor(Date.now() / 1000);
       const createdAtMs = createdAt * 1000;
       const profile = profiles[event.pubkey];
+      const deletedOnRelays = deletedRelaysById[event.id];
 
       map.set(event.id, {
         id: event.id,
@@ -125,11 +192,117 @@ export function useIncidentComments(
         createdAtMs,
         displayName: getDisplayName(event.pubkey, profile),
         avatarUrl: profile?.avatarUrl,
+        deletedOnRelays:
+          deletedOnRelays && deletedOnRelays.length > 0 ? deletedOnRelays : undefined,
       });
     }
 
     return Array.from(map.values()).sort((a, b) => b.createdAtMs - a.createdAtMs);
-  }, [events, profiles]);
+  }, [events, profiles, deletedRelaysById]);
+
+  const visibleComments = useMemo(
+    () => allComments.filter((comment) => !deletedRelaysById[comment.id]),
+    [allComments, deletedRelaysById]
+  );
+
+  useEffect(() => {
+    setDeletedRelaysById({});
+    setRecentDeletions([]);
+  }, [incident?.eventId]);
+
+  useEffect(() => {
+    if (!deletionFilters || deletionEvents.length === 0) return;
+
+    const commentIdSet = new Set(commentEventIds);
+    const now = Date.now();
+    const deletionUpdates = new Map<string, string[]>();
+
+    setDeletedRelaysById((prev) => {
+      let next: Record<string, string[]> | null = null;
+
+      const ensureNext = () => {
+        if (!next) {
+          next = { ...prev };
+        }
+        return next;
+      };
+
+      for (const event of deletionEvents) {
+        if (event.kind !== NOSTR_KINDS.EVENT_DELETION) continue;
+
+        const targetIds = getDeletedEventIds(event).filter((id) => commentIdSet.has(id));
+        if (targetIds.length === 0) continue;
+
+        const relayUrls = getRelayUrls(event);
+        const relayList = relayUrls.length > 0 ? relayUrls : ['unknown relay'];
+
+        for (const targetId of targetIds) {
+          const current = (next ?? prev)[targetId] ?? [];
+          const relaySet = new Set(current);
+          const sizeBefore = relaySet.size;
+          relayList.forEach((url) => relaySet.add(url));
+
+          if (relaySet.size !== sizeBefore) {
+            const updated = ensureNext();
+            updated[targetId] = Array.from(relaySet);
+          }
+
+          const merged = new Set(deletionUpdates.get(targetId) ?? []);
+          relayList.forEach((url) => merged.add(url));
+          deletionUpdates.set(targetId, Array.from(merged));
+        }
+      }
+
+      return next ?? prev;
+    });
+
+    if (deletionUpdates.size > 0) {
+      setRecentDeletions((prev) => {
+        const cutoff = now - RECENT_DELETION_TTL_MS;
+        const map = new Map<string, CommentDeletionNotice>();
+
+        prev
+          .filter((notice) => notice.timestampMs >= cutoff)
+          .forEach((notice) => {
+            map.set(notice.id, notice);
+          });
+
+        deletionUpdates.forEach((relays, id) => {
+          const existing = map.get(id);
+          const relaySet = new Set(existing?.relays ?? []);
+          relays.forEach((url) => relaySet.add(url));
+
+          map.set(id, {
+            id,
+            relays: Array.from(relaySet),
+            timestampMs: now,
+          });
+        });
+
+        return Array.from(map.values())
+          .sort((a, b) => b.timestampMs - a.timestampMs)
+          .slice(0, MAX_RECENT_DELETIONS);
+      });
+    }
+  }, [commentEventIds, deletionEvents, deletionFilters]);
+
+  useEffect(() => {
+    if (commentEventIds.length === 0) {
+      setDeletedRelaysById({});
+      return;
+    }
+
+    setDeletedRelaysById((prev) => {
+      const next: Record<string, string[]> = {};
+      for (const id of commentEventIds) {
+        if (prev[id]) {
+          next[id] = prev[id];
+        }
+      }
+
+      return Object.keys(next).length === Object.keys(prev).length ? prev : next;
+    });
+  }, [commentEventIds]);
 
   useEffect(() => {
     if (!filters) return undefined;
@@ -167,7 +340,7 @@ export function useIncidentComments(
   useEffect(() => {
     if (!incident) return;
 
-    const authors = Array.from(new Set(comments.map((comment) => comment.authorPubkey)));
+    const authors = Array.from(new Set(visibleComments.map((comment) => comment.authorPubkey)));
     const missing = authors.filter((pubkey) => !fetchedProfilesRef.current.has(pubkey));
 
     if (missing.length === 0) return;
@@ -201,7 +374,7 @@ export function useIncidentComments(
       .catch((error) => {
         console.warn('[Comments] Failed to fetch profiles:', error);
       });
-  }, [comments, incident]);
+  }, [incident, visibleComments]);
 
   const postComment = useCallback(
     async (content: string, replyTo?: IncidentComment) => {
@@ -231,15 +404,33 @@ export function useIncidentComments(
     [incident, incidentAddress]
   );
 
+  const deleteComment = useCallback(async (comment: IncidentComment) => {
+    if (!comment?.id) {
+      throw new Error('Comment is not available');
+    }
+
+    const deletion = new NDKEvent(ndk);
+    deletion.kind = NOSTR_KINDS.EVENT_DELETION;
+    deletion.content = 'Deleted by author';
+    deletion.tags = [
+      ['e', comment.id],
+      ['k', String(NOSTR_KINDS.ALERT)],
+    ];
+
+    await deletion.publish();
+  }, []);
+
   const retry = useCallback(() => {
     setRetryToken((value) => value + 1);
   }, []);
 
   return {
-    comments,
+    comments: visibleComments,
     isLoading: !eose && events.length === 0 && !didTimeout,
     isStale: didTimeout && events.length === 0 && !eose,
     retry,
     postComment,
+    deleteComment,
+    recentDeletions,
   };
 }

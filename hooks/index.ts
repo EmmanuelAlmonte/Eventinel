@@ -15,6 +15,10 @@ export type {
 } from './useIncidentSubscription';
 
 export { useIncidentComments } from './useIncidentComments';
-export type { IncidentComment, UseIncidentCommentsResult } from './useIncidentComments';
+export type {
+  CommentDeletionNotice,
+  IncidentComment,
+  UseIncidentCommentsResult,
+} from './useIncidentComments';
 
 export { useAppTheme } from './useAppTheme';
