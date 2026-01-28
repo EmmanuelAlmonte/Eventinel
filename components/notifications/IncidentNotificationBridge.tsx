@@ -10,6 +10,7 @@ import { showToast } from '@components/ui';
 import { useIncidentCache, useSharedIncidents } from '@contexts';
 import type { ProcessedIncident } from '@hooks/useIncidentSubscription';
 import type { ParsedIncident } from '@lib/nostr/events/types';
+import { saveExpoPushToken } from '@lib/notifications/pushTokenStorage';
 import {
   coerceIncidentNotificationPayload,
   fetchIncidentFromRelay,
@@ -141,6 +142,9 @@ export default function IncidentNotificationBridge() {
       .then((token) => {
         if (token) {
           console.log('📨 [Notifications] Expo push token:', token);
+          saveExpoPushToken(token).catch((error) => {
+            console.warn('[Notifications] Failed to store expo push token:', error);
+          });
         }
       })
       .catch((error) => {

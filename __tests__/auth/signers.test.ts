@@ -374,7 +374,8 @@ describe('Signer Integration', () => {
         await signer.blockUntilReady();
         fail('Should have thrown');
       } catch (error) {
-        expect(error.message).toContain('not available');
+        const message = error instanceof Error ? error.message : String(error);
+        expect(message).toContain('not available');
       }
     });
 
@@ -386,7 +387,8 @@ describe('Signer Integration', () => {
         await signer.blockUntilReady();
         fail('Should have thrown');
       } catch (error) {
-        expect(error.message).toContain('connection failed');
+        const message = error instanceof Error ? error.message : String(error);
+        expect(message).toContain('connection failed');
       }
     });
 

@@ -5,13 +5,15 @@
  * Includes theme toggle for light/dark mode.
  */
 
+import { useCallback, useState } from 'react';
 import { StyleSheet, View, Alert, Platform, Pressable } from 'react-native';
 import { Text, Button, Card, Avatar, Icon, Divider, Switch } from '@rneui/themed';
 import { useNDKSessionLogout, useNDKCurrentPubkey, useNDKCurrentUser } from '@nostr-dev-kit/mobile';
-import { useNavigation } from '@react-navigation/native';
+import { useFocusEffect, useNavigation } from '@react-navigation/native';
 
 import { ScreenContainer } from '@components/ui';
 import { useAppTheme } from '@hooks';
+import { loadExpoPushToken } from '@lib/notifications/pushTokenStorage';
 
 export default function ProfileScreen() {
   const navigation = useNavigation<any>();
@@ -21,6 +23,27 @@ export default function ProfileScreen() {
 
   // Get theme-aware colors and toggle
   const { colors, isDark, toggleMode } = useAppTheme();
+  const [pushToken, setPushToken] = useState<string | null>(null);
+  const [isLoadingPushToken, setIsLoadingPushToken] = useState(false);
+
+  const refreshPushToken = useCallback(async () => {
+    setIsLoadingPushToken(true);
+    try {
+      const token = await loadExpoPushToken();
+      setPushToken(token);
+    } catch (error) {
+      console.warn('[Profile] Failed to load expo push token:', error);
+      setPushToken(null);
+    } finally {
+      setIsLoadingPushToken(false);
+    }
+  }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      refreshPushToken();
+    }, [refreshPushToken])
+  );
 
   const handleRelaySettings = () => {
     navigation.navigate('Relays');
@@ -205,6 +228,40 @@ export default function ProfileScreen() {
         </Pressable>
       </Card>
 
+      {/* Push Token */}
+      <Card containerStyle={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+        <View style={styles.cardHeader}>
+          <Icon
+            name="notifications"
+            type="material"
+            size={20}
+            color={colors.primary}
+          />
+          <Text style={[styles.cardTitle, { color: colors.text }]}>Push Token</Text>
+        </View>
+        {isLoadingPushToken ? (
+          <Text style={[styles.pushTokenHint, { color: colors.textMuted }]}>
+            Loading push token...
+          </Text>
+        ) : pushToken ? (
+          <>
+            <Text
+              style={[styles.pushTokenText, { color: colors.text, backgroundColor: colors.background }]}
+              selectable
+            >
+              {pushToken}
+            </Text>
+            <Text style={[styles.pushTokenHint, { color: colors.textMuted }]}>
+              Tap and hold to copy
+            </Text>
+          </>
+        ) : (
+          <Text style={[styles.pushTokenEmpty, { color: colors.textMuted }]}>
+            No push token yet. Open the app on a physical device and allow notifications.
+          </Text>
+        )}
+      </Card>
+
       {/* Account Actions */}
       <Card containerStyle={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
         <View style={styles.cardHeader}>
@@ -373,5 +430,20 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 13,
     lineHeight: 18,
+  },
+  pushTokenText: {
+    fontSize: 12,
+    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
+    padding: 12,
+    borderRadius: 8,
+    lineHeight: 16,
+  },
+  pushTokenHint: {
+    fontSize: 12,
+    marginTop: 8,
+  },
+  pushTokenEmpty: {
+    fontSize: 12,
+    lineHeight: 16,
   },
 });
