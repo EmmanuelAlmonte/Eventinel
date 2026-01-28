@@ -41,6 +41,12 @@ module.exports = {
         },
       ],
       [
+        'expo-notifications',
+        {
+          defaultChannel: 'incidents',
+        },
+      ],
+      [
         '@rnmapbox/maps',
         {
           RNMapboxMapsAccessToken: process.env.MAPBOX_ACCESS_TOKEN,

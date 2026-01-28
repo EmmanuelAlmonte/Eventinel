@@ -21,6 +21,7 @@ import { theme } from './lib/theme';
 import { useAppTheme } from '@hooks';
 import { IncidentCacheProvider, LocationProvider, IncidentSubscriptionProvider } from '@contexts';
 import { ToastProvider, ErrorBoundary } from '@components/ui';
+import IncidentNotificationBridge from '@components/notifications/IncidentNotificationBridge';
 
 const Tab = createBottomTabNavigator();
 const Stack = createNativeStackNavigator();
@@ -97,6 +98,7 @@ function MainNavigation() {
   return (
     <NavigationContainer>
       <StatusBar style={isDark ? 'light' : 'dark'} />
+      <IncidentNotificationBridge />
       <Stack.Navigator screenOptions={{ headerShown: false }}>
         <Stack.Screen name="Main" component={TabNavigator} />
         <Stack.Screen name="IncidentDetail" component={IncidentDetailScreen} />
