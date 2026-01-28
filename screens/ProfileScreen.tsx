@@ -5,15 +5,21 @@
  * Includes theme toggle for light/dark mode.
  */
 
-import { useCallback, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { StyleSheet, View, Alert, Platform, Pressable } from 'react-native';
 import { Text, Button, Card, Avatar, Icon, Divider, Switch } from '@rneui/themed';
 import { useNDKSessionLogout, useNDKCurrentPubkey, useNDKCurrentUser } from '@nostr-dev-kit/mobile';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
+import * as Notifications from 'expo-notifications';
 
-import { ScreenContainer } from '@components/ui';
+import { ScreenContainer, showToast } from '@components/ui';
 import { useAppTheme } from '@hooks';
-import { loadExpoPushToken } from '@lib/notifications/pushTokenStorage';
+import { loadExpoPushToken, saveExpoPushToken } from '@lib/notifications/pushTokenStorage';
+import {
+  getPushPermissionStatus,
+  registerForPushNotificationsAsync,
+  requestPushPermissions,
+} from '@lib/notifications/pushRegistration';
 
 export default function ProfileScreen() {
   const navigation = useNavigation<any>();
@@ -25,6 +31,9 @@ export default function ProfileScreen() {
   const { colors, isDark, toggleMode } = useAppTheme();
   const [pushToken, setPushToken] = useState<string | null>(null);
   const [isLoadingPushToken, setIsLoadingPushToken] = useState(false);
+  const [pushPermissionStatus, setPushPermissionStatus] = useState<Notifications.PermissionStatus | null>(null);
+  const [isRequestingPermission, setIsRequestingPermission] = useState(false);
+  const [isRegisteringPush, setIsRegisteringPush] = useState(false);
 
   const refreshPushToken = useCallback(async () => {
     setIsLoadingPushToken(true);
@@ -39,10 +48,21 @@ export default function ProfileScreen() {
     }
   }, []);
 
+  const refreshPermissionStatus = useCallback(async () => {
+    try {
+      const status = await getPushPermissionStatus();
+      setPushPermissionStatus(status);
+    } catch (error) {
+      console.warn('[Profile] Failed to load notification permissions:', error);
+      setPushPermissionStatus(null);
+    }
+  }, []);
+
   useFocusEffect(
     useCallback(() => {
       refreshPushToken();
-    }, [refreshPushToken])
+      refreshPermissionStatus();
+    }, [refreshPermissionStatus, refreshPushToken])
   );
 
   const handleRelaySettings = () => {
@@ -67,6 +87,73 @@ export default function ProfileScreen() {
       ]
     );
   };
+
+  const handleRequestPermission = useCallback(async () => {
+    if (pushPermissionStatus === Notifications.PermissionStatus.GRANTED) {
+      showToast.info('Notifications already enabled');
+      return;
+    }
+
+    setIsRequestingPermission(true);
+    try {
+      const status = await requestPushPermissions();
+      setPushPermissionStatus(status);
+      if (status === Notifications.PermissionStatus.GRANTED) {
+        showToast.success('Notifications enabled');
+      } else {
+        showToast.warning('Notifications disabled', 'You can enable them in system settings.');
+      }
+    } catch (error) {
+      console.warn('[Profile] Failed to request notification permission:', error);
+      showToast.error('Permission request failed', 'Please try again');
+    } finally {
+      setIsRequestingPermission(false);
+    }
+  }, [pushPermissionStatus]);
+
+  const handleRegisterPushToken = useCallback(async () => {
+    setIsRegisteringPush(true);
+    try {
+      const token = await registerForPushNotificationsAsync();
+      if (token) {
+        await saveExpoPushToken(token);
+        setPushToken(token);
+        showToast.success('Push token updated');
+      } else {
+        showToast.warning('Push token unavailable', 'Check notification permission');
+      }
+    } catch (error) {
+      console.warn('[Profile] Failed to register push token:', error);
+      showToast.error('Registration failed', 'Please try again');
+    } finally {
+      setIsRegisteringPush(false);
+      refreshPermissionStatus();
+    }
+  }, [refreshPermissionStatus]);
+
+  const permissionLabel = useMemo(() => {
+    if (!pushPermissionStatus) return 'Unknown';
+    switch (pushPermissionStatus) {
+      case Notifications.PermissionStatus.GRANTED:
+        return 'Granted';
+      case Notifications.PermissionStatus.DENIED:
+        return 'Denied';
+      default:
+        return 'Undetermined';
+    }
+  }, [pushPermissionStatus]);
+
+  const permissionColor = useMemo(() => {
+    if (!pushPermissionStatus) return colors.textMuted;
+    switch (pushPermissionStatus) {
+      case Notifications.PermissionStatus.GRANTED:
+        return colors.success;
+      case Notifications.PermissionStatus.DENIED:
+        return colors.error;
+      default:
+        return colors.warning;
+    }
+  }, [colors, pushPermissionStatus]);
 
   // Get display name from profile if available
   const displayName = currentUser?.profile?.displayName || currentUser?.profile?.name || 'Anonymous';
@@ -238,6 +325,28 @@ export default function ProfileScreen() {
             color={colors.primary}
           />
           <Text style={[styles.cardTitle, { color: colors.text }]}>Push Token</Text>
+        </View>
+        <View style={styles.pushStatusRow}>
+          <Text style={[styles.pushStatusLabel, { color: colors.textMuted }]}>Permission</Text>
+          <View style={[styles.pushStatusBadge, { borderColor: permissionColor }]}>
+            <View style={[styles.pushStatusDot, { backgroundColor: permissionColor }]} />
+            <Text style={[styles.pushStatusValue, { color: permissionColor }]}>{permissionLabel}</Text>
+          </View>
+        </View>
+        <View style={styles.pushActions}>
+          <Button
+            title="Request permission"
+            type="outline"
+            onPress={handleRequestPermission}
+            disabled={isRequestingPermission || isRegisteringPush}
+            containerStyle={styles.pushActionButton}
+          />
+          <Button
+            title="Register token"
+            onPress={handleRegisterPushToken}
+            disabled={isRegisteringPush || isRequestingPermission}
+            containerStyle={styles.pushActionButton}
+          />
         </View>
         {isLoadingPushToken ? (
           <Text style={[styles.pushTokenHint, { color: colors.textMuted }]}>
@@ -445,5 +554,40 @@ const styles = StyleSheet.create({
   pushTokenEmpty: {
     fontSize: 12,
     lineHeight: 16,
+  },
+  pushStatusRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 12,
+  },
+  pushStatusLabel: {
+    fontSize: 13,
+  },
+  pushStatusBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    borderWidth: 1,
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+  },
+  pushStatusDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+  },
+  pushStatusValue: {
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  pushActions: {
+    flexDirection: 'row',
+    gap: 8,
+    marginBottom: 12,
+  },
+  pushActionButton: {
+    flex: 1,
   },
 });

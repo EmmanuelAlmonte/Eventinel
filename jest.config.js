@@ -28,6 +28,7 @@ module.exports = {
     '^expo-secure-store$': '<rootDir>/__mocks__/expo-secure-store.js',
     '^expo-sqlite$': '<rootDir>/__mocks__/expo-sqlite.js',
     '^expo-nip55$': '<rootDir>/__mocks__/expo-nip55.js',
+    '^expo-notifications$': '<rootDir>/__mocks__/expo-notifications.js',
 
     // Mock the NDK mobile package
     '^@nostr-dev-kit/mobile$': '<rootDir>/__mocks__/@nostr-dev-kit/mobile.ts',

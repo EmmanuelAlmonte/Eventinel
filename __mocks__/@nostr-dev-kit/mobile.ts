@@ -196,6 +196,18 @@ export class NDKPrivateKeySigner {
   async blockUntilReady() {
     return this;
   }
+
+  get nsec() {
+    return this.key;
+  }
+
+  get npub() {
+    return `npub_${this.mockPubkey}`;
+  }
+
+  static generate() {
+    return new NDKPrivateKeySigner(`nsec1${'a'.repeat(60)}`);
+  }
 }
 
 /**

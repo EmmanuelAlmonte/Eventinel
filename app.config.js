@@ -13,7 +13,7 @@ if (!mapboxToken) {
 module.exports = {
   expo: {
     name: 'Eventinel',
-    slug: 'eventinel',
+    slug: 'eventinel-zu26kq3j5yws6enmbulrx',
     version: '1.0.0',
     scheme: 'eventinel',
     orientation: 'portrait',
@@ -88,13 +88,14 @@ module.exports = {
         backgroundColor: '#ffffff',
       },
       package: 'com.eventinel.app',
+      googleServicesFile: './google-services.json',
     },
     web: {
       favicon: './assets/favicon.png',
     },
     extra: {
       eas: {
-        projectId: '1a58dec9-3386-4d0f-822e-48bf0ee5a852',
+        projectId: '095741fd-0726-4560-9b50-528a8e167252',
       },
     },
   },

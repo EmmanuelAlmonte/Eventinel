@@ -8,6 +8,7 @@
 import { useState } from 'react';
 import { View, StyleSheet, Platform, KeyboardAvoidingView } from 'react-native';
 import { Text, Button, Input, Card, Icon, Overlay } from '@rneui/themed';
+import * as Clipboard from 'expo-clipboard';
 import {
   useNip55,
   NDKNip55Signer,
@@ -28,6 +29,9 @@ export default function LoginScreen() {
   const [manualKey, setManualKey] = useState('');
   const [bunkerUrl, setBunkerUrl] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [generatedKey, setGeneratedKey] = useState<string | null>(null);
+  const [generatedPubkey, setGeneratedPubkey] = useState<string | null>(null);
+  const [generatedSigner, setGeneratedSigner] = useState<NDKPrivateKeySigner | null>(null);
 
   // Get theme-aware colors
   const { colors, isDark } = useAppTheme();
@@ -92,6 +96,47 @@ export default function LoginScreen() {
     }
   };
 
+  const handleGenerateKey = async () => {
+    try {
+      const signer = NDKPrivateKeySigner.generate();
+      const nsec = signer.nsec;
+      setGeneratedSigner(signer);
+      setGeneratedKey(nsec);
+      setGeneratedPubkey(signer.npub);
+
+      try {
+        await Clipboard.setStringAsync(nsec);
+        showToast.success('Copied to clipboard', 'New private key copied');
+      } catch (err) {
+        showToast.warning('Clipboard unavailable', 'Copy the key manually');
+      }
+    } catch (err) {
+      showToast.error('Key Generation Failed', 'Please try again');
+    }
+  };
+
+  const handleGeneratedLogin = async () => {
+    if (!generatedSigner) return;
+
+    setIsLoading(true);
+    try {
+      await login(generatedSigner, true);
+      setGeneratedKey(null);
+      setGeneratedPubkey(null);
+      setGeneratedSigner(null);
+    } catch (err) {
+      showToast.error('Login Failed', 'Unable to use generated key');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const dismissGeneratedKey = () => {
+    setGeneratedKey(null);
+    setGeneratedPubkey(null);
+    setGeneratedSigner(null);
+  };
+
   // Dynamic styles based on theme
   const themedStyles = {
     card: {
@@ -132,6 +177,58 @@ export default function LoginScreen() {
             color={colors.primary}
           />
           <Text style={[styles.loadingText, { color: colors.text }]}>Connecting...</Text>
+        </View>
+      </Overlay>
+
+      {/* Generated Key Overlay */}
+      <Overlay
+        isVisible={Boolean(generatedKey)}
+        overlayStyle={[styles.keyOverlay, { backgroundColor: colors.surface, borderColor: colors.border }]}
+        onBackdropPress={dismissGeneratedKey}
+      >
+        <View style={styles.keyContent}>
+          <View style={styles.cardHeader}>
+            <Icon name="key" type="material" size={22} color={colors.warning} />
+            <Text style={[styles.cardTitle, { color: colors.text }]}>New Test Key</Text>
+          </View>
+          <Text style={[styles.cardDescription, { color: colors.textMuted }]}>
+            Save this private key. Anyone with it can control the account.
+          </Text>
+          {generatedKey ? (
+            <Text
+              selectable
+              style={[styles.generatedKeyText, { color: colors.text, borderColor: colors.border }]}
+            >
+              {generatedKey}
+            </Text>
+          ) : null}
+          {generatedPubkey ? (
+            <Text style={[styles.generatedPubkeyText, { color: colors.textMuted }]}>
+              Public key: {generatedPubkey}
+            </Text>
+          ) : null}
+          <Button
+            title="Use this key to login"
+            onPress={handleGeneratedLogin}
+            disabled={isLoading}
+            containerStyle={styles.buttonContainer}
+            icon={
+              <Icon
+                name="login"
+                type="material"
+                size={20}
+                color="#FFFFFF"
+                style={{ marginRight: 8 }}
+              />
+            }
+          />
+          <Button
+            title="Close"
+            type="clear"
+            onPress={dismissGeneratedKey}
+            disabled={isLoading}
+            titleStyle={{ color: colors.textMuted }}
+          />
         </View>
       </Overlay>
 
@@ -275,6 +372,25 @@ export default function LoginScreen() {
         />
 
         <Button
+          title="Create New Test Key"
+          onPress={handleGenerateKey}
+          disabled={isLoading}
+          containerStyle={styles.buttonContainer}
+          type="outline"
+          buttonStyle={{ borderColor: colors.warning }}
+          titleStyle={{ color: colors.warning }}
+          icon={
+            <Icon
+              name="add-circle-outline"
+              type="material"
+              size={20}
+              color={colors.warning}
+              style={{ marginRight: 8 }}
+            />
+          }
+        />
+
+        <Button
           title="Login with Private Key"
           onPress={handleManualLogin}
           disabled={isLoading}
@@ -400,6 +516,27 @@ const styles = StyleSheet.create({
   },
   buttonContainer: {
     marginTop: 4,
+  },
+  keyOverlay: {
+    borderRadius: 16,
+    padding: 20,
+    borderWidth: 1,
+    width: '90%',
+    maxWidth: 420,
+  },
+  keyContent: {
+    gap: 12,
+  },
+  generatedKeyText: {
+    fontSize: 14,
+    lineHeight: 20,
+    padding: 12,
+    borderRadius: 8,
+    borderWidth: 1,
+    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
+  },
+  generatedPubkeyText: {
+    fontSize: 12,
   },
   warningCard: {
     backgroundColor: 'rgba(245, 158, 11, 0.1)',
