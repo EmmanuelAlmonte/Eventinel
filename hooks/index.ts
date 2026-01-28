@@ -14,4 +14,7 @@ export type {
   ProcessedIncident,
 } from './useIncidentSubscription';
 
+export { useIncidentComments } from './useIncidentComments';
+export type { IncidentComment, UseIncidentCommentsResult } from './useIncidentComments';
+
 export { useAppTheme } from './useAppTheme';

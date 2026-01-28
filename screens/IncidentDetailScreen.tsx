@@ -35,10 +35,11 @@ import { useNDKCurrentUser } from '@nostr-dev-kit/mobile';
 
 import type { ParsedIncident } from '@lib/nostr/events/types';
 import { TYPE_CONFIG, SEVERITY_COLORS, type IncidentType } from '@lib/nostr/config';
-import { formatRelativeTime } from '@lib/utils/time';
-import { useAppTheme } from '@hooks';
+import { formatRelativeTime, formatRelativeTimeMs } from '@lib/utils/time';
+import { useAppTheme, useIncidentComments } from '@hooks';
 import { useIncidentCache } from '@contexts';
 import { MAP_STYLES } from '@lib/map/types';
+import { showToast } from '@components/ui';
 
 // Route params type - now uses incidentId only (no serialization warning)
 type DetailRouteParams = {
@@ -83,13 +84,14 @@ export default function IncidentDetailScreen() {
   const [commentText, setCommentText] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // TODO: Fetch real comments from Nostr (kind:1 replies referencing incident event)
-  // Mock comments commented out until real implementation
-  const [comments] = useState<Array<{ id: string; author: string; time: string; text: string }>>([
-    // { id: '1', author: 'Sarah M.', time: '45 min ago', text: 'I can see smoke from my window, looks contained now' },
-    // { id: '2', author: 'Mike J.', time: '1 hr ago', text: 'Hope everyone is safe! Heard sirens earlier' },
-    // { id: '3', author: 'Local Resident', time: '2 hrs ago', text: 'Heavy smoke visible from Spring Garden' },
-  ]);
+  // Nostr-native comments for this incident
+  const {
+    comments,
+    isLoading: isLoadingComments,
+    isStale: commentsAreStale,
+    retry: retryComments,
+    postComment,
+  } = useIncidentComments(incident);
   const [showAllComments, setShowAllComments] = useState(false);
 
   // Start pulse animation
@@ -138,16 +140,20 @@ export default function IncidentDetailScreen() {
     }
   }, [incident]);
 
-  // Handle comment submit (placeholder)
+  // Handle comment submit
   const handleCommentSubmit = useCallback(async () => {
     if (!commentText.trim() || isSubmitting) return;
     setIsSubmitting(true);
-    // TODO: Implement Nostr comment publishing
-    setTimeout(() => {
+    try {
+      await postComment(commentText.trim());
       setCommentText('');
+    } catch (error) {
+      console.warn('[Comments] Failed to publish comment:', error);
+      showToast.error('Failed to post comment', 'Please try again');
+    } finally {
       setIsSubmitting(false);
-    }, 1000);
-  }, [commentText, isSubmitting]);
+    }
+  }, [commentText, isSubmitting, postComment]);
 
   // Loading/error state if no incident
   if (!incident) {
@@ -352,7 +358,26 @@ export default function IncidentDetailScreen() {
             </Text>
           </View>
 
-          {comments.length === 0 ? (
+          {commentsAreStale && comments.length === 0 ? (
+            <View style={styles.commentsBanner}>
+              <Icon name="info-outline" type="material" size={16} color={colors.textMuted} />
+              <Text style={[styles.commentsBannerText, { color: colors.textMuted }]}>
+                Relays slow, showing cached comments
+              </Text>
+              <Pressable onPress={retryComments} style={styles.commentsRetryButton}>
+                <Text style={[styles.commentsRetryText, { color: colors.primary }]}>Retry</Text>
+              </Pressable>
+            </View>
+          ) : null}
+
+          {isLoadingComments && comments.length === 0 ? (
+            <View style={styles.emptyComments}>
+              <ActivityIndicator size="small" color={colors.primary} />
+              <Text style={[styles.emptySubtext, { color: colors.textMuted, marginTop: 8 }]}>
+                Loading comments...
+              </Text>
+            </View>
+          ) : comments.length === 0 ? (
             <View style={styles.emptyComments}>
               <Text style={[styles.emptyText, { color: colors.textMuted }]}>No comments yet</Text>
               <Text style={[styles.emptySubtext, { color: colors.textMuted }]}>
@@ -370,15 +395,18 @@ export default function IncidentDetailScreen() {
                     <Avatar
                       rounded
                       size={36}
-                      title={comment.author.charAt(0)}
+                      title={comment.displayName.charAt(0)}
+                      source={comment.avatarUrl ? { uri: comment.avatarUrl } : undefined}
                       containerStyle={[styles.commentAvatar, { backgroundColor: colors.primary }]}
                     />
                     <View style={styles.commentContent}>
                       <View style={styles.commentHeader}>
-                        <Text style={[styles.commentAuthor, { color: colors.text }]}>{comment.author}</Text>
-                        <Text style={[styles.commentTime, { color: colors.textMuted }]}>{comment.time}</Text>
+                        <Text style={[styles.commentAuthor, { color: colors.text }]}>{comment.displayName}</Text>
+                        <Text style={[styles.commentTime, { color: colors.textMuted }]}>
+                          {formatRelativeTimeMs(comment.createdAtMs)}
+                        </Text>
                       </View>
-                      <Text style={[styles.commentText, { color: colors.text }]}>{comment.text}</Text>
+                      <Text style={[styles.commentText, { color: colors.text }]}>{comment.content}</Text>
                     </View>
                   </View>
                 </Card>
@@ -722,6 +750,28 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     marginBottom: 4,
+  },
+  commentsBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(148, 163, 184, 0.12)',
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    marginBottom: 12,
+    gap: 8,
+  },
+  commentsBannerText: {
+    flex: 1,
+    fontSize: 12,
+  },
+  commentsRetryButton: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+  },
+  commentsRetryText: {
+    fontSize: 12,
+    fontWeight: '600',
   },
   commentAuthor: {
     fontSize: 14,
