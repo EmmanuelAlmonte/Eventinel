@@ -8,7 +8,7 @@
  */
 
 import 'react-native-gesture-handler/jestSetup';
-import '@testing-library/react-native/extend-expect';
+import '@testing-library/react-native';
 
 // Silence console warnings during tests (optional)
 // console.warn = jest.fn();
@@ -43,11 +43,25 @@ jest.mock('react-native-safe-area-context', () => {
 });
 
 // Mock Mapbox (heavy native module)
+// MarkerView needs to be a functional component that renders children
+const MockMarkerView = ({ children, coordinate, allowOverlap }) => {
+  const { View } = require('react-native');
+  return (
+    <View testID="marker-view" data-coordinate={JSON.stringify(coordinate)} data-allow-overlap={allowOverlap}>
+      {children}
+    </View>
+  );
+};
+
 jest.mock('@rnmapbox/maps', () => ({
-  default: {},
+  default: {
+    MarkerView: MockMarkerView,
+    MapView: 'MapView',
+    Camera: 'Camera',
+  },
   MapView: 'MapView',
   Camera: 'Camera',
-  MarkerView: 'MarkerView',
+  MarkerView: MockMarkerView,
   PointAnnotation: 'PointAnnotation',
   ShapeSource: 'ShapeSource',
   SymbolLayer: 'SymbolLayer',
@@ -64,13 +78,13 @@ jest.mock('@react-navigation/native', () => {
   };
 });
 
-// Mock Material Top Tabs
+// Mock Material Top Tabs (virtual module - doesn't need to exist in node_modules)
 jest.mock('@react-navigation/material-top-tabs', () => ({
   createMaterialTopTabNavigator: () => ({
     Navigator: ({ children }) => children,
     Screen: ({ children }) => children,
   }),
-}));
+}), { virtual: true });
 
 // Global test utilities
 global.mockNDKUser = (pubkey, profile = {}) => ({

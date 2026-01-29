@@ -364,14 +364,181 @@ export default NDK;
 export class NDKCacheAdapterSqlite {
   private dbName: string;
   ndk: any;
+  db: {
+    getFirstSync: jest.Mock;
+    getAllSync: jest.Mock;
+    runSync: jest.Mock;
+  };
 
   constructor(dbName: string) {
     this.dbName = dbName;
+    this.db = {
+      getFirstSync: jest.fn().mockReturnValue({ count: 0 }),
+      getAllSync: jest.fn().mockReturnValue([]),
+      runSync: jest.fn(),
+    };
   }
 
   initialize() {
     // No-op in tests
   }
+
+  query(subscription: any): any[] {
+    // Return empty array by default - tests can override
+    return [];
+  }
+
+  setEvent(event: any) {
+    // No-op in tests
+  }
+
+  getEvent(id: string): any | null {
+    return null;
+  }
+}
+
+// =============================================================================
+// MOCK SUBSCRIPTION STATE (for useSubscribe)
+// =============================================================================
+
+interface MockSubscriptionState {
+  events: any[];
+  eose: boolean;
+}
+
+const subscriptionState: MockSubscriptionState = {
+  events: [],
+  eose: false,
+};
+
+/**
+ * Helper to control useSubscribe mock state from tests
+ */
+export const mockSubscription = {
+  setEvents: (events: any[]) => {
+    subscriptionState.events = events;
+  },
+  setEose: (eose: boolean) => {
+    subscriptionState.eose = eose;
+  },
+  addEvent: (event: any) => {
+    subscriptionState.events.push(event);
+  },
+  reset: () => {
+    subscriptionState.events = [];
+    subscriptionState.eose = false;
+  },
+};
+
+/**
+ * Mock useSubscribe hook
+ * Returns events and eose state that can be controlled by tests
+ */
+export const useSubscribe = jest.fn((filters: any[] | false, options?: any) => {
+  // Return empty if filters is false (disabled)
+  if (filters === false) {
+    return { events: [], eose: false };
+  }
+  return {
+    events: subscriptionState.events,
+    eose: subscriptionState.eose,
+  };
+});
+
+// =============================================================================
+// MOCK NDK EVENT CLASS
+// =============================================================================
+
+/**
+ * Mock NDKEvent class for creating/publishing events
+ */
+export class NDKEvent {
+  ndk: any;
+  id: string;
+  pubkey: string;
+  kind: number;
+  content: string;
+  tags: string[][];
+  created_at: number;
+  sig?: string;
+  relay?: any;
+  onRelays?: any[];
+
+  constructor(ndk?: any, rawEvent?: any) {
+    this.ndk = ndk;
+    this.id = rawEvent?.id || 'mock_event_id_' + Math.random().toString(36).slice(2);
+    this.pubkey = rawEvent?.pubkey || 'mock_pubkey';
+    this.kind = rawEvent?.kind || 1;
+    this.content = rawEvent?.content || '';
+    this.tags = rawEvent?.tags || [];
+    this.created_at = rawEvent?.created_at || Math.floor(Date.now() / 1000);
+    this.sig = rawEvent?.sig;
+  }
+
+  async publish() {
+    return Promise.resolve();
+  }
+
+  async sign() {
+    this.sig = 'mock_signature_' + Date.now();
+    return Promise.resolve();
+  }
+
+  tagValue(tagName: string): string | undefined {
+    const tag = this.tags.find((t) => t[0] === tagName);
+    return tag?.[1];
+  }
+}
+
+// =============================================================================
+// MOCK NDK SUBSCRIPTION CACHE USAGE ENUM
+// =============================================================================
+
+export const NDKSubscriptionCacheUsage = {
+  CACHE_FIRST: 'CACHE_FIRST',
+  ONLY_CACHE: 'ONLY_CACHE',
+  ONLY_RELAY: 'ONLY_RELAY',
+  PARALLEL: 'PARALLEL',
+} as const;
+
+// =============================================================================
+// MOCK NDK RELAY STATUS ENUM
+// =============================================================================
+
+/**
+ * NDKRelayStatus enum - mirrors the actual NDK values
+ * 0: DISCONNECTING, 1: DISCONNECTED, 2: RECONNECTING, 3: FLAPPING,
+ * 4: CONNECTING, 5: CONNECTED, 6: AUTH_REQUESTED, 7: AUTHENTICATING, 8: AUTHENTICATED
+ */
+export const NDKRelayStatus = {
+  DISCONNECTING: 0,
+  DISCONNECTED: 1,
+  RECONNECTING: 2,
+  FLAPPING: 3,
+  CONNECTING: 4,
+  CONNECTED: 5,
+  AUTH_REQUESTED: 6,
+  AUTHENTICATING: 7,
+  AUTHENTICATED: 8,
+} as const;
+
+// =============================================================================
+// MOCK NDK FILTER TYPE
+// =============================================================================
+
+export interface NDKFilter {
+  kinds?: number[];
+  authors?: string[];
+  ids?: string[];
+  '#e'?: string[];
+  '#p'?: string[];
+  '#a'?: string[];
+  '#g'?: string[];
+  '#t'?: string[];
+  since?: number;
+  until?: number;
+  limit?: number;
+  [key: string]: any;
 }
 
 // =============================================================================

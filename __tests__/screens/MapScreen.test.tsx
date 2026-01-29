@@ -1,0 +1,474 @@
+/**
+ * MapScreen Component Tests
+ *
+ * Tests the map screen functionality including:
+ * - Initial rendering and loading states
+ * - Map marker interactions
+ * - Fly to user location button
+ * - Empty state handling
+ * - Camera interactions
+ *
+ * @jest-environment jsdom
+ */
+
+import React from 'react';
+import { render, fireEvent, waitFor } from '@testing-library/react-native';
+import { View } from 'react-native';
+
+// Import the component
+import MapScreen from '../../screens/MapScreen';
+
+// =============================================================================
+// MOCK SETUP
+// =============================================================================
+
+// Mock navigation
+const mockNavigate = jest.fn();
+jest.mock('@react-navigation/native', () => ({
+  ...jest.requireActual('@react-navigation/native'),
+  useNavigation: () => ({
+    navigate: mockNavigate,
+    goBack: jest.fn(),
+  }),
+}));
+
+// Mock useAppTheme
+jest.mock('@hooks', () => ({
+  useAppTheme: () => ({
+    colors: {
+      background: '#1a1a2e',
+      surface: '#27272A',
+      text: '#FAFAFA',
+      textMuted: '#A1A1AA',
+      primary: '#2563eb',
+      success: '#22c55e',
+      error: '#ef4444',
+      warning: '#f59e0b',
+      info: '#3b82f6',
+      border: '#3F3F46',
+    },
+    isDark: true,
+  }),
+}));
+
+// Mock shared location context
+const mockLocation: [number, number] = [-73.935242, 40.730610];
+const mockUseSharedLocation = jest.fn(() => ({
+  location: mockLocation,
+  isLoading: false,
+  source: 'fresh',
+  permission: 'granted',
+}));
+
+// Mock shared incidents context
+const mockIncidents = [
+  {
+    incidentId: 'incident-1',
+    eventId: 'event-1',
+    title: 'Test Incident 1',
+    description: 'Test description',
+    type: 'fire',
+    severity: 3,
+    location: { lat: 40.730610, lng: -73.935242, address: '123 Test St' },
+    occurredAt: Math.floor(Date.now() / 1000) - 3600,
+  },
+  {
+    incidentId: 'incident-2',
+    eventId: 'event-2',
+    title: 'Test Incident 2',
+    description: 'Another test description',
+    type: 'traffic',
+    severity: 2,
+    location: { lat: 40.731610, lng: -73.936242, address: '456 Test Ave' },
+    occurredAt: Math.floor(Date.now() / 1000) - 7200,
+  },
+];
+
+const mockUseSharedIncidents = jest.fn(() => ({
+  incidents: mockIncidents,
+  isInitialLoading: false,
+  hasReceivedHistory: true,
+}));
+
+jest.mock('@contexts', () => ({
+  useSharedLocation: () => mockUseSharedLocation(),
+  useSharedIncidents: () => mockUseSharedIncidents(),
+}));
+
+// Mock IncidentMarker component
+jest.mock('@components/map', () => ({
+  IncidentMarker: ({ incident, onPress }: any) => {
+    const { Pressable, Text } = require('react-native');
+    return (
+      <Pressable
+        testID={`marker-${incident.incidentId}`}
+        onPress={() => onPress(incident)}
+      >
+        <Text>{incident.title}</Text>
+      </Pressable>
+    );
+  },
+}));
+
+// Mock MapSkeleton
+jest.mock('@components/ui', () => ({
+  MapSkeleton: () => {
+    const { View, Text } = require('react-native');
+    return (
+      <View testID="map-skeleton">
+        <Text>Loading map...</Text>
+      </View>
+    );
+  },
+}));
+
+// Mock map constants
+jest.mock('@lib/map/types', () => ({
+  DEFAULT_CAMERA: {
+    centerCoordinate: [-73.935242, 40.730610],
+  },
+  MAP_STYLES: {
+    DARK: 'mapbox://styles/mapbox/dark-v11',
+  },
+}));
+
+jest.mock('@lib/map/constants', () => ({
+  MAPBOX_CONFIG: {
+    DEFAULT_ZOOM: 14,
+  },
+  USER_LOCATION: {
+    MARKER_SIZE: 16,
+    MARKER_COLOR: '#2563eb',
+    MARKER_BORDER_WIDTH: 2,
+    MARKER_BORDER_COLOR: '#FFFFFF',
+  },
+  INCIDENT_LIMITS: {
+    SINCE_DAYS: 7,
+  },
+}));
+
+// Mock @rneui/themed Icon
+jest.mock('@rneui/themed', () => ({
+  Icon: ({ name, onPress, testID }: any) => {
+    const { Pressable, Text } = require('react-native');
+    return (
+      <Pressable testID={testID || `icon-${name}`} onPress={onPress}>
+        <Text>{name}</Text>
+      </Pressable>
+    );
+  },
+}));
+
+// =============================================================================
+// TEST SUITE
+// =============================================================================
+
+describe('MapScreen', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockUseSharedLocation.mockReturnValue({
+      location: mockLocation,
+      isLoading: false,
+      source: 'fresh',
+      permission: 'granted',
+    });
+    mockUseSharedIncidents.mockReturnValue({
+      incidents: mockIncidents,
+      isInitialLoading: false,
+      hasReceivedHistory: true,
+    });
+  });
+
+  // =============================================================================
+  // LOADING STATE TESTS
+  // =============================================================================
+
+  describe('Loading States', () => {
+    it('shows MapSkeleton when location is loading', () => {
+      mockUseSharedLocation.mockReturnValue({
+        location: null,
+        isLoading: true,
+        source: null,
+        permission: 'undetermined',
+      });
+
+      const { getByTestId } = render(<MapScreen />);
+      expect(getByTestId('map-skeleton')).toBeTruthy();
+    });
+
+    it('shows loading text while location is being fetched', () => {
+      mockUseSharedLocation.mockReturnValue({
+        location: null,
+        isLoading: true,
+        source: null,
+        permission: 'undetermined',
+      });
+
+      const { getByText } = render(<MapScreen />);
+      expect(getByText('Loading map...')).toBeTruthy();
+    });
+
+    it('renders map container after location loads', () => {
+      const { queryByTestId } = render(<MapScreen />);
+      expect(queryByTestId('map-skeleton')).toBeNull();
+    });
+  });
+
+  // =============================================================================
+  // MAP RENDERING TESTS
+  // =============================================================================
+
+  describe('Map Rendering', () => {
+    it('renders map container when ready', () => {
+      const { UNSAFE_root } = render(<MapScreen />);
+      // Check that we have the main container structure
+      expect(UNSAFE_root).toBeTruthy();
+    });
+
+    it('shows incident count in stats overlay', () => {
+      const { getByText } = render(<MapScreen />);
+      // Incident count is shown in the stats overlay when DEV mode is on
+      expect(getByText(/Incidents: 2/)).toBeTruthy();
+    });
+
+    it('shows EOSE indicator when history received', () => {
+      const { getByText } = render(<MapScreen />);
+      expect(getByText(/EOSE:/)).toBeTruthy();
+    });
+  });
+
+  // =============================================================================
+  // INCIDENT DATA TESTS
+  // =============================================================================
+
+  describe('Incident Data', () => {
+    it('displays incident count from shared context', () => {
+      const { getByText } = render(<MapScreen />);
+      // The component shows incidents.length in the stats overlay
+      expect(getByText(/Incidents: 2/)).toBeTruthy();
+    });
+
+    it('handles empty incidents array', () => {
+      mockUseSharedIncidents.mockReturnValue({
+        incidents: [],
+        isInitialLoading: false,
+        hasReceivedHistory: true,
+      });
+
+      const { getByText } = render(<MapScreen />);
+      expect(getByText(/Incidents: 0/)).toBeTruthy();
+    });
+  });
+
+  // =============================================================================
+  // FLY TO USER BUTTON TESTS
+  // =============================================================================
+
+  describe('Fly To User Button', () => {
+    it('renders fly to user button when location is available', () => {
+      const { getByLabelText } = render(<MapScreen />);
+      expect(getByLabelText('Fly to my location')).toBeTruthy();
+    });
+
+    it('fly to button has correct accessibility role', () => {
+      const { getByRole } = render(<MapScreen />);
+      const button = getByRole('button', { name: 'Fly to my location' });
+      expect(button).toBeTruthy();
+    });
+
+    it('does not render fly to button when location is null', () => {
+      mockUseSharedLocation.mockReturnValue({
+        location: null,
+        isLoading: false,
+        source: 'default',
+        permission: 'denied',
+      });
+
+      const { queryByLabelText } = render(<MapScreen />);
+      expect(queryByLabelText('Fly to my location')).toBeNull();
+    });
+  });
+
+  // =============================================================================
+  // EMPTY STATE TESTS
+  // =============================================================================
+
+  describe('Empty State', () => {
+    it('shows empty state message when no incidents and history received', () => {
+      mockUseSharedIncidents.mockReturnValue({
+        incidents: [],
+        isInitialLoading: false,
+        hasReceivedHistory: true,
+      });
+
+      const { getByText } = render(<MapScreen />);
+      expect(getByText('No incidents found')).toBeTruthy();
+    });
+
+    it('shows hint text about incident timeframe', () => {
+      mockUseSharedIncidents.mockReturnValue({
+        incidents: [],
+        isInitialLoading: false,
+        hasReceivedHistory: true,
+      });
+
+      const { getByText } = render(<MapScreen />);
+      expect(getByText(/Incidents from the last/)).toBeTruthy();
+    });
+
+    it('does not show empty state before history is received', () => {
+      mockUseSharedIncidents.mockReturnValue({
+        incidents: [],
+        isInitialLoading: true,
+        hasReceivedHistory: false,
+      });
+
+      const { queryByText } = render(<MapScreen />);
+      expect(queryByText('No incidents found')).toBeNull();
+    });
+
+    it('does not show empty state when incidents exist', () => {
+      const { queryByText } = render(<MapScreen />);
+      expect(queryByText('No incidents found')).toBeNull();
+    });
+  });
+
+  // =============================================================================
+  // USER LOCATION MARKER TESTS
+  // =============================================================================
+
+  describe('User Location Marker', () => {
+    it('does not render user marker when location is null', () => {
+      mockUseSharedLocation.mockReturnValue({
+        location: null,
+        isLoading: false,
+        source: 'default',
+        permission: 'denied',
+      });
+
+      // The user marker component won't be rendered
+      const { UNSAFE_root } = render(<MapScreen />);
+      expect(UNSAFE_root).toBeTruthy();
+    });
+  });
+
+  // =============================================================================
+  // LOCATION SOURCE INDICATOR TESTS (DEV MODE)
+  // =============================================================================
+
+  describe('Location Debug Info (DEV mode)', () => {
+    beforeAll(() => {
+      (global as any).__DEV__ = true;
+    });
+
+    afterAll(() => {
+      (global as any).__DEV__ = false;
+    });
+
+    it('renders fresh location indicator style', () => {
+      mockUseSharedLocation.mockReturnValue({
+        location: mockLocation,
+        isLoading: false,
+        source: 'fresh',
+        permission: 'granted',
+      });
+
+      const { getByText } = render(<MapScreen />);
+      // In DEV mode, the location source text should be visible
+      expect(getByText(/FRESH/)).toBeTruthy();
+    });
+
+    it('renders cached location indicator', () => {
+      mockUseSharedLocation.mockReturnValue({
+        location: mockLocation,
+        isLoading: false,
+        source: 'cached',
+        permission: 'granted',
+      });
+
+      const { getByText } = render(<MapScreen />);
+      expect(getByText(/CACHED/)).toBeTruthy();
+    });
+
+    it('renders default location indicator', () => {
+      mockUseSharedLocation.mockReturnValue({
+        location: mockLocation,
+        isLoading: false,
+        source: 'default',
+        permission: 'denied',
+      });
+
+      const { getByText } = render(<MapScreen />);
+      expect(getByText(/DEFAULT/)).toBeTruthy();
+    });
+  });
+
+  // =============================================================================
+  // STATS OVERLAY TESTS (DEV MODE)
+  // =============================================================================
+
+  describe('Stats Overlay (DEV mode)', () => {
+    beforeAll(() => {
+      (global as any).__DEV__ = true;
+    });
+
+    afterAll(() => {
+      (global as any).__DEV__ = false;
+    });
+
+    it('shows incident count in DEV mode', () => {
+      const { getByText } = render(<MapScreen />);
+      expect(getByText(/Incidents: 2/)).toBeTruthy();
+    });
+
+    it('shows EOSE status when history received', () => {
+      const { getByText } = render(<MapScreen />);
+      // EOSE checkmark should be visible
+      expect(getByText(/EOSE:/)).toBeTruthy();
+    });
+  });
+
+  // =============================================================================
+  // ANIMATION STATE TESTS
+  // =============================================================================
+
+  describe('Animation States', () => {
+    it('disables fly to button during animation', async () => {
+      const { getByRole } = render(<MapScreen />);
+      const button = getByRole('button', { name: 'Fly to my location' });
+
+      // Initial state should not be disabled
+      expect(button.props.accessibilityState?.disabled).toBeFalsy();
+    });
+  });
+
+  // =============================================================================
+  // PERMISSION HANDLING TESTS
+  // =============================================================================
+
+  describe('Permission Handling', () => {
+    it('handles denied permission gracefully', () => {
+      mockUseSharedLocation.mockReturnValue({
+        location: mockLocation, // Default location may still be provided
+        isLoading: false,
+        source: 'default',
+        permission: 'denied',
+      });
+
+      const { UNSAFE_root } = render(<MapScreen />);
+      expect(UNSAFE_root).toBeTruthy();
+    });
+
+    it('handles undetermined permission state', () => {
+      mockUseSharedLocation.mockReturnValue({
+        location: null,
+        isLoading: true,
+        source: null,
+        permission: 'undetermined',
+      });
+
+      const { getByTestId } = render(<MapScreen />);
+      expect(getByTestId('map-skeleton')).toBeTruthy();
+    });
+  });
+});

@@ -29,9 +29,24 @@ module.exports = {
     '^expo-sqlite$': '<rootDir>/__mocks__/expo-sqlite.js',
     '^expo-nip55$': '<rootDir>/__mocks__/expo-nip55.js',
     '^expo-notifications$': '<rootDir>/__mocks__/expo-notifications.js',
+    '^expo-location$': '<rootDir>/__mocks__/expo-location.ts',
+    '^@react-native-async-storage/async-storage$': '<rootDir>/__mocks__/@react-native-async-storage/async-storage.js',
 
-    // Mock the NDK mobile package
+    // Mock the NDK mobile package (both alias forms)
     '^@nostr-dev-kit/mobile$': '<rootDir>/__mocks__/@nostr-dev-kit/mobile.ts',
+    '^@nostr-dev-kit/ndk-mobile$': '<rootDir>/__mocks__/@nostr-dev-kit/mobile.ts',
+
+    // Path aliases (matching tsconfig.json)
+    '^@lib/(.*)$': '<rootDir>/lib/$1',
+    '^@lib$': '<rootDir>/lib',
+    '^@hooks/(.*)$': '<rootDir>/hooks/$1',
+    '^@hooks$': '<rootDir>/hooks',
+    '^@contexts/(.*)$': '<rootDir>/contexts/$1',
+    '^@contexts$': '<rootDir>/contexts',
+    '^@components/(.*)$': '<rootDir>/components/$1',
+    '^@components$': '<rootDir>/components',
+    '^@screens/(.*)$': '<rootDir>/screens/$1',
+    '^@screens$': '<rootDir>/screens',
   },
 
   // Ignore patterns - exclude documentation and build folders
@@ -58,6 +73,8 @@ module.exports = {
   collectCoverageFrom: [
     'screens/**/*.{ts,tsx}',
     'lib/**/*.{ts,tsx}',
+    'hooks/**/*.{ts,tsx}',
+    'components/**/*.{ts,tsx}',
     'App.tsx',
     '!**/*.d.ts',
     '!**/node_modules/**',
@@ -81,8 +98,8 @@ module.exports = {
     },
   },
 
-  // Test timeout
-  testTimeout: 10000,
+  // Test timeout (increased for React Native cleanup operations)
+  testTimeout: 30000,
 
   // Verbose output
   verbose: true,

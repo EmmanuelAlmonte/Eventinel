@@ -25,6 +25,16 @@ import {
 // =============================================================================
 
 describe('Authentication Flow Integration', () => {
+  beforeAll(() => {
+    // Use real timers for auth tests since signers use setTimeout
+    jest.useRealTimers();
+  });
+
+  afterAll(() => {
+    // Restore fake timers for other tests
+    jest.useFakeTimers();
+  });
+
   beforeEach(() => {
     mockNDKHooks.reset();
     jest.clearAllMocks();
