@@ -58,7 +58,7 @@ const mockCurrentUser = {
   profile: { displayName: 'Test User' },
 };
 
-jest.mock('@nostr-dev-kit/ndk-mobile', () => ({
+jest.mock('@nostr-dev-kit/mobile', () => ({
   useNDKCurrentUser: () => mockCurrentUser,
 }));
 

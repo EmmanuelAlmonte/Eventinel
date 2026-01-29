@@ -34,7 +34,6 @@ module.exports = {
 
     // Mock the NDK mobile package (both alias forms)
     '^@nostr-dev-kit/mobile$': '<rootDir>/__mocks__/@nostr-dev-kit/mobile.ts',
-    '^@nostr-dev-kit/ndk-mobile$': '<rootDir>/__mocks__/@nostr-dev-kit/mobile.ts',
 
     // Path aliases (matching tsconfig.json)
     '^@lib/(.*)$': '<rootDir>/lib/$1',

@@ -50,7 +50,7 @@ const mockNdk = {
   },
 };
 
-jest.mock('@nostr-dev-kit/ndk-mobile', () => ({
+jest.mock('@nostr-dev-kit/mobile', () => ({
   useNDK: () => ({ ndk: mockNdk }),
   NDKEvent: function (ndk: any) {
     const instance = {
@@ -297,7 +297,7 @@ describe('MenuScreen', () => {
 
     it('shows error when NDK is not initialized', async () => {
       // Mock useNDK to return null
-      jest.doMock('@nostr-dev-kit/ndk-mobile', () => ({
+      jest.doMock('@nostr-dev-kit/mobile', () => ({
         useNDK: () => ({ ndk: null }),
         NDKEvent: mockNDKEvent,
       }));

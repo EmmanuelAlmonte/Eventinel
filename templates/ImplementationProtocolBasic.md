@@ -23,7 +23,7 @@ Search for dependencies BEFORE removing code.
 /check-export {API_NAME}
 
 # Or manually:
-grep "export.*{API_NAME}" node_modules/@nostr-dev-kit/ndk-mobile/dist/typescript/index.d.ts
+grep "export.*{API_NAME}" node_modules/@nostr-dev-kit/mobile/dist/typescript/index.d.ts
 ```
 
 **Questions to answer:**

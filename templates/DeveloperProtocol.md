@@ -81,8 +81,8 @@ grep -r "{PATTERN}" ndk-docs/mobile/
 ### APIs Required
 | API | Package | Verified |
 |-----|---------|----------|
-| {API_1} | @nostr-dev-kit/ndk-mobile | [ ] |
-| {API_2} | @nostr-dev-kit/ndk-mobile | [ ] |
+| {API_1} | @nostr-dev-kit/mobile | [ ] |
+| {API_2} | @nostr-dev-kit/mobile | [ ] |
 ```
 
 ### Step 3.2: Verify Each API Exists
@@ -106,7 +106,7 @@ grep -A 10 "export.*{API_NAME}" node_modules/@nostr-dev-kit/react/dist/index.d.t
 
 ```markdown
 ### Mobile Compatibility
-- [ ] All imports from `@nostr-dev-kit/ndk-mobile` (not ndk or react)
+- [ ] All imports from `@nostr-dev-kit/mobile` (not ndk or react)
 - [ ] No web-only patterns (NDKHeadless, NIP-07, localStorage)
 - [ ] No browser APIs (window.nostr)
 ```
@@ -388,7 +388,7 @@ Before implementing, verify you're NOT doing:
 
 | Anti-Pattern | Check |
 |--------------|-------|
-| Wrong package | All imports from `@nostr-dev-kit/ndk-mobile` |
+| Wrong package | All imports from `@nostr-dev-kit/mobile` |
 | Web patterns | No NDKHeadless, NIP-07, localStorage |
 | Trusting docs | Verified against type definitions |
 | Wrong signature | `login(signer, boolean)` not options |

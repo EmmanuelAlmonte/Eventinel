@@ -5,7 +5,7 @@
  * independent useUserLocation() hooks in different screens could result in
  * different locations (real GPS vs fallback) depending on timing.
  *
- * Pattern: Follows IncidentCacheContext.tsx and ndk-mobile Context Provider pattern.
+ * Pattern: Follows IncidentCacheContext.tsx and NDK mobile Context Provider pattern.
  *
  * Usage:
  *   // In App.tsx - wrap with provider

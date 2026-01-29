@@ -103,7 +103,7 @@ export function useIncidentSubscription({
   }, [enabled, geohashes, sinceDays]);
 
   // Subscribe with explicit CACHE_FIRST to ensure cached events load immediately
-  // WORKAROUND: ndk-mobile cache has a bug where events.id uses tagAddress format
+  // WORKAROUND: NDK mobile cache has a bug where events.id uses tagAddress format
   // but event_tags.event_id uses actual event ID for replaceable events (kind 30911).
   // This breaks tag-based queries. We use cacheUnconstrainFilter to remove tag
   // filters for cache queries, falling back to kinds-only query which works.

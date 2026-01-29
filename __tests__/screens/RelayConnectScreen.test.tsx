@@ -108,7 +108,7 @@ jest.mock('@components/ui', () => ({
 }));
 
 // Mock NDKRelayStatus
-jest.mock('@nostr-dev-kit/ndk-mobile', () => ({
+jest.mock('@nostr-dev-kit/mobile', () => ({
   NDKRelayStatus: {
     DISCONNECTED: 1,
     CONNECTING: 4,

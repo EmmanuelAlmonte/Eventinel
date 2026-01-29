@@ -4,8 +4,6 @@
     "strict": true,
     "baseUrl": ".",
     "paths": {
-      "@nostr-dev-kit/mobile": ["node_modules/@nostr-dev-kit/ndk-mobile"],
-      "@nostr-dev-kit/mobile/*": ["node_modules/@nostr-dev-kit/ndk-mobile/*"],
       "@components": ["components"],
       "@components/*": ["components/*"],
       "@contexts": ["contexts"],

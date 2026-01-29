@@ -31,19 +31,19 @@ Validate this plan against actual NDK APIs
 Read CLAUDE.md for project context.
 
 Platform: React Native + Expo (mobile)
-NDK Package: @nostr-dev-kit/ndk-mobile ONLY
+NDK Package: @nostr-dev-kit/mobile ONLY
 
 I want to: {WHAT_YOU_WANT}
 
 Constraints:
 - Verify all NDK imports exist using /check-export before implementing
-- Only use @nostr-dev-kit/ndk-mobile (no ndk or ndk-react)
+- Only use @nostr-dev-kit/mobile (no ndk or ndk-react)
 - Check ndk-mobile skill for correct patterns
 ```
 
 ### Quick Session
 ```markdown
-Mobile app using @nostr-dev-kit/ndk-mobile.
+Mobile app using @nostr-dev-kit/mobile.
 Task: {TASK}
 Verify imports exist before implementing.
 ```
@@ -60,7 +60,7 @@ Verify imports exist before implementing.
 **Files involved**: {KEY_FILES}
 
 ### Constraints
-- Only import from @nostr-dev-kit/ndk-mobile
+- Only import from @nostr-dev-kit/mobile
 - Verify each NDK import exists using /check-export
 - Follow patterns in ndk-mobile skill
 - This is mobile - no web patterns
@@ -94,7 +94,7 @@ Verify imports exist before implementing.
 
 ### Context
 - Platform: React Native mobile
-- Package: @nostr-dev-kit/ndk-mobile only
+- Package: @nostr-dev-kit/mobile only
 
 ### Proposed Changes
 {DESCRIBE_CHANGES}
@@ -125,7 +125,7 @@ If not: what's the alternative?
 **For features:**
 ```
 Verify all imports exist using /check-export before implementing.
-Only import from @nostr-dev-kit/ndk-mobile.
+Only import from @nostr-dev-kit/mobile.
 Check ndk-mobile skill for patterns.
 This is mobile - no web patterns.
 ```

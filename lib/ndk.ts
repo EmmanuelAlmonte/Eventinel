@@ -56,7 +56,7 @@ export const ndk = new NDK({
 // Set bidirectional reference for cache adapter
 cacheAdapter.ndk = ndk;
 
-// NOTE: ndk-mobile cache adapter has a bug where events.id uses tagAddress format
+// NOTE: NDK mobile cache adapter has a bug where events.id uses tagAddress format
 // but event_tags.event_id uses actual event.id for replaceable events (kind 30911).
 // This breaks tag-based cache queries. See useIncidentSubscription.ts for workaround
 // using cacheUnconstrainFilter to query cache by kinds only.

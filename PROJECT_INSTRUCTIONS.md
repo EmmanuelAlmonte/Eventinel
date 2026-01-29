@@ -39,7 +39,7 @@
 ### 🔴 Rule #1: Single Package Rule
 
 ```typescript
-// ✅ ALWAYS - ndk-mobile re-exports everything
+// ✅ ALWAYS - @nostr-dev-kit/mobile re-exports everything
 import { useNDK, NDKEvent, NDKNip55Signer } from '@nostr-dev-kit/mobile';
 
 // ❌ NEVER - causes version conflicts

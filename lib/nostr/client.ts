@@ -23,7 +23,7 @@ let ndkInstance: NDK | null = null;
 export interface CreateNDKOptions {
   /** Custom relay URLs (overrides environment config) */
   relayUrls?: string[];
-  /** Custom cache adapter (e.g., NDKCacheAdapterSqlite from ndk-mobile) */
+  /** Custom cache adapter (e.g., NDKCacheAdapterSqlite from NDK mobile) */
   cacheAdapter?: NDKCacheAdapter;
   /** Auto-connect after creation (default: false) */
   autoConnect?: boolean;

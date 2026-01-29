@@ -27,12 +27,12 @@ npm run web
 
 ## NDK Mobile Rules (Critical)
 
-**Package:** `@nostr-dev-kit/ndk-mobile` (ONLY this package)
+**Package:** `@nostr-dev-kit/mobile` (ONLY this package)
 
 ### Single Package Rule
 ```typescript
-// ✅ ALWAYS use ndk-mobile (re-exports everything from core)
-import { useNDK, NDKEvent, NDKNip55Signer } from '@nostr-dev-kit/ndk-mobile';
+// ✅ ALWAYS use @nostr-dev-kit/mobile (re-exports everything from core)
+import { useNDK, NDKEvent, NDKNip55Signer } from '@nostr-dev-kit/mobile';
 
 // ❌ NEVER import from these (causes errors)
 import { ... } from '@nostr-dev-kit/ndk';      // Version conflicts
@@ -62,7 +62,7 @@ import { ... } from '@nostr-dev-kit/react';    // Web only - doesn't work
 - **Framework**: React Native 0.79.2 + Expo 53
 - **JavaScript Engine**: Hermes with React Native New Architecture enabled
 - **Navigation**: React Navigation with Material Top Tabs
-- **Nostr Integration**: @nostr-dev-kit/ndk-mobile
+- **Nostr Integration**: @nostr-dev-kit/mobile
 - **Storage**: expo-sqlite for NDK caching, expo-secure-store for sensitive data
 - **Language**: TypeScript with strict mode
 
@@ -136,7 +136,7 @@ However, App.tsx currently overrides this with hardcoded public relays. Be cauti
 
 ### SQLite Cache Adapter
 
-NDK is configured with `NDKCacheAdapterSqlite` from `@nostr-dev-kit/ndk-mobile`:
+NDK is configured with `NDKCacheAdapterSqlite` from `@nostr-dev-kit/mobile`:
 ```typescript
 cacheAdapter: new NDKCacheAdapterSqlite('eventinel.db')
 ```
