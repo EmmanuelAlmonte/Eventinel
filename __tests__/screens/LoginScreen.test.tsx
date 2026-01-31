@@ -24,9 +24,6 @@ import {
   useNDK,
   useNip55,
   useNDKSessionLogin,
-  NDKPrivateKeySigner,
-  NDKNip55Signer,
-  NDKNip46Signer,
 } from '../../__mocks__/@nostr-dev-kit/mobile';
 
 // =============================================================================
@@ -61,11 +58,18 @@ describe('LoginScreen', () => {
       expect(getByText(/Never share your private key/)).toBeTruthy();
     });
 
-    it('renders bunker login section', () => {
+    it('renders remote signer section', () => {
       const { getByText, getByPlaceholderText } = render(<LoginScreen />);
       expect(getByText(/Remote Signer/)).toBeTruthy();
-      expect(getByPlaceholderText('bunker://pubkey?relay=wss://...')).toBeTruthy();
-      expect(getByText('Connect to Bunker')).toBeTruthy();
+      expect(getByPlaceholderText('bunker://pubkey?relay=wss://... or name@domain')).toBeTruthy();
+      expect(getByText('Connect to Remote Signer')).toBeTruthy();
+    });
+
+    it('renders nostr connect section', () => {
+      const { getByText, getByPlaceholderText } = render(<LoginScreen />);
+      expect(getByText('Nostr Connect (NIP-46)')).toBeTruthy();
+      expect(getByPlaceholderText('wss://relay.example.com')).toBeTruthy();
+      expect(getByText('Generate Nostr Connect')).toBeTruthy();
     });
 
     it('renders manual key login section', () => {
@@ -92,7 +96,8 @@ describe('LoginScreen', () => {
 
       it('shows NIP-55 section when signer apps are available', () => {
         const { getByText } = render(<LoginScreen />);
-        expect(getByText('Device Signer (Recommended)')).toBeTruthy();
+        expect(getByText('Device Signer')).toBeTruthy();
+        expect(getByText('Recommended')).toBeTruthy();
         expect(getByText('Login with Amber')).toBeTruthy();
       });
 
@@ -116,7 +121,8 @@ describe('LoginScreen', () => {
 
       it('shows bunker as recommended on iOS', () => {
         const { getByText } = render(<LoginScreen />);
-        expect(getByText('Remote Signer (Recommended)')).toBeTruthy();
+        expect(getByText('Remote Signer (NIP-46)')).toBeTruthy();
+        expect(getByText('Recommended')).toBeTruthy();
       });
     });
   });
@@ -208,18 +214,18 @@ describe('LoginScreen', () => {
   });
 
   // =============================================================================
-  // NIP-46 BUNKER LOGIN TESTS
+  // NIP-46 REMOTE SIGNER LOGIN TESTS
   // =============================================================================
 
-  describe('NIP-46 Bunker Login', () => {
-    it('shows error for empty bunker URL', async () => {
+  describe('NIP-46 Remote Signer Login', () => {
+    it('shows error for empty remote signer input', async () => {
       const { getByText } = render(<LoginScreen />);
-      const connectButton = getByText('Connect to Bunker');
+      const connectButton = getByText('Connect to Remote Signer');
 
       fireEvent.press(connectButton);
 
       await waitFor(() => {
-        expect(getByText('Please enter a bunker URL')).toBeTruthy();
+        expect(getByText('Please enter a bunker URL or NIP-05 identifier')).toBeTruthy();
       });
     });
 
@@ -227,8 +233,8 @@ describe('LoginScreen', () => {
       (useNDK as jest.Mock).mockReturnValue({ ndk: null });
 
       const { getByText, getByPlaceholderText } = render(<LoginScreen />);
-      const input = getByPlaceholderText('bunker://pubkey?relay=wss://...');
-      const connectButton = getByText('Connect to Bunker');
+      const input = getByPlaceholderText('bunker://pubkey?relay=wss://... or name@domain');
+      const connectButton = getByText('Connect to Remote Signer');
 
       fireEvent.changeText(input, 'bunker://abc123?relay=wss://relay.example.com');
       fireEvent.press(connectButton);
@@ -243,8 +249,8 @@ describe('LoginScreen', () => {
       (useNDKSessionLogin as jest.Mock).mockReturnValue(mockLogin);
 
       const { getByText, getByPlaceholderText } = render(<LoginScreen />);
-      const input = getByPlaceholderText('bunker://pubkey?relay=wss://...');
-      const connectButton = getByText('Connect to Bunker');
+      const input = getByPlaceholderText('bunker://pubkey?relay=wss://... or name@domain');
+      const connectButton = getByText('Connect to Remote Signer');
 
       fireEvent.changeText(input, 'bunker://abc123?relay=wss://relay.example.com');
       fireEvent.press(connectButton);
@@ -259,8 +265,8 @@ describe('LoginScreen', () => {
       (useNDKSessionLogin as jest.Mock).mockReturnValue(mockLogin);
 
       const { getByText, getByPlaceholderText } = render(<LoginScreen />);
-      const input = getByPlaceholderText('bunker://pubkey?relay=wss://...');
-      const connectButton = getByText('Connect to Bunker');
+      const input = getByPlaceholderText('bunker://pubkey?relay=wss://... or name@domain');
+      const connectButton = getByText('Connect to Remote Signer');
 
       fireEvent.changeText(input, 'bunker://abc123?relay=wss://relay.example.com');
       fireEvent.press(connectButton);
@@ -275,14 +281,96 @@ describe('LoginScreen', () => {
       (useNDKSessionLogin as jest.Mock).mockReturnValue(mockLogin);
 
       const { getByText, getByPlaceholderText } = render(<LoginScreen />);
-      const input = getByPlaceholderText('bunker://pubkey?relay=wss://...');
-      const connectButton = getByText('Connect to Bunker');
+      const input = getByPlaceholderText('bunker://pubkey?relay=wss://... or name@domain');
+      const connectButton = getByText('Connect to Remote Signer');
 
       fireEvent.changeText(input, '  bunker://abc123?relay=wss://relay.example.com  ');
       fireEvent.press(connectButton);
 
       await waitFor(() => {
         // The signer should be created with trimmed URL
+        expect(mockLogin).toHaveBeenCalled();
+      });
+    });
+
+    it('calls login with NIP-05 identifier', async () => {
+      const mockLogin = jest.fn().mockResolvedValue({});
+      (useNDKSessionLogin as jest.Mock).mockReturnValue(mockLogin);
+
+      const { getByText, getByPlaceholderText } = render(<LoginScreen />);
+      const input = getByPlaceholderText('bunker://pubkey?relay=wss://... or name@domain');
+      const connectButton = getByText('Connect to Remote Signer');
+
+      fireEvent.changeText(input, 'alice@example.com');
+      fireEvent.press(connectButton);
+
+      await waitFor(() => {
+        expect(mockLogin).toHaveBeenCalled();
+      });
+    });
+
+    it('shows error for invalid remote signer input', async () => {
+      const { getByText, getByPlaceholderText } = render(<LoginScreen />);
+      const input = getByPlaceholderText('bunker://pubkey?relay=wss://... or name@domain');
+      const connectButton = getByText('Connect to Remote Signer');
+
+      fireEvent.changeText(input, 'http://not-valid');
+      fireEvent.press(connectButton);
+
+      await waitFor(() => {
+        expect(getByText('Enter a bunker:// URL or name@domain')).toBeTruthy();
+      });
+    });
+  });
+
+  // =============================================================================
+  // NIP-46 NOSTR CONNECT TESTS
+  // =============================================================================
+
+  describe('NIP-46 Nostr Connect', () => {
+    it('shows error for empty relay URL', async () => {
+      const { getByText } = render(<LoginScreen />);
+      const connectButton = getByText('Generate Nostr Connect');
+
+      fireEvent.press(connectButton);
+
+      await waitFor(() => {
+        expect(getByText('Please enter a relay URL')).toBeTruthy();
+      });
+    });
+
+    it('shows error for invalid relay URL', async () => {
+      const { getByText, getByPlaceholderText } = render(<LoginScreen />);
+      const relayInput = getByPlaceholderText('wss://relay.example.com');
+      const connectButton = getByText('Generate Nostr Connect');
+
+      fireEvent.changeText(relayInput, 'https://relay.example.com');
+      fireEvent.press(connectButton);
+
+      await waitFor(() => {
+        expect(getByText('Relay URL must start with wss:// or ws://')).toBeTruthy();
+      });
+    });
+
+    it('generates a nostr connect URI and completes login', async () => {
+      const mockLogin = jest.fn().mockResolvedValue({});
+      (useNDKSessionLogin as jest.Mock).mockReturnValue(mockLogin);
+
+      const { getByText, getByPlaceholderText } = render(<LoginScreen />);
+      const relayInput = getByPlaceholderText('wss://relay.example.com');
+      const connectButton = getByText('Generate Nostr Connect');
+
+      fireEvent.changeText(relayInput, 'wss://relay.example.com');
+      fireEvent.press(connectButton);
+
+      await waitFor(() => {
+        expect(getByText('Nostr Connect')).toBeTruthy();
+        expect(getByText('I Approved in Signer')).toBeTruthy();
+      });
+
+      fireEvent.press(getByText('I Approved in Signer'));
+
+      await waitFor(() => {
         expect(mockLogin).toHaveBeenCalled();
       });
     });
@@ -477,7 +565,8 @@ describe('LoginScreen', () => {
       (useNDKSessionLogin as jest.Mock).mockReturnValue(mockLogin);
 
       const { getByText, getByPlaceholderText } = render(<LoginScreen />);
-      const bunkerInput = getByPlaceholderText('bunker://pubkey?relay=wss://...');
+      const remoteSignerInput = getByPlaceholderText('bunker://pubkey?relay=wss://... or name@domain');
+      const relayInput = getByPlaceholderText('wss://relay.example.com');
       const keyInput = getByPlaceholderText('nsec1... or hex private key');
       const loginButton = getByText('Login with Private Key');
 
@@ -485,7 +574,8 @@ describe('LoginScreen', () => {
       fireEvent.press(loginButton);
 
       await waitFor(() => {
-        expect(bunkerInput.props.editable).toBe(false);
+        expect(remoteSignerInput.props.editable).toBe(false);
+        expect(relayInput.props.editable).toBe(false);
         expect(keyInput.props.editable).toBe(false);
       });
     });

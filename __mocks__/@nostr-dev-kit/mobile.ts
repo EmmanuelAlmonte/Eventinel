@@ -264,22 +264,73 @@ export class NDKNip55Signer {
 
 /**
  * Mock NDKNip46Signer
- * Simulates remote bunker connection
+ * Simulates remote signer connection (bunker, NIP-05, nostrconnect)
  */
 export class NDKNip46Signer {
   private ndk: any;
-  private bunkerUrl: string;
+  private connectionToken?: string;
+  private flow: 'bunker' | 'nip05' | 'nostrconnect';
   private isReady: boolean = false;
   private shouldFail: boolean = false;
+  public nostrConnectUri?: string;
+  public rpc = { encryptionType: 'nip44' as 'nip04' | 'nip44' };
+  private listeners: Record<string, Array<(...args: any[]) => void>> = {};
 
-  constructor(ndk: any, bunkerUrl: string) {
+  constructor(ndk: any, userOrConnectionToken?: string, flow: 'auto' | 'nostrconnect' = 'auto') {
     this.ndk = ndk;
-    this.bunkerUrl = bunkerUrl;
+    this.connectionToken = userOrConnectionToken;
 
-    // Validate bunker URL format
-    if (!bunkerUrl.startsWith('bunker://')) {
+    if (flow === 'nostrconnect') {
+      this.flow = 'nostrconnect';
+      const relay = userOrConnectionToken || 'wss://relay.mock';
+      this.nostrConnectUri = `nostrconnect://mock?relay=${encodeURIComponent(relay)}`;
+      return;
+    }
+
+    if (!userOrConnectionToken) {
+      this.flow = 'bunker';
+      this.shouldFail = true;
+      return;
+    }
+
+    if (userOrConnectionToken.startsWith('bunker://')) {
+      this.flow = 'bunker';
+    } else if (userOrConnectionToken.includes('@')) {
+      this.flow = 'nip05';
+    } else {
+      this.flow = 'bunker';
       this.shouldFail = true;
     }
+  }
+
+  static bunker(ndk: any, userOrConnectionToken?: string, localSigner?: any) {
+    return new NDKNip46Signer(ndk, userOrConnectionToken);
+  }
+
+  static nostrconnect(
+    ndk: any,
+    relay: string,
+    localSigner?: any,
+    options?: any
+  ) {
+    return new NDKNip46Signer(ndk, relay, 'nostrconnect');
+  }
+
+  on(event: string, handler: (...args: any[]) => void) {
+    if (!this.listeners[event]) {
+      this.listeners[event] = [];
+    }
+    this.listeners[event].push(handler);
+  }
+
+  off(event: string, handler: (...args: any[]) => void) {
+    if (!this.listeners[event]) return;
+    this.listeners[event] = this.listeners[event].filter((fn) => fn !== handler);
+  }
+
+  private emit(event: string, ...args: any[]) {
+    const handlers = this.listeners[event] || [];
+    handlers.forEach((handler) => handler(...args));
   }
 
   async blockUntilReady() {
@@ -291,7 +342,7 @@ export class NDKNip46Signer {
     await new Promise((resolve) => setTimeout(resolve, 50));
 
     // Simulate connection failure for specific test URLs
-    if (this.bunkerUrl.includes('fail')) {
+    if (this.connectionToken && this.connectionToken.includes('fail')) {
       throw new Error('Bunker connection failed');
     }
 
@@ -304,15 +355,28 @@ export class NDKNip46Signer {
       throw new Error('Bunker not ready - call blockUntilReady first');
     }
 
-    // Extract pubkey from bunker URL (mock behavior)
-    const match = this.bunkerUrl.match(/bunker:\/\/([a-f0-9]+)/);
-    const pubkey = match ? match[1] : 'bunker_pubkey_mock';
+    let pubkey = 'bunker_pubkey_mock';
+    let displayName = 'Bunker User';
+    let name = 'bunker_user';
+
+    if (this.flow === 'bunker' && this.connectionToken) {
+      const match = this.connectionToken.match(/bunker:\/\/([a-f0-9]+)/);
+      pubkey = match ? match[1] : 'bunker_pubkey_mock';
+    } else if (this.flow === 'nip05' && this.connectionToken) {
+      pubkey = `nip05_${this.connectionToken.replace('@', '_')}`;
+      displayName = 'NIP-05 User';
+      name = 'nip05_user';
+    } else if (this.flow === 'nostrconnect') {
+      pubkey = 'nostrconnect_pubkey_mock';
+      displayName = 'Nostr Connect User';
+      name = 'nostrconnect_user';
+    }
 
     return {
       pubkey,
       profile: {
-        displayName: 'Bunker User',
-        name: 'bunker_user',
+        displayName,
+        name,
       },
     };
   }

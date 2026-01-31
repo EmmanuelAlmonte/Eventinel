@@ -50,7 +50,8 @@ export const ndk = new NDK({
   // relays stored in user's kind:10002 event (relay.damus.io, relay.primal.net, etc.)
   autoConnectUserRelays: false,
 
-  // NOTE: aiGuardrails was removed - not available in stable NDK 0.8.x
+  // Enable AI guardrails in dev to catch common Nostr/NDK mistakes early.
+  aiGuardrails: __DEV__,
 });
 
 // Set bidirectional reference for cache adapter
@@ -74,7 +75,7 @@ if (__DEV__) {
   };
 }
 
-// NOTE: AI Guardrails removed - not available in stable NDK 0.8.x
+// NOTE: AI Guardrails are enabled in dev via the NDK constructor.
 
 // Add global relay event logging with detailed WebSocket info
 ndk.pool.on('relay:connect', (relay) => {

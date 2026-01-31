@@ -6,7 +6,7 @@
  */
 
 import { useState } from 'react';
-import { View, StyleSheet, Platform, KeyboardAvoidingView } from 'react-native';
+import { View, StyleSheet, Platform, KeyboardAvoidingView, Linking, Switch } from 'react-native';
 import { Text, Button, Input, Card, Icon, Overlay } from '@rneui/themed';
 import * as Clipboard from 'expo-clipboard';
 import {
@@ -27,7 +27,11 @@ export default function LoginScreen() {
   const { isAvailable, apps } = useNip55(); // Android only
   const login = useNDKSessionLogin();
   const [manualKey, setManualKey] = useState('');
-  const [bunkerUrl, setBunkerUrl] = useState('');
+  const [remoteSignerInput, setRemoteSignerInput] = useState('');
+  const [nostrConnectRelay, setNostrConnectRelay] = useState('');
+  const [nostrConnectUri, setNostrConnectUri] = useState<string | null>(null);
+  const [nostrConnectSigner, setNostrConnectSigner] = useState<NDKNip46Signer | null>(null);
+  const [forceLegacyNip04, setForceLegacyNip04] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [generatedKey, setGeneratedKey] = useState<string | null>(null);
   const [generatedPubkey, setGeneratedPubkey] = useState<string | null>(null);
@@ -53,10 +57,21 @@ export default function LoginScreen() {
     }
   };
 
-  // Handle NIP-46 bunker login (iOS primary, Android optional)
-  const handleBunkerLogin = async () => {
-    if (!bunkerUrl.trim()) {
-      showToast.warning('Missing URL', 'Please enter a bunker URL');
+  const isNip05Identifier = (value: string) => value.includes('@') && !value.includes('://');
+
+  // Handle NIP-46 remote signer login (bunker:// or NIP-05)
+  const handleRemoteSignerLogin = async () => {
+    const trimmed = remoteSignerInput.trim();
+    if (!trimmed) {
+      showToast.warning('Missing Identifier', 'Please enter a bunker URL or NIP-05 identifier');
+      return;
+    }
+    if (trimmed.startsWith('nostrconnect://')) {
+      showToast.warning('Use Nostr Connect', 'Generate a nostrconnect:// URI below');
+      return;
+    }
+    if (!trimmed.startsWith('bunker://') && !isNip05Identifier(trimmed)) {
+      showToast.error('Invalid Identifier', 'Enter a bunker:// URL or name@domain');
       return;
     }
     if (!ndk) {
@@ -66,14 +81,103 @@ export default function LoginScreen() {
 
     setIsLoading(true);
     try {
-      const signer = new NDKNip46Signer(ndk, bunkerUrl.trim());
+      const signer = NDKNip46Signer.bunker(ndk, trimmed);
+      signer.on?.('authUrl', (url: string) => {
+        Linking.openURL(url).catch(() => {
+          showToast.warning('Action required', 'Open the authorization URL in a browser');
+        });
+      });
+      if (forceLegacyNip04 && (signer as any).rpc) {
+        (signer as any).rpc.encryptionType = 'nip04';
+      }
       await signer.blockUntilReady();
       await login(signer, true);
     } catch (err) {
-      showToast.error('Connection Failed', err instanceof Error ? err.message : 'Bunker connection failed');
+      showToast.error(
+        'Connection Failed',
+        err instanceof Error ? err.message : 'Remote signer connection failed'
+      );
     } finally {
       setIsLoading(false);
     }
+  };
+
+  const handleStartNostrConnect = async () => {
+    const relay = nostrConnectRelay.trim();
+    if (!relay) {
+      showToast.warning('Missing Relay', 'Please enter a relay URL');
+      return;
+    }
+    if (!relay.startsWith('wss://') && !relay.startsWith('ws://')) {
+      showToast.warning('Invalid Relay', 'Relay URL must start with wss:// or ws://');
+      return;
+    }
+    if (!ndk) {
+      showToast.error('Error', 'NDK not initialized');
+      return;
+    }
+
+    try {
+      const signer = NDKNip46Signer.nostrconnect(ndk, relay);
+      signer.on?.('authUrl', (url: string) => {
+        Linking.openURL(url).catch(() => {
+          showToast.warning('Action required', 'Open the authorization URL in a browser');
+        });
+      });
+      if (!signer.nostrConnectUri) {
+        showToast.error('Failed to generate', 'Unable to build Nostr Connect URI');
+        return;
+      }
+      setNostrConnectSigner(signer);
+      setNostrConnectUri(signer.nostrConnectUri);
+    } catch (err) {
+      showToast.error(
+        'Failed to generate',
+        err instanceof Error ? err.message : 'Unable to start Nostr Connect flow'
+      );
+    }
+  };
+
+  const handleCopyNostrConnect = async () => {
+    if (!nostrConnectUri) return;
+    try {
+      await Clipboard.setStringAsync(nostrConnectUri);
+      showToast.success('Copied', 'Nostr Connect URI copied');
+    } catch (err) {
+      showToast.warning('Clipboard unavailable', 'Copy the URI manually');
+    }
+  };
+
+  const handleOpenNostrConnect = async () => {
+    if (!nostrConnectUri) return;
+    try {
+      await Linking.openURL(nostrConnectUri);
+    } catch (err) {
+      showToast.warning('Open failed', 'Unable to open signer app');
+    }
+  };
+
+  const handleCompleteNostrConnect = async () => {
+    if (!nostrConnectSigner) return;
+    setIsLoading(true);
+    try {
+      await nostrConnectSigner.blockUntilReady();
+      await login(nostrConnectSigner, true);
+      setNostrConnectSigner(null);
+      setNostrConnectUri(null);
+    } catch (err) {
+      showToast.error(
+        'Connection Failed',
+        err instanceof Error ? err.message : 'Nostr Connect failed'
+      );
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const dismissNostrConnect = () => {
+    setNostrConnectSigner(null);
+    setNostrConnectUri(null);
   };
 
   // Handle manual key login (fallback for both platforms)
@@ -232,6 +336,68 @@ export default function LoginScreen() {
         </View>
       </Overlay>
 
+      {/* Nostr Connect Overlay */}
+      <Overlay
+        isVisible={Boolean(nostrConnectUri)}
+        overlayStyle={[styles.keyOverlay, { backgroundColor: colors.surface, borderColor: colors.border }]}
+        onBackdropPress={dismissNostrConnect}
+      >
+        <View style={styles.keyContent}>
+          <View style={styles.cardHeader}>
+            <Icon name="link" type="material" size={22} color={colors.primary} />
+            <Text style={[styles.cardTitle, { color: colors.text }]}>Nostr Connect</Text>
+          </View>
+          <Text style={[styles.cardDescription, { color: colors.textMuted }]}>
+            Open this URI in your signer app to authorize Eventinel.
+          </Text>
+          {nostrConnectUri ? (
+            <Text
+              selectable
+              style={[styles.generatedKeyText, { color: colors.text, borderColor: colors.border }]}
+            >
+              {nostrConnectUri}
+            </Text>
+          ) : null}
+          <Button
+            title="Copy URI"
+            onPress={handleCopyNostrConnect}
+            disabled={isLoading}
+            containerStyle={styles.buttonContainer}
+            type="outline"
+            buttonStyle={{ borderColor: colors.primary }}
+            titleStyle={{ color: colors.primary }}
+          />
+          <Button
+            title="Open Signer"
+            onPress={handleOpenNostrConnect}
+            disabled={isLoading}
+            containerStyle={styles.buttonContainer}
+            icon={
+              <Icon
+                name="open-in-new"
+                type="material"
+                size={18}
+                color="#FFFFFF"
+                style={{ marginRight: 8 }}
+              />
+            }
+          />
+          <Button
+            title="I Approved in Signer"
+            onPress={handleCompleteNostrConnect}
+            disabled={isLoading}
+            containerStyle={styles.buttonContainer}
+          />
+          <Button
+            title="Cancel"
+            type="clear"
+            onPress={dismissNostrConnect}
+            disabled={isLoading}
+            titleStyle={{ color: colors.textMuted }}
+          />
+        </View>
+      </Overlay>
+
       {/* NIP-55 Section (Android Only) */}
       {isAndroid && isAvailable && apps.length > 0 && (
         <Card containerStyle={[styles.card, themedStyles.card]}>
@@ -272,7 +438,7 @@ export default function LoginScreen() {
         </Card>
       )}
 
-      {/* NIP-46 Bunker Section */}
+      {/* NIP-46 Remote Signer Section */}
       <Card containerStyle={[styles.card, themedStyles.card]}>
         <View style={styles.cardHeader}>
           <Icon
@@ -289,13 +455,13 @@ export default function LoginScreen() {
           )}
         </View>
         <Text style={[styles.cardDescription, { color: colors.textMuted }]}>
-          Connect to a Nostr bunker for secure remote signing.
+          Connect via bunker:// or NIP-05 (name@domain) for secure remote signing.
         </Text>
 
         <Input
-          placeholder="bunker://pubkey?relay=wss://..."
-          value={bunkerUrl}
-          onChangeText={setBunkerUrl}
+          placeholder="bunker://pubkey?relay=wss://... or name@domain"
+          value={remoteSignerInput}
+          onChangeText={setRemoteSignerInput}
           autoCapitalize="none"
           autoCorrect={false}
           disabled={isLoading}
@@ -313,15 +479,81 @@ export default function LoginScreen() {
           placeholderTextColor={colors.textMuted}
         />
 
+        <View style={styles.toggleRow}>
+          <Text style={[styles.toggleLabel, { color: colors.textMuted }]}>
+            Legacy NIP-04 (if bunker doesn't support NIP-44)
+          </Text>
+          <Switch
+            value={forceLegacyNip04}
+            onValueChange={setForceLegacyNip04}
+            disabled={isLoading}
+            trackColor={{ false: colors.border, true: colors.primary }}
+            thumbColor={forceLegacyNip04 ? colors.primary : colors.textMuted}
+          />
+        </View>
+
         <Button
-          title="Connect to Bunker"
-          onPress={handleBunkerLogin}
+          title="Connect to Remote Signer"
+          onPress={handleRemoteSignerLogin}
           disabled={isLoading}
           containerStyle={styles.buttonContainer}
           buttonStyle={isIOS ? undefined : { backgroundColor: colors.primaryDark }}
           icon={
             <Icon
               name="login"
+              type="material"
+              size={20}
+              color="#FFFFFF"
+              style={{ marginRight: 8 }}
+            />
+          }
+        />
+      </Card>
+
+      {/* NIP-46 Nostr Connect Section */}
+      <Card containerStyle={[styles.card, themedStyles.card]}>
+        <View style={styles.cardHeader}>
+          <Icon
+            name="link"
+            type="material"
+            size={24}
+            color={colors.primary}
+          />
+          <Text style={[styles.cardTitle, { color: colors.text }]}>Nostr Connect (NIP-46)</Text>
+        </View>
+        <Text style={[styles.cardDescription, { color: colors.textMuted }]}>
+          Generate a nostrconnect:// URI and open it in a signer app.
+        </Text>
+
+        <Input
+          placeholder="wss://relay.example.com"
+          value={nostrConnectRelay}
+          onChangeText={setNostrConnectRelay}
+          autoCapitalize="none"
+          autoCorrect={false}
+          disabled={isLoading}
+          leftIcon={
+            <Icon
+              name="dns"
+              type="material"
+              size={20}
+              color={colors.textMuted}
+            />
+          }
+          containerStyle={styles.inputContainer}
+          inputContainerStyle={[styles.input, themedStyles.input]}
+          inputStyle={[styles.inputText, themedStyles.inputText]}
+          placeholderTextColor={colors.textMuted}
+        />
+
+        <Button
+          title="Generate Nostr Connect"
+          onPress={handleStartNostrConnect}
+          disabled={isLoading}
+          containerStyle={styles.buttonContainer}
+          icon={
+            <Icon
+              name="qr-code"
               type="material"
               size={20}
               color="#FFFFFF"
@@ -513,6 +745,17 @@ const styles = StyleSheet.create({
   inputText: {
     fontSize: 14,
     fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
+  },
+  toggleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 12,
+  },
+  toggleLabel: {
+    flex: 1,
+    fontSize: 12,
+    marginRight: 12,
   },
   buttonContainer: {
     marginTop: 4,

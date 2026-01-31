@@ -238,6 +238,17 @@ describe('NDKNip46Signer (Mock)', () => {
       await expect(signer.blockUntilReady()).resolves.toBe(signer);
     });
 
+    it('resolves for NIP-05 identifier', async () => {
+      const signer = new NDKNip46Signer(mockNDK, 'alice@example.com');
+      await expect(signer.blockUntilReady()).resolves.toBe(signer);
+    });
+
+    it('supports nostrconnect flow via static method', async () => {
+      const signer = NDKNip46Signer.nostrconnect(mockNDK, 'wss://relay.test.com');
+      expect(signer.nostrConnectUri).toContain('nostrconnect://');
+      await expect(signer.blockUntilReady()).resolves.toBe(signer);
+    });
+
     it('rejects for invalid bunker URL format', async () => {
       const signer = new NDKNip46Signer(mockNDK, 'invalid://url');
       await expect(signer.blockUntilReady()).rejects.toThrow('Invalid bunker URL');
@@ -274,6 +285,24 @@ describe('NDKNip46Signer (Mock)', () => {
       const user = await signer.user();
 
       expect(user.pubkey).toBe('abc123def456');
+    });
+
+    it('returns user for NIP-05 identifier', async () => {
+      const signer = new NDKNip46Signer(mockNDK, 'alice@example.com');
+      await signer.blockUntilReady();
+
+      const user = await signer.user();
+
+      expect(user.pubkey).toContain('nip05_');
+    });
+
+    it('returns user for nostrconnect flow', async () => {
+      const signer = NDKNip46Signer.nostrconnect(mockNDK, 'wss://relay.test.com');
+      await signer.blockUntilReady();
+
+      const user = await signer.user();
+
+      expect(user.pubkey).toContain('nostrconnect');
     });
 
     it('throws if called before blockUntilReady', async () => {
