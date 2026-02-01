@@ -2,8 +2,8 @@
 
 ## Project Structure & Module Organization
 - `App.tsx` boots the app, handles NDK init, and wires navigation; `index.ts` is the Expo entrypoint.
-- UI lives in `screens/` (Map, IncidentFeed, Profile, RelayConnect, Login) with shared primitives in `components/ui` (ScreenContainer, ErrorBoundary, Toast) plus `components/map` and `components/incident` widgets.
-- Domain/data: `lib/ndk.ts` defines the NDK singleton + SQLite cache; `lib/nostr/` holds Nostr config/events; `lib/relay/` tracks relay persistence/status; `lib/map/` stores map constants/types; `lib/theme` and `lib/brand` provide tokens; `hooks/` host subscriptions/theme/location hooks; `contexts/` expose incident cache and location providers.
+- UI lives in `screens/` (Home, Map, IncidentFeed, IncidentDetail, Profile, RelayConnect, Login, Menu) with shared primitives in `components/ui` (ScreenContainer, ErrorBoundary, Toast) plus `components/map`, `components/incident`, and `components/notifications` widgets.
+- Domain/data: `lib/ndk.ts` defines the NDK singleton + SQLite cache; `lib/nostr/` holds Nostr config/events; `lib/relay/` tracks relay persistence/status; `lib/map/` stores map constants/types; `lib/notifications/` handles notification helpers; `lib/utils/` holds shared helpers (time formatting, etc.); `lib/theme` and `lib/brand` provide tokens; `hooks/` host subscriptions/theme/location hooks; `contexts/` expose incident cache and location providers.
 - Assets live in `assets/`; Expo config in `app.config.js`; scripts/templates in `scripts/` and `templates/DeveloperProtocol.md`.
 - Tests live in `__tests__` with supporting mocks in `__mocks__`; build outputs in `dist/` (exclude from commits).
 
