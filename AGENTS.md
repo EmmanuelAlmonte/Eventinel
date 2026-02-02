@@ -32,5 +32,5 @@
 - Keep changes focused; update docs or templates (e.g., `templates/DeveloperProtocol.md`) when altering workflows.
 
 ## Security & Configuration Tips
-- Copy `.env.example` to `.env.local`; keep secrets out of VCS. `app.config.js` loads `.env.local` and requires `MAPBOX_ACCESS_TOKEN` for Mapbox.
+- Copy `.env.example` to `.env.local` for local development and to `.env` for production builds; keep secrets out of VCS. `app.config.js` loads `.env.local` in dev and `.env` in production and requires `MAPBOX_ACCESS_TOKEN` for Mapbox.
 - Sensitive data persists via `expo-secure-store`; never use browser-only storage. Avoid committing build artifacts from `dist/`, `android/`, or `ios/`.

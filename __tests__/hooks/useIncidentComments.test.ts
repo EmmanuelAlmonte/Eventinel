@@ -113,7 +113,7 @@ function createMockCommentEvent(overrides: Partial<any> = {}) {
     pubkey,
     kind: 1,
     created_at: createdAt,
-    content: overrides.content || 'This is a test comment',
+    content: overrides.content ?? 'This is a test comment',
     tags: overrides.tags || [
       ['e', 'incident_event_123', '', 'root'],
       ['a', '30911:incident_author_pubkey:incident_123', '', 'root'],
@@ -505,7 +505,8 @@ describe('useIncidentComments', () => {
       const incident1 = createMockIncident({ eventId: 'event1' });
       const incident2 = createMockIncident({ eventId: 'event2' });
 
-      const { rerender } = renderHook(
+      type HookProps = { incident: ParsedIncident | null };
+      const { rerender } = renderHook<ReturnType<typeof useIncidentComments>, HookProps>(
         ({ incident }) => useIncidentComments(incident),
         { initialProps: { incident: incident1 } }
       );

@@ -22,6 +22,7 @@ import { useIncidentSubscription } from '@hooks';
 import type { ProcessedIncident } from '@hooks';
 import { useSharedLocation } from './LocationContext';
 import { useIncidentCache } from './IncidentCacheContext';
+import { useRelayStatus } from './RelayStatusContext';
 import type { Severity } from '@lib/nostr/config';
 
 interface IncidentSubscriptionContextValue {
@@ -48,6 +49,8 @@ const IncidentSubscriptionContext = createContext<IncidentSubscriptionContextVal
 export function IncidentSubscriptionProvider({ children }: { children: React.ReactNode }) {
   const { location } = useSharedLocation();
   const { upsertMany } = useIncidentCache();
+  const { hasConnectedRelay } = useRelayStatus();
+  const isSubscriptionEnabled = !!location && hasConnectedRelay;
 
   // Single subscription shared by all screens
   const {
@@ -57,7 +60,7 @@ export function IncidentSubscriptionProvider({ children }: { children: React.Rea
     severityCounts,
   } = useIncidentSubscription({
     location,
-    enabled: !!location, // Only subscribe when we have real GPS location
+    enabled: isSubscriptionEnabled, // Only subscribe when we have location AND at least one relay connected
   });
 
   // Cache incidents centrally for Detail screen lookups

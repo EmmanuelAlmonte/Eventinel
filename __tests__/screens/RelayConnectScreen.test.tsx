@@ -67,13 +67,18 @@ jest.mock('../../lib/relay/status', () => ({
 }));
 
 // Mock relay storage
-const mockAddRelayToStorage = jest.fn().mockResolvedValue(undefined);
-const mockRemoveRelayFromStorage = jest.fn().mockResolvedValue(undefined);
+jest.mock('../../lib/relay/storage', () => {
+  const addRelayToStorage = jest.fn().mockResolvedValue(undefined);
+  const removeRelayFromStorage = jest.fn().mockResolvedValue(undefined);
 
-jest.mock('../../lib/relay/storage', () => ({
-  addRelayToStorage: jest.fn().mockResolvedValue(undefined),
-  removeRelayFromStorage: jest.fn().mockResolvedValue(undefined),
-}));
+  return {
+    addRelayToStorage,
+    removeRelayFromStorage,
+    saveRelays: jest.fn().mockResolvedValue(undefined),
+    DEFAULT_RELAYS: ['wss://relay.eventinel.com'],
+    LOCAL_RELAYS: ['ws://10.0.2.2:8085'],
+  };
+});
 
 // Mock useAppTheme
 const mockColors = {
@@ -169,17 +174,41 @@ jest.mock('@rneui/themed', () => ({
       </View>
     );
   },
+  Switch: ({ value, onValueChange, disabled }: any) => {
+    const { Pressable, Text } = require('react-native');
+    return (
+      <Pressable
+        accessibilityRole="switch"
+        accessibilityState={{ checked: value, disabled }}
+        onPress={() => {
+          if (!disabled && onValueChange) onValueChange(!value);
+        }}
+      >
+        <Text>{value ? 'On' : 'Off'}</Text>
+      </Pressable>
+    );
+  },
 }));
 
 // Import component after all mocks are set up
 import RelayConnectScreen from '../../screens/RelayConnectScreen';
-import { ndk, __mockRelaysMap } from '../../lib/ndk';
+import { ndk } from '../../lib/ndk';
 
 // Get references to the mocked functions
 const mockAddExplicitRelay = ndk.addExplicitRelay as jest.Mock;
 const mockRemoveRelay = ndk.pool.removeRelay as jest.Mock;
 const mockOn = ndk.pool.on as jest.Mock;
 const mockOff = ndk.pool.off as jest.Mock;
+const { __mockRelaysMap } = jest.requireMock('../../lib/ndk') as {
+  __mockRelaysMap: Map<string, any>;
+};
+const {
+  addRelayToStorage: mockAddRelayToStorage,
+  removeRelayFromStorage: mockRemoveRelayFromStorage,
+} = jest.requireMock('../../lib/relay/storage') as {
+  addRelayToStorage: jest.Mock;
+  removeRelayFromStorage: jest.Mock;
+};
 
 // =============================================================================
 // TEST SUITE
@@ -188,7 +217,7 @@ const mockOff = ndk.pool.off as jest.Mock;
 describe('RelayConnectScreen', () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    ____mockRelaysMap.clear();
+    __mockRelaysMap.clear();
     // Add some default relays
     __mockRelaysMap.set('wss://relay1.com', { url: 'wss://relay1.com', status: 5 });
     __mockRelaysMap.set('wss://relay2.com', { url: 'wss://relay2.com', status: 4 });

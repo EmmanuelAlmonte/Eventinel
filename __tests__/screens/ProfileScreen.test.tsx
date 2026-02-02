@@ -14,6 +14,39 @@ import React from 'react';
 import { render, fireEvent, waitFor } from '@testing-library/react-native';
 import { Alert } from 'react-native';
 
+// Mock navigation
+jest.mock('@react-navigation/native', () => ({
+  ...jest.requireActual('@react-navigation/native'),
+  useNavigation: () => ({
+    navigate: jest.fn(),
+    goBack: jest.fn(),
+    setOptions: jest.fn(),
+  }),
+  useFocusEffect: jest.fn(),
+}));
+
+// Mock useAppTheme
+const mockColors = {
+  background: '#1a1a2e',
+  surface: '#27272A',
+  text: '#FAFAFA',
+  textMuted: '#A1A1AA',
+  primary: '#2563eb',
+  success: '#22c55e',
+  error: '#ef4444',
+  warning: '#f59e0b',
+  info: '#3b82f6',
+  border: '#3F3F46',
+};
+
+jest.mock('@hooks', () => ({
+  useAppTheme: () => ({
+    colors: mockColors,
+    isDark: true,
+    toggleMode: jest.fn(),
+  }),
+}));
+
 // Import the component
 import ProfileScreen from '../../screens/ProfileScreen';
 
@@ -95,7 +128,7 @@ describe('ProfileScreen', () => {
 
     it('displays pubkey label', () => {
       const { getByText } = render(<ProfileScreen />);
-      expect(getByText('Your Public Key:')).toBeTruthy();
+      expect(getByText('Public Key')).toBeTruthy();
     });
 
     it('displays avatar with first letter of displayName', () => {

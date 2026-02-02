@@ -303,7 +303,8 @@ describe('MapSkeleton', () => {
 
     it('renders overlay with skeleton', () => {
       const { UNSAFE_root } = render(<MapSkeleton />);
-      const views = UNSAFE_root.findAllByType('RCTView' as any);
+      const { View } = require('react-native');
+      const views = UNSAFE_root.findAllByType(View);
       expect(views.length).toBeGreaterThan(0);
     });
   });

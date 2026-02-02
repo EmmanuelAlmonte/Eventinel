@@ -12,8 +12,8 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Mapbox, { type MapState } from '@rnmapbox/maps';
 import { Icon } from '@rneui/themed';
 
-import { MapSkeleton } from '@components/ui';
-import { useSharedLocation, useSharedIncidents } from '@contexts';
+import { EmptyState, MapSkeleton, NoRelaysEmpty, ScreenContainer } from '@components/ui';
+import { useRelayStatus, useSharedLocation, useSharedIncidents } from '@contexts';
 import { IncidentMarker } from '@components/map';
 import { DEFAULT_CAMERA, MAP_STYLES } from '@lib/map/types';
 import { MAPBOX_CONFIG, USER_LOCATION, INCIDENT_LIMITS } from '@lib/map/constants';
@@ -23,10 +23,23 @@ import type { ParsedIncident } from '@lib/nostr/events/types';
 type CameraAnimationMode = 'flyTo' | 'easeTo' | 'linearTo' | 'moveTo' | 'none';
 const FLY_TO_DURATION = 1500; // ms
 const AUTO_RESUME_DELAY_MS = 20000;
+const MAX_RELAY_LABELS = 2;
+
+function formatRelayList(relayUrls: string[]): string {
+  if (!relayUrls || relayUrls.length === 0) return 'relays';
+  const cleaned = relayUrls
+    .map((relay) => relay.replace(/^wss?:\/\//, ''))
+    .filter((relay) => relay.length > 0);
+  if (cleaned.length <= MAX_RELAY_LABELS) {
+    return cleaned.join(', ');
+  }
+  return `${cleaned.slice(0, MAX_RELAY_LABELS).join(', ')} +${cleaned.length - MAX_RELAY_LABELS} more`;
+}
 
 export default function MapScreen() {
   const navigation = useNavigation<any>();
   const insets = useSafeAreaInsets();
+  const { hasConnectedRelay, hasRelays, isConnecting, relays } = useRelayStatus();
 
   // Delay map render until container has valid dimensions (fixes iOS 64x64 fallback)
   const [mapReady, setMapReady] = useState(false);
@@ -155,6 +168,38 @@ export default function MapScreen() {
   function handleMarkerPress(incident: ParsedIncident) {
     console.log('MapScreen: Marker pressed:', incident.incidentId);
     navigation.navigate('IncidentDetail', { incidentId: incident.incidentId });
+  }
+
+  const handleRelaySettings = useCallback(() => {
+    navigation.navigate('Relays');
+  }, [navigation]);
+
+  const relayLabel = formatRelayList(relays.map((relay) => relay.url));
+
+  if (!hasConnectedRelay) {
+    if (!hasRelays) {
+      return (
+        <ScreenContainer>
+          <NoRelaysEmpty onAddRelay={handleRelaySettings} />
+        </ScreenContainer>
+      );
+    }
+
+    return (
+      <ScreenContainer>
+        <EmptyState
+          icon={isConnecting ? 'wifi' : 'wifi-off'}
+          title={isConnecting ? 'Connecting to relays' : 'Relays disconnected'}
+          description={
+            isConnecting
+              ? `Waiting for ${relayLabel} to connect.`
+              : `Unable to reach ${relayLabel}. Check your connection or relay settings.`
+          }
+          action="Relay Settings"
+          onAction={handleRelaySettings}
+        />
+      </ScreenContainer>
+    );
   }
 
   // Loading state - show animated skeleton

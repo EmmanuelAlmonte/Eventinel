@@ -15,6 +15,57 @@ import React from 'react';
 import { render, fireEvent, waitFor, screen } from '@testing-library/react-native';
 import { Platform } from 'react-native';
 
+// Mock useAppTheme
+const mockColors = {
+  background: '#1a1a2e',
+  surface: '#27272A',
+  text: '#FAFAFA',
+  textMuted: '#A1A1AA',
+  primary: '#2563eb',
+  success: '#22c55e',
+  error: '#ef4444',
+  warning: '#f59e0b',
+  info: '#3b82f6',
+  border: '#3F3F46',
+};
+
+jest.mock('@hooks', () => ({
+  useAppTheme: () => ({
+    colors: mockColors,
+    isDark: true,
+  }),
+}));
+
+jest.mock('@components/ui', () => {
+  const { View } = require('react-native');
+  const showToast = {
+    error: jest.fn(),
+    warning: jest.fn(),
+    success: jest.fn(),
+    info: jest.fn(),
+    network: jest.fn(),
+    show: jest.fn(),
+    hide: jest.fn(),
+  };
+
+  return {
+    ScreenContainer: ({ children }: any) => <View>{children}</View>,
+    showToast,
+  };
+});
+
+const { showToast: mockShowToast } = jest.requireMock('@components/ui') as {
+  showToast: {
+    error: jest.Mock;
+    warning: jest.Mock;
+    success: jest.Mock;
+    info: jest.Mock;
+    network: jest.Mock;
+    show: jest.Mock;
+    hide: jest.Mock;
+  };
+};
+
 // Import the component
 import LoginScreen from '../../screens/LoginScreen';
 
@@ -35,6 +86,7 @@ describe('LoginScreen', () => {
   beforeEach(() => {
     mockNDKHooks.reset();
     jest.clearAllMocks();
+    useNDK.mockImplementation(() => ({ ndk: mockNDKHooks.getNDK() }));
   });
 
   // =============================================================================
@@ -60,7 +112,7 @@ describe('LoginScreen', () => {
 
     it('renders remote signer section', () => {
       const { getByText, getByPlaceholderText } = render(<LoginScreen />);
-      expect(getByText(/Remote Signer/)).toBeTruthy();
+      expect(getByText('Remote Signer (NIP-46)')).toBeTruthy();
       expect(getByPlaceholderText('bunker://pubkey?relay=wss://... or name@domain')).toBeTruthy();
       expect(getByText('Connect to Remote Signer')).toBeTruthy();
     });
@@ -180,7 +232,7 @@ describe('LoginScreen', () => {
       fireEvent.press(loginButton);
 
       await waitFor(() => {
-        expect(getByText('Signer unavailable')).toBeTruthy();
+        expect(mockShowToast.error).toHaveBeenCalledWith('Login Failed', 'Signer unavailable');
       });
     });
 
@@ -190,15 +242,21 @@ describe('LoginScreen', () => {
       );
       (useNDKSessionLogin as jest.Mock).mockReturnValue(mockLogin);
 
-      const { getByText } = render(<LoginScreen />);
+      const { getByText, queryByText } = render(<LoginScreen />);
       const loginButton = getByText('Login with Amber');
 
       fireEvent.press(loginButton);
 
       await waitFor(() => {
-        // During loading, the button should be disabled
-        expect(loginButton.props.accessibilityState?.disabled).toBe(true);
+        expect(queryByText('Connecting...')).toBeTruthy();
       });
+
+      await waitFor(() => {
+        expect(mockLogin).toHaveBeenCalledTimes(1);
+      });
+
+      fireEvent.press(loginButton);
+      expect(mockLogin).toHaveBeenCalledTimes(1);
     });
 
     it('renders multiple signer apps when available', () => {
@@ -225,7 +283,10 @@ describe('LoginScreen', () => {
       fireEvent.press(connectButton);
 
       await waitFor(() => {
-        expect(getByText('Please enter a bunker URL or NIP-05 identifier')).toBeTruthy();
+        expect(mockShowToast.warning).toHaveBeenCalledWith(
+          'Missing Identifier',
+          'Please enter a bunker URL or NIP-05 identifier'
+        );
       });
     });
 
@@ -240,7 +301,7 @@ describe('LoginScreen', () => {
       fireEvent.press(connectButton);
 
       await waitFor(() => {
-        expect(getByText('NDK not initialized')).toBeTruthy();
+        expect(mockShowToast.error).toHaveBeenCalledWith('Error', 'NDK not initialized');
       });
     });
 
@@ -272,7 +333,10 @@ describe('LoginScreen', () => {
       fireEvent.press(connectButton);
 
       await waitFor(() => {
-        expect(getByText('Connection timeout')).toBeTruthy();
+        expect(mockShowToast.error).toHaveBeenCalledWith(
+          'Connection Failed',
+          'Connection timeout'
+        );
       });
     });
 
@@ -318,7 +382,10 @@ describe('LoginScreen', () => {
       fireEvent.press(connectButton);
 
       await waitFor(() => {
-        expect(getByText('Enter a bunker:// URL or name@domain')).toBeTruthy();
+        expect(mockShowToast.error).toHaveBeenCalledWith(
+          'Invalid Identifier',
+          'Enter a bunker:// URL or name@domain'
+        );
       });
     });
   });
@@ -335,7 +402,10 @@ describe('LoginScreen', () => {
       fireEvent.press(connectButton);
 
       await waitFor(() => {
-        expect(getByText('Please enter a relay URL')).toBeTruthy();
+        expect(mockShowToast.warning).toHaveBeenCalledWith(
+          'Missing Relay',
+          'Please enter a relay URL'
+        );
       });
     });
 
@@ -348,7 +418,10 @@ describe('LoginScreen', () => {
       fireEvent.press(connectButton);
 
       await waitFor(() => {
-        expect(getByText('Relay URL must start with wss:// or ws://')).toBeTruthy();
+        expect(mockShowToast.warning).toHaveBeenCalledWith(
+          'Invalid Relay',
+          'Relay URL must start with wss:// or ws://'
+        );
       });
     });
 
@@ -388,7 +461,10 @@ describe('LoginScreen', () => {
       fireEvent.press(loginButton);
 
       await waitFor(() => {
-        expect(getByText('Please enter a private key')).toBeTruthy();
+        expect(mockShowToast.warning).toHaveBeenCalledWith(
+          'Missing Key',
+          'Please enter a private key'
+        );
       });
     });
 
@@ -422,7 +498,10 @@ describe('LoginScreen', () => {
       fireEvent.press(loginButton);
 
       await waitFor(() => {
-        expect(getByText(/Invalid/)).toBeTruthy();
+        expect(mockShowToast.error).toHaveBeenCalledWith(
+          'Login Failed',
+          'Please check your key and try again'
+        );
       });
     });
 
@@ -464,7 +543,7 @@ describe('LoginScreen', () => {
 
       (useNDKSessionLogin as jest.Mock).mockReturnValue(mockLogin);
 
-      const { getByText, getByPlaceholderText, queryByText } = render(<LoginScreen />);
+      const { getByText, getByPlaceholderText } = render(<LoginScreen />);
       const input = getByPlaceholderText('nsec1... or hex private key');
       const loginButton = getByText('Login with Private Key');
 
@@ -473,7 +552,10 @@ describe('LoginScreen', () => {
       fireEvent.press(loginButton);
 
       await waitFor(() => {
-        expect(getByText('First error')).toBeTruthy();
+        expect(mockShowToast.error).toHaveBeenCalledWith(
+          'Login Failed',
+          'Please check your key and try again'
+        );
       });
 
       // Second attempt - error should be cleared
@@ -481,7 +563,7 @@ describe('LoginScreen', () => {
       fireEvent.press(loginButton);
 
       await waitFor(() => {
-        expect(queryByText('First error')).toBeNull();
+        expect(mockShowToast.error).toHaveBeenCalledTimes(1);
       });
     });
 
@@ -497,7 +579,10 @@ describe('LoginScreen', () => {
       fireEvent.press(loginButton);
 
       await waitFor(() => {
-        expect(getByText('Invalid private key')).toBeTruthy();
+        expect(mockShowToast.error).toHaveBeenCalledWith(
+          'Login Failed',
+          'Please check your key and try again'
+        );
       });
     });
   });
@@ -553,7 +638,10 @@ describe('LoginScreen', () => {
       fireEvent.press(loginButton);
 
       await waitFor(() => {
-        expect(getByText('Failed')).toBeTruthy();
+        expect(mockShowToast.error).toHaveBeenCalledWith(
+          'Login Failed',
+          'Please check your key and try again'
+        );
         expect(queryByText('Connecting...')).toBeNull();
       });
     });

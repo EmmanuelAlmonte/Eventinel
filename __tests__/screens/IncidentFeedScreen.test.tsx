@@ -16,6 +16,7 @@ import { render, fireEvent, waitFor } from '@testing-library/react-native';
 
 // Import the component
 import IncidentFeedScreen from '../../screens/IncidentFeedScreen';
+import type { UseUserLocationResult } from '../../hooks/useUserLocation';
 
 // =============================================================================
 // MOCK SETUP
@@ -54,10 +55,16 @@ jest.mock('@hooks', () => ({
 
 // Mock shared location context
 const mockLocation: [number, number] = [-73.935242, 40.730610];
-const mockUseSharedLocation = jest.fn(() => ({
+const createLocationState = (overrides: Partial<UseUserLocationResult> = {}): UseUserLocationResult => ({
   location: mockLocation,
+  permission: 'granted',
+  source: 'fresh',
   isLoading: false,
-}));
+  error: null,
+  refresh: jest.fn(),
+  ...overrides,
+});
+const mockUseSharedLocation = jest.fn<UseUserLocationResult, []>(() => createLocationState());
 
 // Mock shared incidents context
 const mockIncidents = [
@@ -101,9 +108,24 @@ const mockUseSharedIncidents = jest.fn(() => ({
   hasReceivedHistory: true,
 }));
 
+const mockUseRelayStatus = jest.fn(() => ({
+  hasConnectedRelay: true,
+  hasRelays: true,
+  isConnecting: false,
+  relays: [
+    {
+      url: 'wss://relay.eventinel.com',
+      status: 'connected',
+      rawStatus: 5,
+      isConnected: true,
+    },
+  ],
+}));
+
 jest.mock('@contexts', () => ({
   useSharedLocation: () => mockUseSharedLocation(),
   useSharedIncidents: () => mockUseSharedIncidents(),
+  useRelayStatus: () => mockUseRelayStatus(),
 }));
 
 // Mock ScreenContainer and SkeletonList
@@ -117,6 +139,25 @@ jest.mock('@components/ui', () => ({
     return (
       <View testID="skeleton-list">
         <Text>Loading {count} items...</Text>
+      </View>
+    );
+  },
+  EmptyState: ({ title }: { title: string }) => {
+    const { View, Text } = require('react-native');
+    return (
+      <View testID="empty-state">
+        <Text>{title}</Text>
+      </View>
+    );
+  },
+  NoRelaysEmpty: ({ onAddRelay }: { onAddRelay?: () => void }) => {
+    const { View, Text, Pressable } = require('react-native');
+    return (
+      <View testID="no-relays-empty">
+        <Text>No Relays Connected</Text>
+        <Pressable onPress={onAddRelay}>
+          <Text>Add Relay</Text>
+        </Pressable>
       </View>
     );
   },
@@ -184,10 +225,7 @@ jest.mock('@rneui/themed', () => ({
 describe('IncidentFeedScreen', () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    mockUseSharedLocation.mockReturnValue({
-      location: mockLocation,
-      isLoading: false,
-    });
+    mockUseSharedLocation.mockReturnValue(createLocationState());
     mockUseSharedIncidents.mockReturnValue({
       incidents: mockIncidents,
       hasReceivedHistory: true,
@@ -236,20 +274,18 @@ describe('IncidentFeedScreen', () => {
 
   describe('Loading States', () => {
     it('shows skeleton list when location is loading', () => {
-      mockUseSharedLocation.mockReturnValue({
-        location: null,
-        isLoading: true,
-      });
+      mockUseSharedLocation.mockReturnValue(
+        createLocationState({ location: null, isLoading: true, source: 'none', permission: 'undetermined' })
+      );
 
       const { getByTestId } = render(<IncidentFeedScreen />);
       expect(getByTestId('skeleton-list')).toBeTruthy();
     });
 
     it('shows finding location message during loading', () => {
-      mockUseSharedLocation.mockReturnValue({
-        location: null,
-        isLoading: true,
-      });
+      mockUseSharedLocation.mockReturnValue(
+        createLocationState({ location: null, isLoading: true, source: 'none', permission: 'undetermined' })
+      );
 
       const { getByText } = render(<IncidentFeedScreen />);
       expect(getByText('Finding your location...')).toBeTruthy();

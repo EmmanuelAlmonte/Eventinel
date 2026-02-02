@@ -19,7 +19,7 @@ import { ndk } from './lib/ndk';
 import { loadRelays } from './lib/relay/storage';
 import { theme } from './lib/theme';
 import { useAppTheme } from '@hooks';
-import { IncidentCacheProvider, LocationProvider, IncidentSubscriptionProvider } from '@contexts';
+import { IncidentCacheProvider, LocationProvider, IncidentSubscriptionProvider, RelayStatusProvider } from '@contexts';
 import { ToastProvider, ErrorBoundary } from '@components/ui';
 import IncidentNotificationBridge from '@components/notifications/IncidentNotificationBridge';
 
@@ -229,11 +229,13 @@ export default function App() {
       <ThemeProvider theme={theme}>
         <ErrorBoundary>
           <LocationProvider>
-            <IncidentCacheProvider>
-              <IncidentSubscriptionProvider>
-                <MainNavigation />
-              </IncidentSubscriptionProvider>
-            </IncidentCacheProvider>
+            <RelayStatusProvider>
+              <IncidentCacheProvider>
+                <IncidentSubscriptionProvider>
+                  <MainNavigation />
+                </IncidentSubscriptionProvider>
+              </IncidentCacheProvider>
+            </RelayStatusProvider>
           </LocationProvider>
         </ErrorBoundary>
         <ToastProvider />

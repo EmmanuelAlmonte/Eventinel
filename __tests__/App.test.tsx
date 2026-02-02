@@ -13,6 +13,28 @@
 import React from 'react';
 import { render, waitFor } from '@testing-library/react-native';
 
+// Mock useAppTheme for LoginWrapper
+const mockColors = {
+  background: '#1a1a2e',
+  surface: '#27272A',
+  text: '#FAFAFA',
+  textMuted: '#A1A1AA',
+  primary: '#2563eb',
+  success: '#22c55e',
+  error: '#ef4444',
+  warning: '#f59e0b',
+  info: '#3b82f6',
+  border: '#3F3F46',
+};
+
+jest.mock('@hooks', () => ({
+  ...jest.requireActual('@hooks'),
+  useAppTheme: () => ({
+    colors: mockColors,
+    isDark: true,
+  }),
+}));
+
 // We need to mock the modules before importing App
 jest.mock('../lib/ndk', () => ({
   ndk: {
@@ -31,8 +53,8 @@ import App from '../App';
 import {
   mockNDKHooks,
   useNDKCurrentUser,
-  useNDKStore,
   useSessionMonitor,
+  useNDKInit,
 } from '../__mocks__/@nostr-dev-kit/mobile';
 import { ndk } from '../lib/ndk';
 import { loadRelays } from '../lib/relay/storage';
@@ -111,17 +133,14 @@ describe('App', () => {
   // =============================================================================
 
   describe('Initialization', () => {
-    it('registers NDK with the store on mount', async () => {
-      const setNDKMock = jest.fn();
-      (useNDKStore as jest.Mock).mockImplementation((selector) => {
-        const store = { ndk: ndk, setNDK: setNDKMock };
-        return selector ? selector(store) : store;
-      });
+    it('initializes NDK on mount', async () => {
+      const initMock = jest.fn();
+      (useNDKInit as jest.Mock).mockReturnValue(initMock);
 
       render(<App />);
 
       await waitFor(() => {
-        expect(setNDKMock).toHaveBeenCalledWith(ndk);
+        expect(initMock).toHaveBeenCalledWith(ndk);
       });
     });
 

@@ -29,18 +29,23 @@ interface MockSignerApp {
   name?: string;
 }
 
+const createMockNDK = () => ({
+  connect: jest.fn().mockResolvedValue(undefined),
+  addExplicitRelay: jest.fn(),
+  fetchEvents: jest.fn().mockResolvedValue(new Set()),
+  pool: {
+    on: jest.fn(),
+    off: jest.fn(),
+    relays: new Map(),
+    removeRelay: jest.fn(),
+  },
+});
+
 // Central mock state - can be modified by tests
 const mockState = {
   currentUser: null as MockUser | null,
   currentPubkey: null as string | null,
-  ndk: {
-    connect: jest.fn().mockResolvedValue(undefined),
-    addExplicitRelay: jest.fn(),
-    pool: {
-      on: jest.fn(),
-      off: jest.fn(),
-    },
-  },
+  ndk: createMockNDK(),
   nip55: {
     isAvailable: true,
     apps: [
@@ -55,6 +60,7 @@ export const mockNDKHooks = {
     mockState.currentUser = user;
     mockState.currentPubkey = user?.pubkey || null;
   },
+  getNDK: () => mockState.ndk,
   setCurrentPubkey: (pubkey: string | null) => {
     mockState.currentPubkey = pubkey;
   },
@@ -71,6 +77,7 @@ export const mockNDKHooks = {
     mockState.nip55.apps = [
       { packageName: 'com.greenart7c3.nostrsigner', name: 'Amber' },
     ];
+    mockState.ndk = createMockNDK();
   },
 };
 
@@ -125,6 +132,18 @@ export const useNDKSessionLogout = jest.fn(() => {
     }
   });
   return logoutFn;
+});
+
+/**
+ * Mock useNDKInit hook
+ * Returns initializer that stores the provided ndk instance
+ */
+export const useNDKInit = jest.fn(() => {
+  return (ndkInstance?: any) => {
+    if (ndkInstance) {
+      mockState.ndk = ndkInstance;
+    }
+  };
 });
 
 /**
@@ -407,6 +426,8 @@ class NDK {
     this.pool = {
       on: jest.fn(),
       off: jest.fn(),
+      relays: new Map(),
+      removeRelay: jest.fn(),
     };
   }
 
@@ -416,6 +437,10 @@ class NDK {
 
   addExplicitRelay(url: string) {
     this.explicitRelayUrls.push(url);
+  }
+
+  async fetchEvents() {
+    return new Set();
   }
 }
 

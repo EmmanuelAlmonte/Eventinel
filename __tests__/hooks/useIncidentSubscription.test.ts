@@ -76,6 +76,7 @@ jest.mock('@lib/nostr/events/incident', () => ({
 
 // Import the hook after mocks
 import { useIncidentSubscription } from '../../hooks/useIncidentSubscription';
+import type { UseIncidentSubscriptionOptions } from '../../hooks/useIncidentSubscription';
 
 // =============================================================================
 // HELPERS
@@ -616,16 +617,15 @@ describe('useIncidentSubscription', () => {
     it('sets isInitialLoading to false after EOSE', async () => {
       mockSubscription.setEose(false);
 
-      const { result, rerender } = renderHook(() =>
-        useIncidentSubscription({
-          location: [-75.1652, 39.9526],
-        })
+      const { result, rerender } = renderHook(
+        (props: UseIncidentSubscriptionOptions) => useIncidentSubscription(props),
+        { initialProps: { location: [-75.1652, 39.9526] } }
       );
 
       expect(result.current.isInitialLoading).toBe(true);
 
       mockSubscription.setEose(true);
-      rerender();
+      rerender({ location: [-75.1652, 39.9526] });
 
       await waitFor(() => {
         expect(result.current.isInitialLoading).toBe(false);
@@ -635,16 +635,15 @@ describe('useIncidentSubscription', () => {
     it('sets hasReceivedHistory to true after EOSE', async () => {
       mockSubscription.setEose(false);
 
-      const { result, rerender } = renderHook(() =>
-        useIncidentSubscription({
-          location: [-75.1652, 39.9526],
-        })
+      const { result, rerender } = renderHook(
+        (props: UseIncidentSubscriptionOptions) => useIncidentSubscription(props),
+        { initialProps: { location: [-75.1652, 39.9526] } }
       );
 
       expect(result.current.hasReceivedHistory).toBe(false);
 
       mockSubscription.setEose(true);
-      rerender();
+      rerender({ location: [-75.1652, 39.9526] });
 
       await waitFor(() => {
         expect(result.current.hasReceivedHistory).toBe(true);

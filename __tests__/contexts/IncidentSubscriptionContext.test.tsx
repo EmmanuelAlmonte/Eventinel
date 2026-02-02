@@ -47,6 +47,17 @@ jest.mock('../../hooks/useUserLocation', () => ({
   useUserLocation: (options: any) => mockUseUserLocation(options),
 }));
 
+// Mock relay status to keep subscriptions enabled in tests
+jest.mock('../../contexts/RelayStatusContext', () => ({
+  useRelayStatus: () => ({
+    hasConnectedRelay: true,
+    hasRelays: true,
+    isConnecting: false,
+    relays: [],
+    stats: { total: 1, connected: 1, connecting: 0, disconnected: 0 },
+  }),
+}));
+
 // =============================================================================
 // TEST UTILITIES
 // =============================================================================
@@ -60,6 +71,7 @@ function createMockIncident(
   overrides: Partial<ProcessedIncident> = {}
 ): ProcessedIncident {
   const createdAt = Math.floor(Date.now() / 1000);
+  const occurredAt = new Date(createdAt * 1000);
   return {
     incidentId: id,
     eventId: `event_${id}`,
@@ -70,16 +82,19 @@ function createMockIncident(
     severity,
     createdAt,
     createdAtMs: createdAt * 1000,
-    occurredAt: new Date(createdAt * 1000),
-    occurredAtMs: createdAt * 1000,
-    geohash: 'dr5r',
+    occurredAt,
+    occurredAtMs: occurredAt.getTime(),
     location: {
-      latitude: 40.7128,
-      longitude: -74.006,
+      lat: 40.7128,
+      lng: -74.006,
+      address: '123 Test St',
+      city: 'New York',
+      state: 'NY',
+      geohash: 'dr5r',
     },
-    address: '123 Test St',
     source: 'community',
-    raw: {} as any,
+    sourceId: `source_${id}`,
+    isVerified: false,
     ...overrides,
   };
 }

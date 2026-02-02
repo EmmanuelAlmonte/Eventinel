@@ -17,6 +17,7 @@ import { View } from 'react-native';
 
 // Import the component
 import MapScreen from '../../screens/MapScreen';
+import type { UseUserLocationResult } from '../../hooks/useUserLocation';
 
 // =============================================================================
 // MOCK SETUP
@@ -53,12 +54,16 @@ jest.mock('@hooks', () => ({
 
 // Mock shared location context
 const mockLocation: [number, number] = [-73.935242, 40.730610];
-const mockUseSharedLocation = jest.fn(() => ({
+const createLocationState = (overrides: Partial<UseUserLocationResult> = {}): UseUserLocationResult => ({
   location: mockLocation,
-  isLoading: false,
-  source: 'fresh',
   permission: 'granted',
-}));
+  source: 'fresh',
+  isLoading: false,
+  error: null,
+  refresh: jest.fn(),
+  ...overrides,
+});
+const mockUseSharedLocation = jest.fn<UseUserLocationResult, []>(() => createLocationState());
 
 // Mock shared incidents context
 const mockIncidents = [
@@ -90,9 +95,24 @@ const mockUseSharedIncidents = jest.fn(() => ({
   hasReceivedHistory: true,
 }));
 
+const mockUseRelayStatus = jest.fn(() => ({
+  hasConnectedRelay: true,
+  hasRelays: true,
+  isConnecting: false,
+  relays: [
+    {
+      url: 'wss://relay.eventinel.com',
+      status: 'connected',
+      rawStatus: 5,
+      isConnected: true,
+    },
+  ],
+}));
+
 jest.mock('@contexts', () => ({
   useSharedLocation: () => mockUseSharedLocation(),
   useSharedIncidents: () => mockUseSharedIncidents(),
+  useRelayStatus: () => mockUseRelayStatus(),
 }));
 
 // Mock IncidentMarker component
@@ -117,6 +137,29 @@ jest.mock('@components/ui', () => ({
     return (
       <View testID="map-skeleton">
         <Text>Loading map...</Text>
+      </View>
+    );
+  },
+  ScreenContainer: ({ children }: any) => {
+    const { View } = require('react-native');
+    return <View testID="screen-container">{children}</View>;
+  },
+  EmptyState: ({ title }: { title: string }) => {
+    const { View, Text } = require('react-native');
+    return (
+      <View testID="empty-state">
+        <Text>{title}</Text>
+      </View>
+    );
+  },
+  NoRelaysEmpty: ({ onAddRelay }: { onAddRelay?: () => void }) => {
+    const { View, Text, Pressable } = require('react-native');
+    return (
+      <View testID="no-relays-empty">
+        <Text>No Relays Connected</Text>
+        <Pressable onPress={onAddRelay}>
+          <Text>Add Relay</Text>
+        </Pressable>
       </View>
     );
   },
@@ -166,12 +209,7 @@ jest.mock('@rneui/themed', () => ({
 describe('MapScreen', () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    mockUseSharedLocation.mockReturnValue({
-      location: mockLocation,
-      isLoading: false,
-      source: 'fresh',
-      permission: 'granted',
-    });
+    mockUseSharedLocation.mockReturnValue(createLocationState());
     mockUseSharedIncidents.mockReturnValue({
       incidents: mockIncidents,
       isInitialLoading: false,
@@ -185,24 +223,18 @@ describe('MapScreen', () => {
 
   describe('Loading States', () => {
     it('shows MapSkeleton when location is loading', () => {
-      mockUseSharedLocation.mockReturnValue({
-        location: null,
-        isLoading: true,
-        source: null,
-        permission: 'undetermined',
-      });
+      mockUseSharedLocation.mockReturnValue(
+        createLocationState({ location: null, isLoading: true, source: 'none', permission: 'undetermined' })
+      );
 
       const { getByTestId } = render(<MapScreen />);
       expect(getByTestId('map-skeleton')).toBeTruthy();
     });
 
     it('shows loading text while location is being fetched', () => {
-      mockUseSharedLocation.mockReturnValue({
-        location: null,
-        isLoading: true,
-        source: null,
-        permission: 'undetermined',
-      });
+      mockUseSharedLocation.mockReturnValue(
+        createLocationState({ location: null, isLoading: true, source: 'none', permission: 'undetermined' })
+      );
 
       const { getByText } = render(<MapScreen />);
       expect(getByText('Loading map...')).toBeTruthy();
@@ -277,12 +309,9 @@ describe('MapScreen', () => {
     });
 
     it('does not render fly to button when location is null', () => {
-      mockUseSharedLocation.mockReturnValue({
-        location: null,
-        isLoading: false,
-        source: 'default',
-        permission: 'denied',
-      });
+      mockUseSharedLocation.mockReturnValue(
+        createLocationState({ location: null, isLoading: false, source: 'none', permission: 'denied' })
+      );
 
       const { queryByLabelText } = render(<MapScreen />);
       expect(queryByLabelText('Fly to my location')).toBeNull();
@@ -339,12 +368,9 @@ describe('MapScreen', () => {
 
   describe('User Location Marker', () => {
     it('does not render user marker when location is null', () => {
-      mockUseSharedLocation.mockReturnValue({
-        location: null,
-        isLoading: false,
-        source: 'default',
-        permission: 'denied',
-      });
+      mockUseSharedLocation.mockReturnValue(
+        createLocationState({ location: null, isLoading: false, source: 'none', permission: 'denied' })
+      );
 
       // The user marker component won't be rendered
       const { UNSAFE_root } = render(<MapScreen />);
@@ -366,12 +392,9 @@ describe('MapScreen', () => {
     });
 
     it('renders fresh location indicator style', () => {
-      mockUseSharedLocation.mockReturnValue({
-        location: mockLocation,
-        isLoading: false,
-        source: 'fresh',
-        permission: 'granted',
-      });
+      mockUseSharedLocation.mockReturnValue(
+        createLocationState({ source: 'fresh', permission: 'granted' })
+      );
 
       const { getByText } = render(<MapScreen />);
       // In DEV mode, the location source text should be visible
@@ -379,24 +402,18 @@ describe('MapScreen', () => {
     });
 
     it('renders cached location indicator', () => {
-      mockUseSharedLocation.mockReturnValue({
-        location: mockLocation,
-        isLoading: false,
-        source: 'cached',
-        permission: 'granted',
-      });
+      mockUseSharedLocation.mockReturnValue(
+        createLocationState({ source: 'cached', permission: 'granted' })
+      );
 
       const { getByText } = render(<MapScreen />);
       expect(getByText(/CACHED/)).toBeTruthy();
     });
 
     it('renders default location indicator', () => {
-      mockUseSharedLocation.mockReturnValue({
-        location: mockLocation,
-        isLoading: false,
-        source: 'default',
-        permission: 'denied',
-      });
+      mockUseSharedLocation.mockReturnValue(
+        createLocationState({ source: 'default', permission: 'denied' })
+      );
 
       const { getByText } = render(<MapScreen />);
       expect(getByText(/DEFAULT/)).toBeTruthy();
@@ -448,24 +465,18 @@ describe('MapScreen', () => {
 
   describe('Permission Handling', () => {
     it('handles denied permission gracefully', () => {
-      mockUseSharedLocation.mockReturnValue({
-        location: mockLocation, // Default location may still be provided
-        isLoading: false,
-        source: 'default',
-        permission: 'denied',
-      });
+      mockUseSharedLocation.mockReturnValue(
+        createLocationState({ location: mockLocation, source: 'default', permission: 'denied' })
+      );
 
       const { UNSAFE_root } = render(<MapScreen />);
       expect(UNSAFE_root).toBeTruthy();
     });
 
     it('handles undetermined permission state', () => {
-      mockUseSharedLocation.mockReturnValue({
-        location: null,
-        isLoading: true,
-        source: null,
-        permission: 'undetermined',
-      });
+      mockUseSharedLocation.mockReturnValue(
+        createLocationState({ location: null, isLoading: true, source: 'none', permission: 'undetermined' })
+      );
 
       const { getByTestId } = render(<MapScreen />);
       expect(getByTestId('map-skeleton')).toBeTruthy();

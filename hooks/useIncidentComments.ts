@@ -288,7 +288,9 @@ export function useIncidentComments(
 
   useEffect(() => {
     if (commentEventIds.length === 0) {
-      setDeletedRelaysById({});
+      setDeletedRelaysById((prev) =>
+        Object.keys(prev).length === 0 ? prev : {}
+      );
       return;
     }
 
@@ -344,6 +346,7 @@ export function useIncidentComments(
     const missing = authors.filter((pubkey) => !fetchedProfilesRef.current.has(pubkey));
 
     if (missing.length === 0) return;
+    if (!ndk?.fetchEvents) return;
 
     missing.forEach((pubkey) => fetchedProfilesRef.current.add(pubkey));
 

@@ -18,14 +18,28 @@ import { useNavigation } from '@react-navigation/native';
 
 import { useAppTheme } from '@hooks';
 import type { ProcessedIncident } from '@hooks';
-import { useSharedLocation, useSharedIncidents } from '@contexts';
-import { ScreenContainer, SkeletonList } from '@components/ui';
+import { useRelayStatus, useSharedLocation, useSharedIncidents } from '@contexts';
+import { EmptyState, NoRelaysEmpty, ScreenContainer, SkeletonList } from '@components/ui';
 import { SEVERITY_COLORS, TYPE_CONFIG } from '@lib/nostr/config';
 import { formatRelativeTimeMs } from '@lib/utils/time';
+
+const MAX_RELAY_LABELS = 2;
+
+function formatRelayList(relayUrls: string[]): string {
+  if (!relayUrls || relayUrls.length === 0) return 'relays';
+  const cleaned = relayUrls
+    .map((relay) => relay.replace(/^wss?:\/\//, ''))
+    .filter((relay) => relay.length > 0);
+  if (cleaned.length <= MAX_RELAY_LABELS) {
+    return cleaned.join(', ');
+  }
+  return `${cleaned.slice(0, MAX_RELAY_LABELS).join(', ')} +${cleaned.length - MAX_RELAY_LABELS} more`;
+}
 
 export default function IncidentFeedScreen() {
   const navigation = useNavigation<any>();
   const { colors } = useAppTheme();
+  const { hasConnectedRelay, hasRelays, isConnecting, relays } = useRelayStatus();
 
   // Get shared user location (fetched once in LocationProvider)
   const { location: userLocation, isLoading: isLoadingLocation } = useSharedLocation();
@@ -40,6 +54,38 @@ export default function IncidentFeedScreen() {
   const handleIncidentPress = useCallback((incident: ProcessedIncident) => {
     navigation.navigate('IncidentDetail', { incidentId: incident.incidentId });
   }, [navigation]);
+
+  const handleRelaySettings = useCallback(() => {
+    navigation.navigate('Relays');
+  }, [navigation]);
+
+  const relayLabel = formatRelayList(relays.map((relay) => relay.url));
+
+  if (!hasConnectedRelay) {
+    if (!hasRelays) {
+      return (
+        <ScreenContainer>
+          <NoRelaysEmpty onAddRelay={handleRelaySettings} />
+        </ScreenContainer>
+      );
+    }
+
+    return (
+      <ScreenContainer>
+        <EmptyState
+          icon={isConnecting ? 'wifi' : 'wifi-off'}
+          title={isConnecting ? 'Connecting to relays' : 'Relays disconnected'}
+          description={
+            isConnecting
+              ? `Waiting for ${relayLabel} to connect.`
+              : `Unable to reach ${relayLabel}. Check your connection or relay settings.`
+          }
+          action="Relay Settings"
+          onAction={handleRelaySettings}
+        />
+      </ScreenContainer>
+    );
+  }
 
   // Render incident item
   const renderIncidentItem = useCallback(({ item }: { item: ProcessedIncident }) => {

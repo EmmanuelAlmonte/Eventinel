@@ -346,20 +346,26 @@ describe('useAppTheme', () => {
 
   describe('Stability', () => {
     it('returns stable references for colors object structure', () => {
-      const { result, rerender } = renderHook(() => useAppTheme());
+      const { result, rerender } = renderHook<ReturnType<typeof useAppTheme>, void>(
+        () => useAppTheme(),
+        { initialProps: undefined }
+      );
 
       const colorKeys = Object.keys(result.current.colors);
-      rerender();
+      rerender(undefined);
       const colorKeysAfterRerender = Object.keys(result.current.colors);
 
       expect(colorKeys).toEqual(colorKeysAfterRerender);
     });
 
     it('returns same theme shape across rerenders', () => {
-      const { result, rerender } = renderHook(() => useAppTheme());
+      const { result, rerender } = renderHook<ReturnType<typeof useAppTheme>, void>(
+        () => useAppTheme(),
+        { initialProps: undefined }
+      );
 
       const keys = Object.keys(result.current);
-      rerender();
+      rerender(undefined);
       const keysAfterRerender = Object.keys(result.current);
 
       expect(keys).toEqual(keysAfterRerender);

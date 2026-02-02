@@ -25,6 +25,7 @@ import {
 
 // Import the hook
 import { useUserLocation } from '../../hooks/useUserLocation';
+import type { UseUserLocationOptions } from '../../hooks/useUserLocation';
 
 // =============================================================================
 // TEST SETUP
@@ -580,11 +581,14 @@ describe('useUserLocation', () => {
     it('handles rapid permission status changes', async () => {
       mockLocation.setPermissionStatus('undetermined');
 
-      const { result, rerender } = renderHook(() => useUserLocation());
+      const { result, rerender } = renderHook(
+        (props: UseUserLocationOptions | undefined) => useUserLocation(props),
+        { initialProps: undefined }
+      );
 
       mockLocation.setPermissionStatus('granted');
       mockLocation.setCurrentPosition(40.7128, -74.006);
-      rerender();
+      rerender(undefined);
 
       await waitFor(() => {
         expect(result.current.permission).toBe('granted');

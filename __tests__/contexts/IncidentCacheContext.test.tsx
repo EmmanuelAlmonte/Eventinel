@@ -35,6 +35,7 @@ function createMockIncident(
   createdAt: number = Date.now() / 1000,
   overrides: Partial<ProcessedIncident> = {}
 ): ProcessedIncident {
+  const occurredAt = new Date(createdAt * 1000);
   return {
     incidentId: id,
     eventId: `event_${id}`,
@@ -45,16 +46,19 @@ function createMockIncident(
     severity: 3,
     createdAt,
     createdAtMs: createdAt * 1000,
-    occurredAt: new Date(createdAt * 1000),
-    occurredAtMs: createdAt * 1000,
-    geohash: 'dr5r',
+    occurredAt,
+    occurredAtMs: occurredAt.getTime(),
     location: {
-      latitude: 40.7128,
-      longitude: -74.006,
+      lat: 40.7128,
+      lng: -74.006,
+      address: '123 Test St',
+      city: 'New York',
+      state: 'NY',
+      geohash: 'dr5r',
     },
-    address: '123 Test St',
     source: 'community',
-    raw: {} as any,
+    sourceId: `source_${id}`,
+    isVerified: false,
     ...overrides,
   };
 }

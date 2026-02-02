@@ -12,11 +12,37 @@ const RELAY_STORAGE_KEY = 'eventinel:saved-relays';
 
 /**
  * Default relays to use if no saved relays exist.
- * These are reliable, well-maintained relays.
+ * Prefer EXPO_PUBLIC_NOSTR_RELAYS (comma-separated) when provided.
  */
-export const DEFAULT_RELAYS = [
-  'ws://10.0.2.2:8085/'
-];
+export const DEFAULT_RELAYS = (() => {
+  const envRelays =
+    process.env.EXPO_PUBLIC_NOSTR_RELAYS ??
+    process.env.NEXT_PUBLIC_NOSTR_RELAYS;
+
+  const parsed = parseRelayList(envRelays);
+  if (parsed.length > 0) {
+    return parsed;
+  }
+
+  return ['wss://relay.eventinel.com'];
+})();
+
+/**
+ * Local relay(s) used for dev toggle.
+ * Override via EXPO_PUBLIC_LOCAL_RELAYS (comma-separated) if needed.
+ */
+export const LOCAL_RELAYS = (() => {
+  const envRelays =
+    process.env.EXPO_PUBLIC_LOCAL_RELAYS ??
+    process.env.EXPO_PUBLIC_LOCAL_RELAY;
+
+  const parsed = parseRelayList(envRelays);
+  if (parsed.length > 0) {
+    return parsed;
+  }
+
+  return ['ws://10.0.2.2:8085'];
+})();
 
 /**
  * Save relay URLs to persistent storage.
@@ -122,4 +148,16 @@ export async function clearRelayStorage(): Promise<void> {
  */
 function normalizeUrl(url: string): string {
   return url.trim().toLowerCase().replace(/\/$/, '');
+}
+
+function parseRelayList(raw?: string | null): string[] {
+  if (!raw) return [];
+
+  const relays = raw
+    .split(',')
+    .map((relay) => relay.trim())
+    .filter((relay) => relay.length > 0)
+    .map(normalizeUrl);
+
+  return [...new Set(relays)];
 }

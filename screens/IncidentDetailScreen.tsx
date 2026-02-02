@@ -7,7 +7,6 @@
  * Design patterns adapted from incident-tracker mockup:
  * - Glass card effects with semi-transparent backgrounds
  * - Gradient icon containers with shadows
- * - Pulse animations for live indicators
  * - Fixed bottom action bar
  */
 
@@ -20,7 +19,6 @@ import {
   Alert,
   Linking,
   Platform,
-  Animated,
   Share,
   TextInput,
   KeyboardAvoidingView,
@@ -93,9 +91,6 @@ export default function IncidentDetailScreen() {
     }
   }, [incidentId, incident, version]);
 
-  // Animation for live indicator pulse
-  const pulseAnim = useRef(new Animated.Value(1)).current;
-
   // Comment composer state
   const [commentText, setCommentText] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -114,26 +109,6 @@ export default function IncidentDetailScreen() {
   const [deletingCommentId, setDeletingCommentId] = useState<string | null>(null);
   const lastDeletionNoticeRef = useRef<string | null>(null);
   const hasMountedRef = useRef(false);
-
-  // Start pulse animation
-  useEffect(() => {
-    const pulse = Animated.loop(
-      Animated.sequence([
-        Animated.timing(pulseAnim, {
-          toValue: 1.3,
-          duration: 1000,
-          useNativeDriver: true,
-        }),
-        Animated.timing(pulseAnim, {
-          toValue: 1,
-          duration: 1000,
-          useNativeDriver: true,
-        }),
-      ])
-    );
-    pulse.start();
-    return () => pulse.stop();
-  }, [pulseAnim]);
 
   // Handle share
   const handleShare = useCallback(async () => {
@@ -274,12 +249,7 @@ export default function IncidentDetailScreen() {
         <View style={styles.headerRight}>
           {/* Live indicator */}
           <View style={styles.liveIndicator}>
-            <Animated.View
-              style={[
-                styles.liveDot,
-                { transform: [{ scale: pulseAnim }] },
-              ]}
-            />
+            <View style={styles.liveDot} />
             <Text style={[styles.liveText, { color: colors.textMuted }]}>LIVE</Text>
           </View>
 

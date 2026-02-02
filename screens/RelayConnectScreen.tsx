@@ -5,13 +5,12 @@
  * Uses RNE components with BRAND theme support.
  */
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { StyleSheet, View, Alert, Pressable } from 'react-native';
-import { Text, Button, Input, Card, Icon } from '@rneui/themed';
+import { Text, Button, Input, Card, Icon, Switch } from '@rneui/themed';
 import { ndk } from '../lib/ndk';
-import { NDKRelayStatus } from '@nostr-dev-kit/mobile';
 import { isConnected, getStatusString } from '../lib/relay/status';
-import { addRelayToStorage, removeRelayFromStorage } from '../lib/relay/storage';
+import { addRelayToStorage, removeRelayFromStorage, saveRelays, DEFAULT_RELAYS, LOCAL_RELAYS } from '../lib/relay/storage';
 import type { RelayInfo } from '../types/relay';
 
 import { ScreenContainer } from '@components/ui';
@@ -32,10 +31,16 @@ function getStatusColor(status: string, colors: ReturnType<typeof useAppTheme>['
   }
 }
 
+function normalizeUrl(url: string): string {
+  return url.trim().toLowerCase().replace(/\/$/, '');
+}
+
 export default function RelayConnectScreen() {
   const [relayUrl, setRelayUrl] = useState('');
   const [relays, setRelays] = useState<RelayInfo[]>([]);
   const [message, setMessage] = useState('');
+  const [useLocalRelay, setUseLocalRelay] = useState(false);
+  const [isSwitchingRelay, setIsSwitchingRelay] = useState(false);
 
   // Get theme-aware colors
   const { colors } = useAppTheme();
@@ -50,6 +55,20 @@ export default function RelayConnectScreen() {
       isConnected: isConnected(relay.status),
     }));
     setRelays(relayInfos);
+  };
+
+  const normalizedLocalRelays = useMemo(
+    () => LOCAL_RELAYS.map((relay) => normalizeUrl(relay)),
+    []
+  );
+
+  const formatRelayList = (relayUrls: string[]) => {
+    if (relayUrls.length === 0) return 'relays';
+    const cleaned = relayUrls.map((relay) => relay.replace(/^wss?:\/\//, ''));
+    if (cleaned.length <= 2) {
+      return cleaned.join(', ');
+    }
+    return `${cleaned.slice(0, 2).join(', ')} +${cleaned.length - 2} more`;
   };
 
   useEffect(() => {
@@ -72,19 +91,89 @@ export default function RelayConnectScreen() {
     };
   }, []);
 
+  useEffect(() => {
+    if (!__DEV__) return;
+    if (relays.length === 0) {
+      setUseLocalRelay(false);
+      return;
+    }
+
+    const relayUrls = relays.map((relay) => normalizeUrl(relay.url));
+    const isLocal =
+      relayUrls.length === normalizedLocalRelays.length &&
+      normalizedLocalRelays.every((relay) => relayUrls.includes(relay));
+    setUseLocalRelay(isLocal);
+  }, [relays, normalizedLocalRelays]);
+
+  const applyRelayList = async (relayUrls: string[], statusMessage: string) => {
+    const normalized = [...new Set(relayUrls.map((relay) => normalizeUrl(relay)))];
+    if (normalized.length === 0) {
+      setMessage('Relay list is empty');
+      return;
+    }
+
+    const poolRelays = Array.from(ndk.pool.relays.values());
+    const poolNormalized = new Set(poolRelays.map((relay) => normalizeUrl(relay.url)));
+
+    // Remove relays that are no longer desired
+    for (const relay of poolRelays) {
+      if (!normalized.includes(normalizeUrl(relay.url))) {
+        ndk.pool.removeRelay(relay.url);
+      }
+    }
+
+    // Add missing relays
+    for (const url of normalized) {
+      if (!poolNormalized.has(url)) {
+        ndk.addExplicitRelay(url);
+      }
+    }
+
+    await saveRelays(normalized);
+    ndk.connect().catch((err) => console.warn('⚠️ [Relay] Relay connection warning:', err));
+    updateRelays();
+    setMessage(statusMessage);
+  };
+
+  const handleToggleLocalRelay = async (nextValue: boolean) => {
+    if (isSwitchingRelay) return;
+    setIsSwitchingRelay(true);
+    try {
+      if (nextValue) {
+        await applyRelayList(
+          LOCAL_RELAYS,
+          `Using local relay: ${formatRelayList(LOCAL_RELAYS)}`
+        );
+      } else {
+        await applyRelayList(
+          DEFAULT_RELAYS,
+          `Using default relay: ${formatRelayList(DEFAULT_RELAYS)}`
+        );
+      }
+      setUseLocalRelay(nextValue);
+    } catch (error) {
+      console.error('[Relay] Failed to switch relay mode:', error);
+      setMessage(`Failed to switch relays: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    } finally {
+      setIsSwitchingRelay(false);
+    }
+  };
+
   const handleConnect = async () => {
-    if (!relayUrl.trim()) {
+    const trimmed = relayUrl.trim();
+
+    if (!trimmed) {
       setMessage('Please enter a relay URL');
       return;
     }
 
     // Validate URL format
-    if (!relayUrl.startsWith('wss://') && !relayUrl.startsWith('ws://')) {
+    if (!trimmed.startsWith('wss://') && !trimmed.startsWith('ws://')) {
       setMessage('Relay URL must start with wss:// or ws://');
       return;
     }
 
-    const url = relayUrl.trim();
+    const url = trimmed;
     console.log('[Relay] User adding relay:', url);
     setMessage(`Connecting to ${url}...`);
 
@@ -165,7 +254,11 @@ export default function RelayConnectScreen() {
   const connectedCount = relays.filter(r => r.isConnected).length;
 
   // Determine message styling
-  const isError = message.includes('Failed') || message.includes('must start');
+  const isError =
+    message.includes('Failed') ||
+    message.includes('must start') ||
+    message.includes('Please enter') ||
+    message.includes('Relay list is empty');
   const messageColor = isError ? colors.error : colors.success;
 
   // DEV-only: Log relay info and check for duplicates
@@ -236,6 +329,39 @@ export default function RelayConnectScreen() {
           }
         />
       </Card>
+
+      {/* Dev-only local relay toggle */}
+      {__DEV__ ? (
+        <Card containerStyle={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+          <View style={styles.cardHeader}>
+            <Icon
+              name="build"
+              type="material"
+              size={20}
+              color={colors.primary}
+            />
+            <Text style={[styles.cardTitle, { color: colors.text }]}>Dev Relay</Text>
+          </View>
+
+          <View style={styles.toggleRow}>
+            <View style={styles.toggleText}>
+              <Text style={[styles.toggleLabel, { color: colors.text }]}>Use local relay</Text>
+              <Text style={[styles.toggleDescription, { color: colors.textMuted }]}>
+                Switches saved relays to {formatRelayList(LOCAL_RELAYS)}.
+              </Text>
+            </View>
+            <Switch
+              value={useLocalRelay}
+              onValueChange={handleToggleLocalRelay}
+              disabled={isSwitchingRelay}
+            />
+          </View>
+
+          <Text style={[styles.toggleNote, { color: colors.textMuted }]}>
+            Turning this off restores the default relay list.
+          </Text>
+        </Card>
+      ) : null}
 
       {/* Status Message */}
       {message ? (
@@ -473,5 +599,27 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 13,
     lineHeight: 18,
+  },
+  toggleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 12,
+  },
+  toggleText: {
+    flex: 1,
+  },
+  toggleLabel: {
+    fontSize: 15,
+    fontWeight: '600',
+    marginBottom: 4,
+  },
+  toggleDescription: {
+    fontSize: 13,
+    lineHeight: 18,
+  },
+  toggleNote: {
+    marginTop: 10,
+    fontSize: 12,
   },
 });
