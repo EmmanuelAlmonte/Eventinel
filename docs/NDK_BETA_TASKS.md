@@ -1,7 +1,7 @@
 # NDK Beta Adoption Task List
 
 - Verify no runtime aliasing remains
-- Confirm `@nostr-dev-kit/ndk-mobile` is absent from code, tsconfig, Metro; keep docs note in `docs/NDK_PACKAGE_ALIAS.md` only.
+- Confirm `@nostr-dev-kit/ndk-mobile` is absent from code, tsconfig, Metro.
 
 - Enable AI Guardrails in dev
 - Add `aiGuardrails: __DEV__` (or config) to `lib/ndk.ts` NDK init.

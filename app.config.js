@@ -1,6 +1,28 @@
-// Read environment variables from .env.local
+// Read environment variables from .env.local (dev) or .env (production)
+const fs = require('fs');
 const path = require('path');
-require('dotenv').config({ path: path.join(__dirname, '.env.local') });
+
+function resolveEnvPath() {
+  if (process.env.DOTENV_PATH) {
+    return process.env.DOTENV_PATH;
+  }
+
+  const isProd = process.env.NODE_ENV === 'production';
+  const candidates = isProd
+    ? ['.env', '.env.local']
+    : ['.env.local', '.env'];
+
+  for (const filename of candidates) {
+    const fullPath = path.join(__dirname, filename);
+    if (fs.existsSync(fullPath)) {
+      return fullPath;
+    }
+  }
+
+  return path.join(__dirname, isProd ? '.env' : '.env.local');
+}
+
+require('dotenv').config({ path: resolveEnvPath() });
 
 // Debug: Verify token is loaded
 const mapboxToken = process.env.MAPBOX_ACCESS_TOKEN;
