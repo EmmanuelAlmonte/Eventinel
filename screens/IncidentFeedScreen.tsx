@@ -5,14 +5,13 @@
  * Uses extracted hooks for location and subscription logic.
  */
 
-import { useCallback } from 'react';
+import { memo, useCallback } from 'react';
 import {
   View,
-  FlatList,
   StyleSheet,
-  RefreshControl,
   Pressable,
 } from 'react-native';
+import { FlashList } from '@shopify/flash-list';
 import { Text, Card, Icon, Badge } from '@rneui/themed';
 import { useNavigation } from '@react-navigation/native';
 
@@ -24,6 +23,13 @@ import { SEVERITY_COLORS, TYPE_CONFIG } from '@lib/nostr/config';
 import { formatRelativeTimeMs } from '@lib/utils/time';
 
 const MAX_RELAY_LABELS = 2;
+const ESTIMATED_ITEM_SIZE = 140;
+
+type IncidentRowProps = {
+  incident: ProcessedIncident;
+  colors: ReturnType<typeof useAppTheme>['colors'];
+  onPress: (incidentId: string) => void;
+};
 
 function formatRelayList(relayUrls: string[]): string {
   if (!relayUrls || relayUrls.length === 0) return 'relays';
@@ -35,6 +41,80 @@ function formatRelayList(relayUrls: string[]): string {
   }
   return `${cleaned.slice(0, MAX_RELAY_LABELS).join(', ')} +${cleaned.length - MAX_RELAY_LABELS} more`;
 }
+
+const IncidentRow = memo(({ incident, colors, onPress }: IncidentRowProps) => {
+  const severityColor = SEVERITY_COLORS[incident.severity] || SEVERITY_COLORS[1];
+  const typeConfig = TYPE_CONFIG[incident.type] || TYPE_CONFIG.other;
+
+  return (
+    <Pressable onPress={() => onPress(incident.incidentId)}>
+      <Card
+        containerStyle={[
+          styles.incidentCard,
+          {
+            backgroundColor: colors.surface,
+            borderColor: colors.border,
+            borderLeftColor: severityColor,
+            borderLeftWidth: 4,
+          },
+        ]}
+      >
+        <View style={styles.cardRow}>
+          {/* Icon */}
+          <View style={[styles.iconContainer, { backgroundColor: `${typeConfig.color}20` }]}>
+            <Icon
+              name={typeConfig.icon}
+              type="material"
+              size={24}
+              color={typeConfig.color}
+            />
+          </View>
+
+          {/* Content */}
+          <View style={styles.cardContent}>
+            <View style={styles.cardHeader}>
+              <Text style={[styles.incidentTitle, { color: colors.text }]} numberOfLines={1}>
+                {incident.title}
+              </Text>
+              <Badge
+                value={`Sev ${incident.severity}`}
+                badgeStyle={{ backgroundColor: severityColor }}
+                textStyle={styles.badgeText}
+              />
+            </View>
+
+            <Text style={[styles.incidentDescription, { color: colors.textMuted }]} numberOfLines={2}>
+              {incident.description}
+            </Text>
+
+            <View style={styles.metaRow}>
+              <View style={styles.metaItem}>
+                <Icon name="schedule" type="material" size={14} color={colors.textMuted} />
+                <Text style={[styles.metaText, { color: colors.textMuted }]}>
+                  {formatRelativeTimeMs(incident.occurredAtMs)}
+                </Text>
+              </View>
+              <View style={styles.metaItem}>
+                <Icon name="location-on" type="material" size={14} color={colors.textMuted} />
+                <Text style={[styles.metaText, { color: colors.textMuted }]} numberOfLines={1}>
+                  {incident.location.address}
+                </Text>
+              </View>
+            </View>
+          </View>
+
+          {/* Chevron */}
+          <Icon
+            name="chevron-right"
+            type="material"
+            size={24}
+            color={colors.textMuted}
+          />
+        </View>
+      </Card>
+    </Pressable>
+  );
+});
 
 export default function IncidentFeedScreen() {
   const navigation = useNavigation<any>();
@@ -51,8 +131,8 @@ export default function IncidentFeedScreen() {
   } = useSharedIncidents();
 
   // Handle incident press - navigate with incidentId only (no serialization warning)
-  const handleIncidentPress = useCallback((incident: ProcessedIncident) => {
-    navigation.navigate('IncidentDetail', { incidentId: incident.incidentId });
+  const handleIncidentPress = useCallback((incidentId: string) => {
+    navigation.navigate('IncidentDetail', { incidentId });
   }, [navigation]);
 
   const handleRelaySettings = useCallback(() => {
@@ -87,80 +167,12 @@ export default function IncidentFeedScreen() {
     );
   }
 
-  // Render incident item
-  const renderIncidentItem = useCallback(({ item }: { item: ProcessedIncident }) => {
-    const severityColor = SEVERITY_COLORS[item.severity] || SEVERITY_COLORS[1];
-    const typeConfig = TYPE_CONFIG[item.type] || TYPE_CONFIG.other;
-
-    return (
-      <Pressable onPress={() => handleIncidentPress(item)}>
-        <Card
-          containerStyle={[
-            styles.incidentCard,
-            {
-              backgroundColor: colors.surface,
-              borderColor: colors.border,
-              borderLeftColor: severityColor,
-              borderLeftWidth: 4,
-            },
-          ]}
-        >
-          <View style={styles.cardRow}>
-            {/* Icon */}
-            <View style={[styles.iconContainer, { backgroundColor: `${typeConfig.color}20` }]}>
-              <Icon
-                name={typeConfig.icon}
-                type="material"
-                size={24}
-                color={typeConfig.color}
-              />
-            </View>
-
-            {/* Content */}
-            <View style={styles.cardContent}>
-              <View style={styles.cardHeader}>
-                <Text style={[styles.incidentTitle, { color: colors.text }]} numberOfLines={1}>
-                  {item.title}
-                </Text>
-                <Badge
-                  value={`Sev ${item.severity}`}
-                  badgeStyle={{ backgroundColor: severityColor }}
-                  textStyle={styles.badgeText}
-                />
-              </View>
-
-              <Text style={[styles.incidentDescription, { color: colors.textMuted }]} numberOfLines={2}>
-                {item.description}
-              </Text>
-
-              <View style={styles.metaRow}>
-                <View style={styles.metaItem}>
-                  <Icon name="schedule" type="material" size={14} color={colors.textMuted} />
-                  <Text style={[styles.metaText, { color: colors.textMuted }]}>
-                    {formatRelativeTimeMs(item.occurredAtMs)}
-                  </Text>
-                </View>
-                <View style={styles.metaItem}>
-                  <Icon name="location-on" type="material" size={14} color={colors.textMuted} />
-                  <Text style={[styles.metaText, { color: colors.textMuted }]} numberOfLines={1}>
-                    {item.location.address}
-                  </Text>
-                </View>
-              </View>
-            </View>
-
-            {/* Chevron */}
-            <Icon
-              name="chevron-right"
-              type="material"
-              size={24}
-              color={colors.textMuted}
-            />
-          </View>
-        </Card>
-      </Pressable>
-    );
-  }, [colors, handleIncidentPress]);
+  const renderIncidentItem = useCallback(
+    ({ item }: { item: ProcessedIncident }) => (
+      <IncidentRow incident={item} colors={colors} onPress={handleIncidentPress} />
+    ),
+    [colors, handleIncidentPress]
+  );
 
   // Loading state - show animated skeleton cards
   if (isLoadingLocation) {
@@ -188,20 +200,15 @@ export default function IncidentFeedScreen() {
       </View>
 
       {/* Incident List */}
-      <FlatList
+      <FlashList
         data={incidents}
         keyExtractor={(item) => item.incidentId}
         renderItem={renderIncidentItem}
         contentContainerStyle={styles.listContent}
         showsVerticalScrollIndicator={false}
-        refreshControl={
-          <RefreshControl
-            refreshing={false}
-            onRefresh={() => {}}
-            tintColor={colors.primary}
-            colors={[colors.primary]}
-          />
-        }
+        estimatedItemSize={ESTIMATED_ITEM_SIZE}
+        refreshing={false}
+        onRefresh={() => {}}
         ListEmptyComponent={
           hasReceivedHistory ? (
             <View style={styles.emptyState}>
