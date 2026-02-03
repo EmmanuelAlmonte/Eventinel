@@ -27,7 +27,7 @@
     "@rneui/base": "5.0.0",
     "@rneui/themed": "5.0.0",
     "@rnmapbox/maps": "^10.2.10",
-    "@shopify/flash-list": "^1.6.4",
+    "@shopify/flash-list": "^1.8.3",
     "expo": "53.0.9",
     "expo-asset": "~11.1.7",
     "expo-blur": "~14.1.5",

@@ -13,6 +13,12 @@
 - `npx tsc --noEmit` – TypeScript type-check.
 - `npm test`, `npm run test:watch`, `npm run test:coverage`, `npm run test:auth` – Jest (jest-expo) suites; `test:auth` scopes to auth flows.
 
+## Patch-package Notes
+- Prefer generating patches via `npx patch-package <pkg>` rather than hand-editing.
+- If a patch fails to parse, check hunk headers (`@@ -a,b +c,d @@`) match the exact number of context/deletion/insertion lines.
+- Quick sanity check:
+  - `node -e "const fs=require('fs');const {parsePatchFile}=require('patch-package/dist/patch/parse');parsePatchFile(fs.readFileSync('patches/<file>.patch','utf8'));console.log('ok')"`
+
 ## Coding Style & Naming Conventions
 - TypeScript with strict mode; prefer functional components + hooks. Use 2-space indentation consistent with existing files.
 - Respect path aliases (`@components`, `@hooks`, `@lib`, etc.) defined in `tsconfig.json`/`babel.config.js`.
