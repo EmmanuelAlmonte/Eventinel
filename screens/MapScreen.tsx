@@ -313,26 +313,6 @@ export default function MapScreen() {
       }
     : null;
 
-  // Loading state - show animated skeleton
-  if (isLoadingLocation) {
-    return <MapSkeleton />;
-  }
-
-  if (!userLocation) {
-    return (
-      <ScreenContainer>
-        <LocationRequiredEmpty
-          permission={permission}
-          onRetry={() => void refreshLocation()}
-        />
-      </ScreenContainer>
-    );
-  }
-
-  // Determine effective camera center (fallback to default if not set)
-  const effectiveCameraCenter = cameraCenter || userLocation || DEFAULT_CAMERA.centerCoordinate;
-  const cameraCenterCoordinate = followUser ? effectiveCameraCenter : undefined;
-
   const handleShapeSourcePress = useCallback((event: ShapeSourcePressEvent) => {
     const feature = event?.features?.[0];
     if (!feature || !feature.properties) {
@@ -375,6 +355,26 @@ export default function MapScreen() {
       handleIncidentPress(incidentId);
     }
   }, [clearAutoResumeTimer, handleIncidentPress, scheduleAutoResume]);
+
+  // Loading state - show animated skeleton
+  if (isLoadingLocation) {
+    return <MapSkeleton />;
+  }
+
+  if (!userLocation) {
+    return (
+      <ScreenContainer>
+        <LocationRequiredEmpty
+          permission={permission}
+          onRetry={() => void refreshLocation()}
+        />
+      </ScreenContainer>
+    );
+  }
+
+  // Determine effective camera center (fallback to default if not set)
+  const effectiveCameraCenter = cameraCenter || userLocation || DEFAULT_CAMERA.centerCoordinate;
+  const cameraCenterCoordinate = followUser ? effectiveCameraCenter : undefined;
 
   return (
     <View style={styles.container}>
