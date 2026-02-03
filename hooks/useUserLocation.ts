@@ -20,10 +20,13 @@ export interface UseUserLocationOptions {
   accuracy?: Location.Accuracy;
   /** Timeout for location fetch in ms (default: 10000 in dev, 5000 in prod) */
   timeout?: number;
+  /** Max age for last known location in ms (default: 24h) */
+  lastKnownMaxAgeMs?: number;
 }
 
 // Longer timeout in development (emulators are slow)
 const DEFAULT_TIMEOUT = __DEV__ ? 10000 : 5000;
+const DEFAULT_LAST_KNOWN_MAX_AGE_MS = 24 * 60 * 60 * 1000;
 
 export interface UseUserLocationResult {
   /** [longitude, latitude] or null */
@@ -54,6 +57,7 @@ export function useUserLocation(options: UseUserLocationOptions = {}): UseUserLo
     defaultLocation,
     accuracy = Location.Accuracy.Balanced,
     timeout = DEFAULT_TIMEOUT,
+    lastKnownMaxAgeMs = DEFAULT_LAST_KNOWN_MAX_AGE_MS,
   } = options;
 
   const [location, setLocation] = useState<[number, number] | null>(null);
@@ -106,9 +110,11 @@ export function useUserLocation(options: UseUserLocationOptions = {}): UseUserLo
       logLocation('✅ Permission GRANTED');
 
       // Try cached location first (faster)
-      logLocation('📦 Checking CACHED location (maxAge: 60s)...');
+      logLocation(`📦 Checking CACHED location (maxAge: ${Math.round(lastKnownMaxAgeMs / 1000)}s)...`);
       try {
-        const cached = await Location.getLastKnownPositionAsync({ maxAge: 60000 });
+        const cached = await Location.getLastKnownPositionAsync({
+          maxAge: lastKnownMaxAgeMs,
+        });
         if (cached) {
           const cachedCoords: [number, number] = [cached.coords.longitude, cached.coords.latitude];
           logLocation('📦 Got CACHED location', {

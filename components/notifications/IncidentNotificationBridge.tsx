@@ -6,8 +6,7 @@ import type { NavigationProp } from '@react-navigation/native';
 
 import { showToast } from '@components/ui';
 import { useIncidentCache, useSharedIncidents } from '@contexts';
-import type { ProcessedIncident } from '@hooks/useIncidentSubscription';
-import type { ParsedIncident } from '@lib/nostr/events/types';
+import { toProcessedIncident } from '@hooks/useIncidentSubscription';
 import { saveExpoPushToken } from '@lib/notifications/pushTokenStorage';
 import {
   coerceIncidentNotificationPayload,
@@ -17,7 +16,7 @@ import {
 import { registerForPushNotificationsAsync } from '@lib/notifications/pushRegistration';
 
 type RootStackParamList = {
-  IncidentDetail: { incidentId: string };
+  IncidentDetail: { incidentId: string; eventId?: string };
 };
 
 Notifications.setNotificationHandler({
@@ -28,20 +27,6 @@ Notifications.setNotificationHandler({
     shouldSetBadge: false,
   }),
 });
-
-function toProcessedIncident(parsed: ParsedIncident): ProcessedIncident {
-  const createdAtMs = parsed.createdAt * 1000;
-  const occurredAtMs =
-    parsed.occurredAt instanceof Date && !Number.isNaN(parsed.occurredAt.getTime())
-      ? parsed.occurredAt.getTime()
-      : createdAtMs;
-
-  return {
-    ...parsed,
-    createdAtMs,
-    occurredAtMs,
-  };
-}
 
 export default function IncidentNotificationBridge() {
   const navigation = useNavigation<NavigationProp<RootStackParamList>>();
@@ -72,14 +57,20 @@ export default function IncidentNotificationBridge() {
         if (parsed) {
           const processed = toProcessedIncident(parsed);
           upsertMany([processed]);
-          navigation.navigate('IncidentDetail', { incidentId: processed.incidentId });
+          navigation.navigate('IncidentDetail', {
+            incidentId: processed.incidentId,
+            eventId: processed.eventId,
+          });
           return;
         }
 
         if (payload.incidentId) {
           const cached = getIncident(payload.incidentId);
           if (cached) {
-            navigation.navigate('IncidentDetail', { incidentId: cached.incidentId });
+            navigation.navigate('IncidentDetail', {
+              incidentId: cached.incidentId,
+              eventId: cached.eventId,
+            });
             return;
           }
         }

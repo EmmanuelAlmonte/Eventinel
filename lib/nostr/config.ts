@@ -9,58 +9,15 @@
 // RELAY CONFIGURATION
 // =============================================================================
 
-/**
- * Default relay URLs for Eventinel
- *
- * IMPORTANT: No public relays are included by default to prevent
- * accidental publishing of test data to public networks.
- *
- * Development: wss://localhost:8443 (local Netstr relay)
- * Production:  wss://relay.eventinel.com (own relay)
- */
-export const DEFAULT_RELAYS = {
-  /** Local development relay - Netstr */
-  DEVELOPMENT: 'wss://localhost:8443',
-
-  /** Production relay (future) */
-  PRODUCTION: 'wss://relay.eventinel.com',
-} as const;
-
-/**
- * Get relay URLs from environment
- *
- * SECURITY: Never falls back to public relays.
- * If no relay is configured, uses local development relay only.
- */
-export function getRelayUrls(): string[] {
-  const envRelays = process.env.NEXT_PUBLIC_NOSTR_RELAYS;
-
-  // If explicitly configured, use those relays
-  if (envRelays) {
-    return envRelays.split(',').map((r: string) => r.trim());
-  }
-
-  // Default to local development relay only
-  // This prevents accidental publishing to public relays
-  console.warn(
-    '[Eventinel] No NEXT_PUBLIC_NOSTR_RELAYS configured. Using local development relay: wss://localhost:8443'
-  );
-  return [DEFAULT_RELAYS.DEVELOPMENT];
-}
-
-/**
- * Check if we're using only local/private relays
- * Useful for safety checks before publishing
- */
-export function isUsingLocalRelaysOnly(): boolean {
-  const relays = getRelayUrls();
-  return relays.every(
-    (relay) =>
-      relay.includes('localhost') ||
-      relay.includes('127.0.0.1') ||
-      relay.includes('relay.eventinel.com')
-  );
-}
+// Relay defaults and env parsing live in lib/relay/config.ts
+export {
+  DEFAULT_RELAYS,
+  LOCAL_RELAYS,
+  getRelayUrls,
+  isUsingLocalRelaysOnly,
+  normalizeRelayUrl,
+  parseRelayList,
+} from '../relay/config';
 
 // =============================================================================
 // EVENT KIND CONSTANTS

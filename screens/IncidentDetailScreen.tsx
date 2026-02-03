@@ -36,18 +36,25 @@ import type { ParsedIncident } from '@lib/nostr/events/types';
 import { TYPE_CONFIG, SEVERITY_COLORS, type IncidentType } from '@lib/nostr/config';
 import { formatRelativeTime, formatRelativeTimeMs } from '@lib/utils/time';
 import { useAppTheme, useIncidentComments, type IncidentComment } from '@hooks';
+import { toProcessedIncident } from '@hooks/useIncidentSubscription';
+import type { ProcessedIncident } from '@hooks/useIncidentSubscription';
 import { useIncidentCache } from '@contexts';
 import { MAP_STYLES } from '@lib/map/types';
 import { showToast } from '@components/ui';
+import { fetchIncidentFromRelay } from '@lib/notifications/incidentNotifications';
 
 // Route params type - now uses incidentId only (no serialization warning)
 type DetailRouteParams = {
   IncidentDetail: {
     incidentId: string;
+    eventId?: string;
   };
 };
 
 const MAX_RELAY_LABELS = 2;
+const MINI_MAP_PITCH = 55;
+const MINI_MAP_HEADING = 20;
+const MINI_MAP_ZOOM = 15;
 
 function formatRelayList(relays: string[]): string {
   if (!relays || relays.length === 0) return '';
@@ -66,30 +73,72 @@ export default function IncidentDetailScreen() {
   const navigation = useNavigation();
   const route = useRoute<RouteProp<DetailRouteParams, 'IncidentDetail'>>();
   const insets = useSafeAreaInsets();
-  const { colors, isDark } = useAppTheme();
+  const { colors } = useAppTheme();
   const currentUser = useNDKCurrentUser();
-  const { getIncident, version } = useIncidentCache();
+  const { getIncident, upsertMany } = useIncidentCache();
 
   // Get incident from cache using incidentId
   // Re-lookup when version changes (cache updated after mount)
   const incidentId = route.params?.incidentId;
-  const incident = incidentId ? getIncident(incidentId) : undefined;
+  const eventId = route.params?.eventId;
+  const cachedIncident = incidentId ? getIncident(incidentId) : undefined;
+  const [fetchedIncident, setFetchedIncident] = useState<ProcessedIncident | null>(null);
+  const incident = cachedIncident ?? fetchedIncident ?? undefined;
 
   // Cache miss timeout - show loading briefly, then error
   const [showNotFound, setShowNotFound] = useState(false);
+  const inFlightRef = useRef<string | null>(null);
+  const incidentRef = useRef<ProcessedIncident | null>(null);
 
   // Delay map render until container has valid dimensions (fixes iOS 64x64 fallback)
   const [mapReady, setMapReady] = useState(false);
+
   useEffect(() => {
-    if (incidentId && !incident) {
-      console.log('[IncidentDetail] Cache miss for:', incidentId, 'version:', version);
-      // Wait 2s for cache to populate before showing error
-      const timer = setTimeout(() => setShowNotFound(true), 2000);
-      return () => clearTimeout(timer);
-    } else {
+    incidentRef.current = incident ?? null;
+    if (incident) {
       setShowNotFound(false);
     }
-  }, [incidentId, incident, version]);
+  }, [incident]);
+
+  useEffect(() => {
+    const key = eventId ?? incidentId;
+    if (!key) {
+      setShowNotFound(true);
+      return;
+    }
+
+    if (incident) return;
+    if (inFlightRef.current === key) return;
+
+    console.log('[IncidentDetail] Cache miss for:', key);
+    inFlightRef.current = key;
+    setShowNotFound(false);
+
+    const timer = setTimeout(() => {
+      if (!incidentRef.current) {
+        setShowNotFound(true);
+      }
+    }, 2000);
+
+    fetchIncidentFromRelay({ incidentId, eventId })
+      .then((parsed) => {
+        if (!parsed) return;
+        const processed = toProcessedIncident(parsed);
+        incidentRef.current = processed;
+        setFetchedIncident(processed);
+        upsertMany([processed]);
+      })
+      .catch((error) => {
+        console.warn('[IncidentDetail] Read-through fetch failed:', error);
+      })
+      .finally(() => {
+        clearTimeout(timer);
+        inFlightRef.current = null;
+        if (!incidentRef.current) {
+          setShowNotFound(true);
+        }
+      });
+  }, [eventId, incident, incidentId, upsertMany]);
 
   // Comment composer state
   const [commentText, setCommentText] = useState('');
@@ -282,10 +331,13 @@ export default function IncidentDetailScreen() {
               pitchEnabled={false}
               rotateEnabled={false}
               zoomEnabled={false}
+              maxPitch={65}
             >
               <Mapbox.Camera
-                zoomLevel={15}
+                zoomLevel={MINI_MAP_ZOOM}
                 centerCoordinate={[incident.location.lng, incident.location.lat]}
+                pitch={MINI_MAP_PITCH}
+                heading={MINI_MAP_HEADING}
                 animationDuration={0}
               />
               <Mapbox.MarkerView

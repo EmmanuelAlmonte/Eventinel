@@ -29,6 +29,20 @@ export interface ProcessedIncident extends ParsedIncident {
   occurredAtMs: number;
 }
 
+export function toProcessedIncident(parsed: ParsedIncident): ProcessedIncident {
+  const createdAtMs = parsed.createdAt * 1000;
+  const occurredAtMs =
+    parsed.occurredAt instanceof Date && !Number.isNaN(parsed.occurredAt.getTime())
+      ? parsed.occurredAt.getTime()
+      : createdAtMs;
+
+  return {
+    ...parsed,
+    createdAtMs,
+    occurredAtMs,
+  };
+}
+
 export interface UseIncidentSubscriptionOptions {
   /** User location as [longitude, latitude] */
   location: [number, number] | null;
@@ -137,20 +151,13 @@ export function useIncidentSubscription({
     return `${sinceTimestamp}:${geohashes.join(',')}`;
   }, [enabled, geohashes, sinceTimestamp]);
 
-  // Subscribe with explicit CACHE_FIRST to ensure cached events load immediately
-  // WORKAROUND: NDK mobile cache has a bug where events.id uses tagAddress format
-  // but event_tags.event_id uses actual event ID for replaceable events (kind 30911).
-  // This breaks tag-based queries. We use cacheUnconstrainFilter to remove tag
-  // filters for cache queries, falling back to kinds-only query which works.
-  // The relay query still uses full filters including geohash tags.
-  //
+  // Subscribe with explicit CACHE_FIRST to ensure cached events load immediately.
   // groupable: false - Prevents NDK timer race condition that causes "No filters to merge"
   // error when subscription is stopped before EOSE (see NDK removeItem bug).
   const { events, eose } = useSubscribe(filter, {
     closeOnEose: false,
     bufferMs: 100,
     cacheUsage: NDKSubscriptionCacheUsage.CACHE_FIRST,
-    cacheUnconstrainFilter: ['#g', '#t', 'since', 'limit'], // Query cache by kinds only
     groupable: false, // Execute immediately, avoid timer race on cleanup
   });
 
@@ -270,17 +277,7 @@ export function useIncidentSubscription({
       const parsed = parseIncidentEvent(event);
       if (!parsed) continue;
 
-      const createdAtMs = parsed.createdAt * 1000;
-      const occurredAtMs =
-        parsed.occurredAt instanceof Date && !Number.isNaN(parsed.occurredAt.getTime())
-          ? parsed.occurredAt.getTime()
-          : createdAtMs;
-
-      const processed: ProcessedIncident = {
-        ...parsed,
-        createdAtMs,
-        occurredAtMs,
-      };
+      const processed = toProcessedIncident(parsed);
 
       const existing = incidentMapRef.current.get(parsed.incidentId);
       if (!existing || parsed.createdAt > existing.createdAt) {

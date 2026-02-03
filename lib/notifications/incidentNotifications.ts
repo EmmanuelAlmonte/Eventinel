@@ -1,4 +1,4 @@
-import type { NDKFilter } from '@nostr-dev-kit/mobile';
+import type { NDKEvent, NDKFilter } from '@nostr-dev-kit/mobile';
 import { NDKSubscriptionCacheUsage } from '@nostr-dev-kit/mobile';
 import { ndk } from '@lib/ndk';
 import { parseIncidentEvent } from '@lib/nostr/events/incident';
@@ -40,12 +40,58 @@ export function coerceIncidentNotificationPayload(
   return { incidentId, eventId };
 }
 
+function selectLatestEvent(events: NDKEvent[]): NDKEvent | null {
+  if (events.length === 0) return null;
+  return events.reduce((latest, current) => {
+    if (!latest) return current;
+    if ((current.created_at ?? 0) > (latest.created_at ?? 0)) {
+      return current;
+    }
+    return latest;
+  }, events[0]);
+}
+
+function findIncidentInCache(
+  payload: IncidentNotificationPayload
+): ParsedIncident | null {
+  try {
+    if (payload.eventId) {
+      const cached = ndk.fetchEventSync([{ ids: [payload.eventId] }]);
+      if (cached && cached.length > 0) {
+        const event = selectLatestEvent(cached);
+        return event ? parseIncidentEvent(event) : null;
+      }
+    }
+
+    if (payload.incidentId) {
+      const cached = ndk.fetchEventSync([
+        { kinds: [NOSTR_KINDS.INCIDENT as number] },
+      ]);
+      if (cached && cached.length > 0) {
+        for (const event of cached) {
+          const parsed = parseIncidentEvent(event);
+          if (parsed?.incidentId === payload.incidentId) {
+            return parsed;
+          }
+        }
+      }
+    }
+  } catch (error) {
+    console.warn('[Notifications] Failed to read incident from cache:', error);
+  }
+
+  return null;
+}
+
 export async function fetchIncidentFromRelay(
   payload: IncidentNotificationPayload
 ): Promise<ParsedIncident | null> {
   if (!payload.incidentId && !payload.eventId) return null;
 
-  const options = { cacheUsage: NDKSubscriptionCacheUsage.ONLY_RELAY };
+  const cached = findIncidentInCache(payload);
+  if (cached) return cached;
+
+  const options = { cacheUsage: NDKSubscriptionCacheUsage.CACHE_FIRST };
 
   try {
     if (payload.eventId) {

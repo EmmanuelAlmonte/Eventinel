@@ -18,6 +18,7 @@ This document consolidates all findings across the reports and removes duplicate
 1) Cache queries are unconstrained due to cacheUnconstrainFilter
    - Removes #g/#t/since/limit for cache lookups, so off-area/old incidents can appear and full cache is reprocessed.
    - Affected: Feed + Map + cache correctness.
+   - Status (2026-02-03): Fixed locally by patching NDK SQLite cache adapter to align event_tags.event_id with events.id for replaceable events; cacheUnconstrainFilter removed.
 
 2) Full-list recompute and rerender churn on each update
    - Incidents are rebuilt and re-sorted each update; identities change and list/markers rerender broadly.
@@ -70,3 +71,24 @@ This document consolidates all findings across the reports and removes duplicate
 
 12) Notification/deep-link lookup ignores SQLite cache
    - Relay-only fetch path means cached incidents may be treated as missing when offline.
+
+## Post-report updates (2026-02-03)
+Implemented:
+1) Relay config single source of truth
+   - Added `lib/relay/config.ts` with `DEFAULT_RELAYS`, `LOCAL_RELAYS`, env parsing, and normalization helpers.
+   - Updated `lib/relay/storage.ts` to import/re-export relay defaults and use shared normalization.
+   - Updated `lib/nostr/config.ts` to re-export relay config so existing imports keep working.
+
+Potential multi-source-of-truth conflicts (not fixed yet):
+1) Incident type display config is duplicated and inconsistent
+   - Canonical `TYPE_CONFIG` in `lib/nostr/config.ts`, but separate mappings in
+     `components/ui/StatusBadge.tsx` and `components/ui/IncidentCard.tsx`.
+2) Severity colors are defined in two places with different models
+   - Numeric `SEVERITY_COLORS` in `lib/nostr/config.ts` vs named `SEVERITY_COLORS` in
+     `lib/brand/colors.ts` (used by `components/ui/StatusBadge.tsx` and `components/ui/IncidentCard.tsx`).
+3) Relay list display logic is duplicated
+   - `formatRelayList` + `MAX_RELAY_LABELS` in `screens/MapScreen.tsx`,
+     `screens/IncidentFeedScreen.tsx`, `screens/IncidentDetailScreen.tsx`.
+4) Relay URL normalization duplicated
+   - Shared `normalizeRelayUrl` in `lib/relay/config.ts` and local `normalizeUrl` in
+     `screens/RelayConnectScreen.tsx`.
