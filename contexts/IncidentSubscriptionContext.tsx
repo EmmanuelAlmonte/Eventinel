@@ -17,12 +17,19 @@
  *   const { incidents, isInitialLoading } = useSharedIncidents();
  */
 
-import React, { createContext, useContext, useEffect } from 'react';
+import React, {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useState,
+} from 'react';
+import { AppState, type AppStateStatus } from 'react-native';
 import { useIncidentSubscription } from '@hooks';
 import type { ProcessedIncident } from '@hooks';
 import { useSharedLocation } from './LocationContext';
 import { useIncidentCache } from './IncidentCacheContext';
-import { useRelayStatus } from './RelayStatusContext';
 import type { Severity } from '@lib/nostr/config';
 
 interface IncidentSubscriptionContextValue {
@@ -34,6 +41,10 @@ interface IncidentSubscriptionContextValue {
   hasReceivedHistory: boolean;
   /** Severity counts for displayed incidents */
   severityCounts: Record<Severity, number>;
+  /** Report Map screen focus for subscription gating */
+  setMapFocused: (focused: boolean) => void;
+  /** Report Feed screen focus for subscription gating */
+  setFeedFocused: (focused: boolean) => void;
 }
 
 const IncidentSubscriptionContext = createContext<IncidentSubscriptionContextValue | null>(null);
@@ -49,8 +60,32 @@ const IncidentSubscriptionContext = createContext<IncidentSubscriptionContextVal
 export function IncidentSubscriptionProvider({ children }: { children: React.ReactNode }) {
   const { location } = useSharedLocation();
   const { upsertMany } = useIncidentCache();
-  const { hasConnectedRelay } = useRelayStatus();
-  const isSubscriptionEnabled = !!location && hasConnectedRelay;
+  const [isMapFocused, setIsMapFocused] = useState(false);
+  const [isFeedFocused, setIsFeedFocused] = useState(false);
+  const [isAppActive, setIsAppActive] = useState(() => {
+    const currentState = AppState.currentState;
+    return !currentState || currentState === 'active';
+  });
+
+  useEffect(() => {
+    const handleAppStateChange = (nextState: AppStateStatus) => {
+      setIsAppActive(nextState === 'active');
+    };
+
+    const subscription = AppState.addEventListener?.('change', handleAppStateChange);
+    return () => subscription?.remove?.();
+  }, []);
+
+  const handleSetMapFocused = useCallback((focused: boolean) => {
+    setIsMapFocused(focused);
+  }, []);
+
+  const handleSetFeedFocused = useCallback((focused: boolean) => {
+    setIsFeedFocused(focused);
+  }, []);
+
+  const isScreenFocused = isMapFocused || isFeedFocused;
+  const isSubscriptionEnabled = !!location && isScreenFocused && isAppActive;
 
   // Single subscription shared by all screens
   const {
@@ -58,27 +93,40 @@ export function IncidentSubscriptionProvider({ children }: { children: React.Rea
     isInitialLoading,
     hasReceivedHistory,
     severityCounts,
+    updatedIncidents,
   } = useIncidentSubscription({
     location,
-    enabled: isSubscriptionEnabled, // Only subscribe when we have location AND at least one relay connected
+    enabled: isSubscriptionEnabled, // Only subscribe when focused, active, and location is available
   });
 
   // Cache incidents centrally for Detail screen lookups
   useEffect(() => {
-    if (incidents.length > 0) {
-      upsertMany(incidents);
+    if (updatedIncidents && updatedIncidents.length > 0) {
+      upsertMany(updatedIncidents);
     }
-  }, [incidents, upsertMany]);
+  }, [updatedIncidents, upsertMany]);
+
+  const contextValue = useMemo(
+    () => ({
+      incidents,
+      isInitialLoading,
+      hasReceivedHistory,
+      severityCounts,
+      setMapFocused: handleSetMapFocused,
+      setFeedFocused: handleSetFeedFocused,
+    }),
+    [
+      incidents,
+      isInitialLoading,
+      hasReceivedHistory,
+      severityCounts,
+      handleSetMapFocused,
+      handleSetFeedFocused,
+    ]
+  );
 
   return (
-    <IncidentSubscriptionContext.Provider
-      value={{
-        incidents,
-        isInitialLoading,
-        hasReceivedHistory,
-        severityCounts,
-      }}
-    >
+    <IncidentSubscriptionContext.Provider value={contextValue}>
       {children}
     </IncidentSubscriptionContext.Provider>
   );

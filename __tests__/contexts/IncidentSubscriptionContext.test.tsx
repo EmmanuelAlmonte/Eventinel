@@ -12,7 +12,7 @@
  * @jest-environment jsdom
  */
 
-import React from 'react';
+import React, { useEffect } from 'react';
 import { render, waitFor } from '@testing-library/react-native';
 import { Text, View } from 'react-native';
 
@@ -119,6 +119,7 @@ const defaultSubscriptionMock = {
   isInitialLoading: false,
   hasReceivedHistory: true,
   severityCounts: { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 } as Record<Severity, number>,
+  updatedIncidents: [] as ProcessedIncident[],
   totalEventsReceived: 0,
   lastUpdatedAt: null,
 };
@@ -138,6 +139,22 @@ function SubscriptionConsumer({ testId }: { testId?: string }) {
       <Text testID="severity-counts">{JSON.stringify(severityCounts)}</Text>
     </View>
   );
+}
+
+/**
+ * Test helper to mark the Map screen as focused for subscription gating.
+ */
+function FocusSetter() {
+  const { setMapFocused } = useSharedIncidents();
+
+  useEffect(() => {
+    setMapFocused(true);
+    return () => {
+      setMapFocused(false);
+    };
+  }, [setMapFocused]);
+
+  return null;
 }
 
 /**
@@ -183,7 +200,10 @@ function TestWrapper({ children }: { children: React.ReactNode }) {
   return (
     <LocationProvider>
       <IncidentCacheProvider>
-        <IncidentSubscriptionProvider>{children}</IncidentSubscriptionProvider>
+        <IncidentSubscriptionProvider>
+          <FocusSetter />
+          {children}
+        </IncidentSubscriptionProvider>
       </IncidentCacheProvider>
     </LocationProvider>
   );
@@ -744,7 +764,7 @@ describe('IncidentSubscriptionContext', () => {
       );
 
       // Hook should be called again but with same params
-      expect(mockUseIncidentSubscription).toHaveBeenCalledTimes(callCount * 2);
+      expect(mockUseIncidentSubscription).toHaveBeenCalledTimes(callCount + 1);
     });
 
     it('updates subscription when location changes', () => {

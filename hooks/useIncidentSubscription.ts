@@ -5,18 +5,19 @@
  * sorting, and severity counting.
  */
 
-import { useMemo, useRef, useEffect, useCallback } from 'react';
+import { useMemo, useRef, useEffect, useState } from 'react';
 import geohash from 'ngeohash';
 import { useSubscribe, NDKSubscriptionCacheUsage } from '@nostr-dev-kit/mobile';
-import type { NDKFilter } from '@nostr-dev-kit/mobile';
-import { parseIncidentEvent } from '@lib/nostr/events/incident';
+import type { NDKEvent, NDKFilter } from '@nostr-dev-kit/mobile';
+import { parseIncidentEvent, parseGeolocation, getTagValue, getTagValues } from '@lib/nostr/events/incident';
 import type { ParsedIncident } from '@lib/nostr/events/types';
 import type { Severity } from '@lib/nostr/config';
-import { DEFAULT_GEOHASH_PRECISION } from '@lib/nostr/config';
+import { DEFAULT_GEOHASH_PRECISION, EVENTINEL_TAGS, TAGS } from '@lib/nostr/config';
 import { INCIDENT_LIMITS } from '@lib/map/constants';
 
 // Debug flag - set to true to enable cache debugging logs
 const DEBUG_CACHE = __DEV__;
+const EMPTY_SEVERITY_COUNTS: Record<Severity, number> = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 };
 
 /**
  * Extended incident with precomputed timestamps for safe sorting
@@ -50,6 +51,8 @@ export interface UseIncidentSubscriptionResult {
   hasReceivedHistory: boolean;
   /** Severity counts for DISPLAYED incidents (post-slice) */
   severityCounts: SeverityCounts;
+  /** Incidents that were updated since last render */
+  updatedIncidents: ProcessedIncident[];
   /** Total events received (for debugging) */
   totalEventsReceived: number;
   /** Timestamp of last update */
@@ -63,6 +66,23 @@ export function useIncidentSubscription({
   maxIncidents = INCIDENT_LIMITS.MAX_CACHE,
 }: UseIncidentSubscriptionOptions): UseIncidentSubscriptionResult {
   const lastUpdatedRef = useRef<number | null>(null);
+  const incidentMapRef = useRef<Map<string, ProcessedIncident>>(new Map());
+  const lastEventCountRef = useRef(0);
+  const lastFilterKeyRef = useRef<string | null>(null);
+  const lastMaxIncidentsRef = useRef(maxIncidents);
+  const lastTotalEventsRef = useRef(0);
+
+  const [state, setState] = useState<{
+    incidents: ProcessedIncident[];
+    severityCounts: SeverityCounts;
+    updatedIncidents: ProcessedIncident[];
+    totalEventsReceived: number;
+  }>({
+    incidents: [],
+    severityCounts: { ...EMPTY_SEVERITY_COUNTS },
+    updatedIncidents: [],
+    totalEventsReceived: 0,
+  });
 
   // Calculate geohashes for NIP-52 filtering
   const geohashes = useMemo(() => {
@@ -85,11 +105,19 @@ export function useIncidentSubscription({
     return allGeohashes;
   }, [location]);
 
+  const geohashSet = useMemo(() => {
+    if (!geohashes) return null;
+    return new Set(geohashes);
+  }, [geohashes]);
+
+  const sinceTimestamp = useMemo(() => {
+    if (!enabled || !geohashes) return null;
+    return Math.floor(Date.now() / 1000) - sinceDays * 86400;
+  }, [enabled, geohashes, sinceDays]);
+
   // Build NDK filter
   const filter = useMemo((): NDKFilter[] | false => {
-    if (!enabled || !geohashes) return false;
-
-    const sinceTimestamp = Math.floor(Date.now() / 1000) - sinceDays * 86400;
+    if (!enabled || !geohashes || sinceTimestamp === null) return false;
 
     return [
       {
@@ -100,7 +128,14 @@ export function useIncidentSubscription({
         limit: INCIDENT_LIMITS.FETCH_LIMIT,
       },
     ];
-  }, [enabled, geohashes, sinceDays]);
+  }, [enabled, geohashes, sinceTimestamp]);
+
+  const filterKey = useMemo(() => {
+    if (!enabled || !geohashes || sinceTimestamp === null) {
+      return 'disabled';
+    }
+    return `${sinceTimestamp}:${geohashes.join(',')}`;
+  }, [enabled, geohashes, sinceTimestamp]);
 
   // Subscribe with explicit CACHE_FIRST to ensure cached events load immediately
   // WORKAROUND: NDK mobile cache has a bug where events.id uses tagAddress format
@@ -156,20 +191,90 @@ export function useIncidentSubscription({
     }
   }, [eose, events.length]);
 
-  // Parse, dedup, sort, slice, then count
-  const result = useMemo(() => {
-    const incidentMap = new Map<string, ProcessedIncident>();
+  function matchesIncidentTag(tags: string[][]): boolean {
+    const hashtags = getTagValues(tags, TAGS.HASHTAG);
+    if (hashtags.length === 0) return true;
+    return hashtags.includes(EVENTINEL_TAGS.INCIDENT);
+  }
 
-    for (const event of events) {
+  function matchesGeohash(tags: string[][], set: Set<string>): boolean {
+    const geohashTag = getTagValue(tags, TAGS.GEOHASH);
+    if (geohashTag && set.has(geohashTag)) {
+      return true;
+    }
+
+    const geoTag = getTagValue(tags, TAGS.GEOLOCATION);
+    const geo = parseGeolocation(geoTag);
+    if (!geo) return false;
+
+    const computed = geohash.encode(
+      geo.lat,
+      geo.lng,
+      DEFAULT_GEOHASH_PRECISION
+    );
+    return set.has(computed);
+  }
+
+  function shouldIncludeEvent(
+    event: NDKEvent,
+    set: Set<string>,
+    since: number
+  ): boolean {
+    const createdAt = event.created_at ?? Math.floor(Date.now() / 1000);
+    if (createdAt < since) return false;
+
+    const tags = event.tags ?? [];
+    if (!matchesIncidentTag(tags)) return false;
+    return matchesGeohash(tags, set);
+  }
+
+  useEffect(() => {
+    if (!enabled || !geohashSet || sinceTimestamp === null) {
+      if (lastFilterKeyRef.current !== 'disabled' || lastTotalEventsRef.current !== 0) {
+        setState({
+          incidents: [],
+          severityCounts: { ...EMPTY_SEVERITY_COUNTS },
+          updatedIncidents: [],
+          totalEventsReceived: 0,
+        });
+      }
+      incidentMapRef.current.clear();
+      lastEventCountRef.current = 0;
+      lastTotalEventsRef.current = 0;
+      lastFilterKeyRef.current = 'disabled';
+      lastUpdatedRef.current = null;
+      lastMaxIncidentsRef.current = maxIncidents;
+      return;
+    }
+
+    let reset = lastFilterKeyRef.current !== filterKey;
+    lastFilterKeyRef.current = filterKey;
+
+    if (events.length < lastEventCountRef.current) {
+      reset = true;
+    }
+
+    if (reset) {
+      incidentMapRef.current.clear();
+      lastEventCountRef.current = 0;
+    }
+
+    const startIndex = reset ? 0 : lastEventCountRef.current;
+    const newEvents = events.slice(startIndex);
+    const updatedIncidents: ProcessedIncident[] = [];
+    let didUpdate = false;
+
+    for (const event of newEvents) {
+      if (!shouldIncludeEvent(event, geohashSet, sinceTimestamp)) continue;
+
       const parsed = parseIncidentEvent(event);
       if (!parsed) continue;
 
-      // Compute timestamps
       const createdAtMs = parsed.createdAt * 1000;
       const occurredAtMs =
         parsed.occurredAt instanceof Date && !Number.isNaN(parsed.occurredAt.getTime())
           ? parsed.occurredAt.getTime()
-          : createdAtMs; // Fallback to createdAt if invalid
+          : createdAtMs;
 
       const processed: ProcessedIncident = {
         ...parsed,
@@ -177,45 +282,81 @@ export function useIncidentSubscription({
         occurredAtMs,
       };
 
-      // Dedup by incidentId, keep LATEST by createdAt
-      const existing = incidentMap.get(parsed.incidentId);
+      const existing = incidentMapRef.current.get(parsed.incidentId);
       if (!existing || parsed.createdAt > existing.createdAt) {
-        incidentMap.set(parsed.incidentId, processed);
+        incidentMapRef.current.set(parsed.incidentId, processed);
+        updatedIncidents.push(processed);
+        didUpdate = true;
       }
     }
 
-    // Sort by occurredAt (when incident happened), newest first
-    const sorted = Array.from(incidentMap.values()).sort(
-      (a, b) => b.occurredAtMs - a.occurredAtMs
-    );
+    lastEventCountRef.current = events.length;
 
-    // Slice to max
-    const sliced = sorted.slice(0, maxIncidents);
-
-    // Compute counts from DISPLAYED list (post-slice)
-    const severityCounts: SeverityCounts = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 };
-    for (const incident of sliced) {
-      severityCounts[incident.severity]++;
+    const maxChanged = lastMaxIncidentsRef.current !== maxIncidents;
+    if (maxChanged) {
+      lastMaxIncidentsRef.current = maxIncidents;
     }
 
-    return {
-      incidents: sliced,
-      severityCounts,
-      totalEventsReceived: events.length,
-    };
-  }, [events, maxIncidents]);
+    const totalChanged = events.length !== lastTotalEventsRef.current;
 
-  // Track lastUpdated in useEffect (NOT inside useMemo - that's a side effect)
-  const prevEventCountRef = useRef(0);
-  useEffect(() => {
-    if (events.length > prevEventCountRef.current) {
-      lastUpdatedRef.current = Date.now();
+    if (didUpdate || reset || maxChanged) {
+      const sorted = Array.from(incidentMapRef.current.values()).sort(
+        (a, b) => b.occurredAtMs - a.occurredAtMs
+      );
+
+      const sliced = sorted.slice(0, maxIncidents);
+
+      if (incidentMapRef.current.size > maxIncidents) {
+        const keepIds = new Set(sliced.map((incident) => incident.incidentId));
+        for (const key of incidentMapRef.current.keys()) {
+          if (!keepIds.has(key)) {
+            incidentMapRef.current.delete(key);
+          }
+        }
+      }
+
+      const severityCounts: SeverityCounts = { ...EMPTY_SEVERITY_COUNTS };
+      for (const incident of sliced) {
+        severityCounts[incident.severity]++;
+      }
+
+      if (updatedIncidents.length > 0) {
+        lastUpdatedRef.current = Date.now();
+      }
+
+      lastTotalEventsRef.current = events.length;
+
+      setState({
+        incidents: sliced,
+        severityCounts,
+        updatedIncidents,
+        totalEventsReceived: events.length,
+      });
+      return;
     }
-    prevEventCountRef.current = events.length;
-  }, [events.length]);
+
+    if (totalChanged) {
+      lastTotalEventsRef.current = events.length;
+      setState((prev) => ({
+        ...prev,
+        totalEventsReceived: events.length,
+        updatedIncidents: [],
+      }));
+    }
+  }, [
+    enabled,
+    events,
+    filterKey,
+    geohashSet,
+    maxIncidents,
+    sinceTimestamp,
+  ]);
 
   return {
-    ...result,
+    incidents: state.incidents,
+    severityCounts: state.severityCounts,
+    updatedIncidents: state.updatedIncidents,
+    totalEventsReceived: state.totalEventsReceived,
     isInitialLoading: !eose,
     hasReceivedHistory: eose,
     lastUpdatedAt: lastUpdatedRef.current,
