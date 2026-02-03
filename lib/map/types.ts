@@ -64,6 +64,51 @@ export function incidentToCoordinate(incident: ParsedIncident): [number, number]
 }
 
 /**
+ * GeoJSON properties for incident features
+ */
+export interface IncidentFeatureProperties {
+  incidentId: string;
+  severity: number;
+}
+
+/**
+ * Converts incidents to a GeoJSON FeatureCollection for Mapbox ShapeSource
+ *
+ * @param incidents - Parsed incident list
+ * @returns GeoJSON FeatureCollection with incidentId + severity properties
+ */
+export function incidentsToFeatureCollection(
+  incidents: ParsedIncident[]
+): GeoJSON.FeatureCollection<GeoJSON.Point, IncidentFeatureProperties> {
+  const features: Array<GeoJSON.Feature<GeoJSON.Point, IncidentFeatureProperties>> = [];
+
+  for (const incident of incidents) {
+    const [lng, lat] = incidentToCoordinate(incident);
+    if (!Number.isFinite(lng) || !Number.isFinite(lat)) {
+      continue;
+    }
+
+    features.push({
+      type: 'Feature',
+      id: incident.incidentId,
+      geometry: {
+        type: 'Point',
+        coordinates: [lng, lat],
+      },
+      properties: {
+        incidentId: incident.incidentId,
+        severity: incident.severity,
+      },
+    });
+  }
+
+  return {
+    type: 'FeatureCollection',
+    features,
+  };
+}
+
+/**
  * Gets the severity color for a given incident
  *
  * @param incident - Parsed incident event

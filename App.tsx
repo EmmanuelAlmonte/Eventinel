@@ -1,12 +1,12 @@
 import 'react-native-get-random-values'; // MUST be first import!
 import { useEffect, useState } from 'react';
-import { Text, Pressable } from 'react-native';
+import { ActivityIndicator, Pressable, StyleSheet, Text } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { NavigationContainer } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
-import { ThemeProvider } from '@rneui/themed';
+import { ThemeProvider, Text as RNEText } from '@rneui/themed';
 import { useNDKInit, useSessionMonitor, useNDKCurrentUser } from '@nostr-dev-kit/mobile';
 
 import MapScreen from './screens/MapScreen';
@@ -20,7 +20,7 @@ import { loadRelays } from './lib/relay/storage';
 import { theme } from './lib/theme';
 import { useAppTheme } from '@hooks';
 import { IncidentCacheProvider, LocationProvider, IncidentSubscriptionProvider, RelayStatusProvider } from '@contexts';
-import { ToastProvider, ErrorBoundary } from '@components/ui';
+import { ToastProvider, ErrorBoundary, ScreenContainer } from '@components/ui';
 import IncidentNotificationBridge from '@components/notifications/IncidentNotificationBridge';
 
 const Tab = createBottomTabNavigator();
@@ -141,6 +141,25 @@ function LoginWrapper() {
   );
 }
 
+function StartupScreen() {
+  const { isDark, colors } = useAppTheme();
+
+  return (
+    <>
+      <StatusBar style={isDark ? 'light' : 'dark'} />
+      <ScreenContainer centerContent>
+        <ActivityIndicator size="large" color={colors.primary} />
+        <RNEText h3 style={[styles.startupTitle, { color: colors.text }]}>
+          Starting Eventinel
+        </RNEText>
+        <RNEText style={[styles.startupSubtitle, { color: colors.textMuted }]}>
+          Loading relays and cached incidents...
+        </RNEText>
+      </ScreenContainer>
+    </>
+  );
+}
+
 /**
  * Eventinel Mobile App
  *
@@ -205,41 +224,42 @@ export default function App() {
     initializeRelays();
   }, []);
 
-  if (!isReady) {
-    // You can add a loading spinner here
-    return null;
-  }
-
-  // Show LoginScreen if not authenticated
-  if (!currentUser) {
-    return (
-      <SafeAreaProvider>
-        <ThemeProvider theme={theme}>
-          <ErrorBoundary>
-            <LoginWrapper />
-          </ErrorBoundary>
-          <ToastProvider />
-        </ThemeProvider>
-      </SafeAreaProvider>
-    );
-  }
+  const content = !isReady ? (
+    <StartupScreen />
+  ) : !currentUser ? (
+    <LoginWrapper />
+  ) : (
+    <LocationProvider>
+      <RelayStatusProvider>
+        <IncidentCacheProvider>
+          <IncidentSubscriptionProvider>
+            <MainNavigation />
+          </IncidentSubscriptionProvider>
+        </IncidentCacheProvider>
+      </RelayStatusProvider>
+    </LocationProvider>
+  );
 
   return (
     <SafeAreaProvider>
       <ThemeProvider theme={theme}>
         <ErrorBoundary>
-          <LocationProvider>
-            <RelayStatusProvider>
-              <IncidentCacheProvider>
-                <IncidentSubscriptionProvider>
-                  <MainNavigation />
-                </IncidentSubscriptionProvider>
-              </IncidentCacheProvider>
-            </RelayStatusProvider>
-          </LocationProvider>
+          {content}
         </ErrorBoundary>
         <ToastProvider />
       </ThemeProvider>
     </SafeAreaProvider>
   );
 }
+
+const styles = StyleSheet.create({
+  startupTitle: {
+    marginTop: 16,
+    textAlign: 'center',
+  },
+  startupSubtitle: {
+    fontSize: 14,
+    marginTop: 8,
+    textAlign: 'center',
+  },
+});

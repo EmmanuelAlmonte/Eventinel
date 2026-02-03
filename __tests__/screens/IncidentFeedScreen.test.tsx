@@ -30,6 +30,7 @@ jest.mock('@react-navigation/native', () => ({
     navigate: mockNavigate,
     goBack: jest.fn(),
   }),
+  useIsFocused: () => true,
 }));
 
 // Mock useAppTheme
@@ -106,6 +107,7 @@ const mockIncidents = [
 const mockUseSharedIncidents = jest.fn(() => ({
   incidents: mockIncidents,
   hasReceivedHistory: true,
+  setFeedFocused: jest.fn(),
 }));
 
 const mockUseRelayStatus = jest.fn(() => ({
@@ -133,6 +135,17 @@ jest.mock('@components/ui', () => ({
   ScreenContainer: ({ children }: any) => {
     const { View } = require('react-native');
     return <View testID="screen-container">{children}</View>;
+  },
+  LocationRequiredEmpty: ({ onRetry }: { onRetry?: () => void }) => {
+    const { View, Text, Pressable } = require('react-native');
+    return (
+      <View testID="location-required">
+        <Text>Location Required</Text>
+        <Pressable onPress={onRetry}>
+          <Text>Retry</Text>
+        </Pressable>
+      </View>
+    );
   },
   SkeletonList: ({ count }: { count: number }) => {
     const { View, Text } = require('react-native');
@@ -200,6 +213,14 @@ jest.mock('@rneui/themed', () => ({
     const { Text } = require('react-native');
     return <Text style={style} numberOfLines={numberOfLines} {...props}>{children}</Text>;
   },
+  Button: ({ title, onPress }: any) => {
+    const { Pressable, Text } = require('react-native');
+    return (
+      <Pressable onPress={onPress}>
+        <Text>{title}</Text>
+      </Pressable>
+    );
+  },
   Card: ({ children, containerStyle }: any) => {
     const { View } = require('react-native');
     return <View style={containerStyle}>{children}</View>;
@@ -229,6 +250,7 @@ describe('IncidentFeedScreen', () => {
     mockUseSharedIncidents.mockReturnValue({
       incidents: mockIncidents,
       hasReceivedHistory: true,
+      setFeedFocused: jest.fn(),
     });
   });
 
@@ -256,6 +278,7 @@ describe('IncidentFeedScreen', () => {
       mockUseSharedIncidents.mockReturnValue({
         incidents: mockIncidents,
         hasReceivedHistory: false,
+        setFeedFocused: jest.fn(),
       });
 
       const { getByText } = render(<IncidentFeedScreen />);
@@ -382,6 +405,7 @@ describe('IncidentFeedScreen', () => {
       mockUseSharedIncidents.mockReturnValue({
         incidents: [],
         hasReceivedHistory: true,
+        setFeedFocused: jest.fn(),
       });
 
       const { getByText } = render(<IncidentFeedScreen />);
@@ -392,6 +416,7 @@ describe('IncidentFeedScreen', () => {
       mockUseSharedIncidents.mockReturnValue({
         incidents: [],
         hasReceivedHistory: true,
+        setFeedFocused: jest.fn(),
       });
 
       const { getByText } = render(<IncidentFeedScreen />);
@@ -402,6 +427,7 @@ describe('IncidentFeedScreen', () => {
       mockUseSharedIncidents.mockReturnValue({
         incidents: [],
         hasReceivedHistory: true,
+        setFeedFocused: jest.fn(),
       });
 
       const { getByTestId } = render(<IncidentFeedScreen />);
@@ -412,6 +438,7 @@ describe('IncidentFeedScreen', () => {
       mockUseSharedIncidents.mockReturnValue({
         incidents: [],
         hasReceivedHistory: false,
+        setFeedFocused: jest.fn(),
       });
 
       const { getByText } = render(<IncidentFeedScreen />);
@@ -423,6 +450,7 @@ describe('IncidentFeedScreen', () => {
       mockUseSharedIncidents.mockReturnValue({
         incidents: [],
         hasReceivedHistory: false,
+        setFeedFocused: jest.fn(),
       });
 
       const { getByTestId } = render(<IncidentFeedScreen />);
@@ -465,6 +493,7 @@ describe('IncidentFeedScreen', () => {
       mockUseSharedIncidents.mockReturnValue({
         incidents: [],
         hasReceivedHistory: true,
+        setFeedFocused: jest.fn(),
       });
 
       const { getByText } = render(<IncidentFeedScreen />);
@@ -475,6 +504,7 @@ describe('IncidentFeedScreen', () => {
       mockUseSharedIncidents.mockReturnValue({
         incidents: [mockIncidents[0]],
         hasReceivedHistory: true,
+        setFeedFocused: jest.fn(),
       });
 
       const { getByText } = render(<IncidentFeedScreen />);
@@ -518,6 +548,7 @@ describe('IncidentFeedScreen', () => {
           severity: 1,
         }],
         hasReceivedHistory: true,
+        setFeedFocused: jest.fn(),
       });
 
       const { getByText } = render(<IncidentFeedScreen />);

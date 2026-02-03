@@ -31,6 +31,7 @@ jest.mock('@react-navigation/native', () => ({
     navigate: mockNavigate,
     goBack: jest.fn(),
   }),
+  useIsFocused: () => true,
 }));
 
 // Mock useAppTheme
@@ -93,6 +94,7 @@ const mockUseSharedIncidents = jest.fn(() => ({
   incidents: mockIncidents,
   isInitialLoading: false,
   hasReceivedHistory: true,
+  setMapFocused: jest.fn(),
 }));
 
 const mockUseRelayStatus = jest.fn(() => ({
@@ -144,6 +146,17 @@ jest.mock('@components/ui', () => ({
     const { View } = require('react-native');
     return <View testID="screen-container">{children}</View>;
   },
+  LocationRequiredEmpty: ({ onRetry }: { onRetry?: () => void }) => {
+    const { View, Text, Pressable } = require('react-native');
+    return (
+      <View testID="location-required">
+        <Text>Location Required</Text>
+        <Pressable onPress={onRetry}>
+          <Text>Retry</Text>
+        </Pressable>
+      </View>
+    );
+  },
   EmptyState: ({ title }: { title: string }) => {
     const { View, Text } = require('react-native');
     return (
@@ -173,6 +186,27 @@ jest.mock('@lib/map/types', () => ({
   MAP_STYLES: {
     DARK: 'mapbox://styles/mapbox/dark-v11',
   },
+  SEVERITY_COLORS: {
+    1: '#6B7280',
+    2: '#3B82F6',
+    3: '#F59E0B',
+    4: '#EA580C',
+    5: '#DC2626',
+  },
+  incidentsToFeatureCollection: (incidents: any[]) => ({
+    type: 'FeatureCollection',
+    features: incidents.map((incident) => ({
+      type: 'Feature',
+      geometry: {
+        type: 'Point',
+        coordinates: [incident.location?.lng ?? 0, incident.location?.lat ?? 0],
+      },
+      properties: {
+        incidentId: incident.incidentId,
+        severity: incident.severity,
+      },
+    })),
+  }),
 }));
 
 jest.mock('@lib/map/constants', () => ({
@@ -188,6 +222,13 @@ jest.mock('@lib/map/constants', () => ({
   INCIDENT_LIMITS: {
     SINCE_DAYS: 7,
   },
+  INCIDENT_MARKER: {
+    PIN_SIZE: 30,
+    PIN_BORDER_WIDTH: 2,
+    PIN_BORDER_COLOR: '#fff',
+    TEXT_COLOR: '#fff',
+    TEXT_FONT_SIZE: 14,
+  },
 }));
 
 // Mock @rneui/themed Icon
@@ -197,6 +238,14 @@ jest.mock('@rneui/themed', () => ({
     return (
       <Pressable testID={testID || `icon-${name}`} onPress={onPress}>
         <Text>{name}</Text>
+      </Pressable>
+    );
+  },
+  Button: ({ title, onPress }: any) => {
+    const { Pressable, Text } = require('react-native');
+    return (
+      <Pressable onPress={onPress}>
+        <Text>{title}</Text>
       </Pressable>
     );
   },
@@ -214,6 +263,7 @@ describe('MapScreen', () => {
       incidents: mockIncidents,
       isInitialLoading: false,
       hasReceivedHistory: true,
+      setMapFocused: jest.fn(),
     });
   });
 
@@ -285,6 +335,7 @@ describe('MapScreen', () => {
         incidents: [],
         isInitialLoading: false,
         hasReceivedHistory: true,
+        setMapFocused: jest.fn(),
       });
 
       const { getByText } = render(<MapScreen />);
@@ -328,6 +379,7 @@ describe('MapScreen', () => {
         incidents: [],
         isInitialLoading: false,
         hasReceivedHistory: true,
+        setMapFocused: jest.fn(),
       });
 
       const { getByText } = render(<MapScreen />);
@@ -339,6 +391,7 @@ describe('MapScreen', () => {
         incidents: [],
         isInitialLoading: false,
         hasReceivedHistory: true,
+        setMapFocused: jest.fn(),
       });
 
       const { getByText } = render(<MapScreen />);
@@ -350,6 +403,7 @@ describe('MapScreen', () => {
         incidents: [],
         isInitialLoading: true,
         hasReceivedHistory: false,
+        setMapFocused: jest.fn(),
       });
 
       const { queryByText } = render(<MapScreen />);

@@ -60,6 +60,7 @@ export {
   EmptyState,
   NoIncidentsEmpty,
   NoRelaysEmpty,
+  LocationRequiredEmpty,
   OfflineEmpty,
   ErrorEmpty,
 } from './EmptyState';

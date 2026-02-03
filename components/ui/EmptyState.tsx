@@ -107,6 +107,29 @@ export function NoRelaysEmpty({ onAddRelay }: { onAddRelay?: () => void }) {
   );
 }
 
+export function LocationRequiredEmpty({
+  onRetry,
+  permission,
+}: {
+  onRetry?: () => void;
+  permission?: 'undetermined' | 'granted' | 'denied';
+}) {
+  const isDenied = permission === 'denied';
+  return (
+    <EmptyState
+      emoji="📍"
+      title={isDenied ? 'Location Permission Needed' : 'Location Required'}
+      description={
+        isDenied
+          ? 'Enable location access to see nearby incidents and map results.'
+          : 'We could not determine your location. Please try again.'
+      }
+      action={onRetry ? 'Retry Location' : undefined}
+      onAction={onRetry}
+    />
+  );
+}
+
 export function OfflineEmpty({ onRetry }: { onRetry?: () => void }) {
   return (
     <EmptyState

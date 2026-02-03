@@ -5,25 +5,122 @@
  * Uses extracted hooks for location and subscription logic.
  */
 
-import { useEffect, useState, useCallback, useRef } from 'react';
+import { useEffect, useState, useCallback, useRef, useMemo, type ElementRef } from 'react';
 import { View, Text, StyleSheet, Pressable, ActivityIndicator } from 'react-native';
-import { useNavigation } from '@react-navigation/native';
+import { useIsFocused, useNavigation } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Mapbox, { type MapState } from '@rnmapbox/maps';
-import { Icon } from '@rneui/themed';
+import { Button, Icon } from '@rneui/themed';
 
-import { EmptyState, MapSkeleton, NoRelaysEmpty, ScreenContainer } from '@components/ui';
+import { LocationRequiredEmpty, MapSkeleton, ScreenContainer } from '@components/ui';
 import { useRelayStatus, useSharedLocation, useSharedIncidents } from '@contexts';
-import { IncidentMarker } from '@components/map';
-import { DEFAULT_CAMERA, MAP_STYLES } from '@lib/map/types';
-import { MAPBOX_CONFIG, USER_LOCATION, INCIDENT_LIMITS } from '@lib/map/constants';
-import type { ParsedIncident } from '@lib/nostr/events/types';
+import { useAppTheme, type ProcessedIncident } from '@hooks';
+import { DEFAULT_CAMERA, MAP_STYLES, SEVERITY_COLORS, incidentsToFeatureCollection } from '@lib/map/types';
+import { MAPBOX_CONFIG, USER_LOCATION, INCIDENT_LIMITS, INCIDENT_MARKER } from '@lib/map/constants';
 
 // Camera animation modes
 type CameraAnimationMode = 'flyTo' | 'easeTo' | 'linearTo' | 'moveTo' | 'none';
 const FLY_TO_DURATION = 1500; // ms
 const AUTO_RESUME_DELAY_MS = 20000;
 const MAX_RELAY_LABELS = 2;
+const INCIDENT_SOURCE_ID = 'incidents-source';
+const CLUSTER_LAYER_ID = 'incident-clusters';
+const CLUSTER_COUNT_LAYER_ID = 'incident-cluster-count';
+const INCIDENT_LAYER_ID = 'incident-points';
+const INCIDENT_LABEL_LAYER_ID = 'incident-point-labels';
+const CLUSTER_RADIUS = 52;
+const EMPTY_INCIDENTS: ProcessedIncident[] = [];
+
+type ShapeSourcePressEvent = {
+  features: Array<GeoJSON.Feature>;
+  coordinates: {
+    latitude: number;
+    longitude: number;
+  };
+  point: {
+    x: number;
+    y: number;
+  };
+};
+
+type CameraRef = ElementRef<typeof Mapbox.Camera>;
+type ShapeSourceRef = ElementRef<typeof Mapbox.ShapeSource>;
+
+const clusterFilter = ['has', 'point_count'] as const;
+const pointFilter = ['!', ['has', 'point_count']] as const;
+
+const clusterCircleColorExpression = [
+  'step',
+  ['get', 'point_count'],
+  '#60a5fa',
+  10,
+  '#3b82f6',
+  25,
+  '#2563eb',
+  50,
+  '#1d4ed8',
+] as const;
+
+const clusterCircleRadiusExpression = [
+  'step',
+  ['get', 'point_count'],
+  18,
+  10,
+  22,
+  25,
+  26,
+  50,
+  30,
+] as const;
+
+const incidentCircleColorExpression = [
+  'match',
+  ['get', 'severity'],
+  1,
+  SEVERITY_COLORS[1],
+  2,
+  SEVERITY_COLORS[2],
+  3,
+  SEVERITY_COLORS[3],
+  4,
+  SEVERITY_COLORS[4],
+  5,
+  SEVERITY_COLORS[5],
+  SEVERITY_COLORS[1],
+] as const;
+
+const clusterCircleStyle = {
+  circleColor: clusterCircleColorExpression,
+  circleRadius: clusterCircleRadiusExpression,
+  circleStrokeColor: INCIDENT_MARKER.PIN_BORDER_COLOR,
+  circleStrokeWidth: INCIDENT_MARKER.PIN_BORDER_WIDTH,
+  circleOpacity: 0.9,
+};
+
+const clusterCountStyle = {
+  textField: ['get', 'point_count_abbreviated'] as const,
+  textSize: 12,
+  textColor: '#ffffff',
+  textAllowOverlap: true,
+  textIgnorePlacement: true,
+};
+
+const incidentCircleStyle = {
+  circleColor: incidentCircleColorExpression,
+  circleRadius: INCIDENT_MARKER.PIN_SIZE / 2,
+  circleStrokeColor: INCIDENT_MARKER.PIN_BORDER_COLOR,
+  circleStrokeWidth: INCIDENT_MARKER.PIN_BORDER_WIDTH,
+  circleOpacity: 0.95,
+};
+
+const incidentLabelStyle = {
+  textField: ['to-string', ['get', 'severity']] as const,
+  textSize: INCIDENT_MARKER.TEXT_FONT_SIZE,
+  textColor: INCIDENT_MARKER.TEXT_COLOR,
+  textAllowOverlap: true,
+  textIgnorePlacement: true,
+  textAnchor: 'center' as const,
+};
 
 function formatRelayList(relayUrls: string[]): string {
   if (!relayUrls || relayUrls.length === 0) return 'relays';
@@ -38,7 +135,9 @@ function formatRelayList(relayUrls: string[]): string {
 
 export default function MapScreen() {
   const navigation = useNavigation<any>();
+  const isFocused = useIsFocused();
   const insets = useSafeAreaInsets();
+  const { colors } = useAppTheme();
   const { hasConnectedRelay, hasRelays, isConnecting, relays } = useRelayStatus();
 
   // Delay map render until container has valid dimensions (fixes iOS 64x64 fallback)
@@ -53,9 +152,17 @@ export default function MapScreen() {
   const animationResetTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const autoResumeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isAnimatingRef = useRef(false);
+  const shapeSourceRef = useRef<ShapeSourceRef | null>(null);
+  const cameraRef = useRef<CameraRef | null>(null);
 
   // Get shared user location (fetched once in LocationProvider)
-  const { location: userLocation, isLoading: isLoadingLocation, source: locationSource, permission } = useSharedLocation();
+  const {
+    location: userLocation,
+    isLoading: isLoadingLocation,
+    source: locationSource,
+    permission,
+    refresh: refreshLocation,
+  } = useSharedLocation();
 
   // Update camera center when user location changes (including from default to real GPS)
   useEffect(() => {
@@ -162,13 +269,26 @@ export default function MapScreen() {
     incidents,
     isInitialLoading,
     hasReceivedHistory,
+    setMapFocused,
   } = useSharedIncidents();
 
-  // Handle marker press - navigate with incidentId only (no serialization warning)
-  function handleMarkerPress(incident: ParsedIncident) {
-    console.log('MapScreen: Marker pressed:', incident.incidentId);
-    navigation.navigate('IncidentDetail', { incidentId: incident.incidentId });
-  }
+  useEffect(() => {
+    setMapFocused(isFocused);
+    return () => {
+      setMapFocused(false);
+    };
+  }, [isFocused, setMapFocused]);
+
+  const visibleIncidents = isFocused ? incidents : EMPTY_INCIDENTS;
+
+  const incidentFeatureCollection = useMemo(
+    () => incidentsToFeatureCollection(visibleIncidents),
+    [visibleIncidents]
+  );
+
+  const handleIncidentPress = useCallback((incidentId: string) => {
+    navigation.navigate('IncidentDetail', { incidentId });
+  }, [navigation]);
 
   const handleRelaySettings = useCallback(() => {
     navigation.navigate('Relays');
@@ -176,40 +296,85 @@ export default function MapScreen() {
 
   const relayLabel = formatRelayList(relays.map((relay) => relay.url));
 
-  if (!hasConnectedRelay) {
-    if (!hasRelays) {
-      return (
-        <ScreenContainer>
-          <NoRelaysEmpty onAddRelay={handleRelaySettings} />
-        </ScreenContainer>
-      );
-    }
-
-    return (
-      <ScreenContainer>
-        <EmptyState
-          icon={isConnecting ? 'wifi' : 'wifi-off'}
-          title={isConnecting ? 'Connecting to relays' : 'Relays disconnected'}
-          description={
-            isConnecting
-              ? `Waiting for ${relayLabel} to connect.`
-              : `Unable to reach ${relayLabel}. Check your connection or relay settings.`
-          }
-          action="Relay Settings"
-          onAction={handleRelaySettings}
-        />
-      </ScreenContainer>
-    );
-  }
+  const relayStatus = !hasConnectedRelay
+    ? {
+        icon: !hasRelays ? 'cloud-off' : isConnecting ? 'wifi' : 'wifi-off',
+        title: !hasRelays
+          ? 'No Relays Connected'
+          : isConnecting
+            ? 'Connecting to relays'
+            : 'Relays disconnected',
+        description: !hasRelays
+          ? 'Add a Nostr relay to start receiving incident updates.'
+          : isConnecting
+            ? `Waiting for ${relayLabel} to connect.`
+            : `Unable to reach ${relayLabel}. Check your connection or relay settings.`,
+        actionLabel: !hasRelays ? 'Add Relay' : 'Relay Settings',
+      }
+    : null;
 
   // Loading state - show animated skeleton
   if (isLoadingLocation) {
     return <MapSkeleton />;
   }
 
+  if (!userLocation) {
+    return (
+      <ScreenContainer>
+        <LocationRequiredEmpty
+          permission={permission}
+          onRetry={() => void refreshLocation()}
+        />
+      </ScreenContainer>
+    );
+  }
+
   // Determine effective camera center (fallback to default if not set)
   const effectiveCameraCenter = cameraCenter || userLocation || DEFAULT_CAMERA.centerCoordinate;
   const cameraCenterCoordinate = followUser ? effectiveCameraCenter : undefined;
+
+  const handleShapeSourcePress = useCallback((event: ShapeSourcePressEvent) => {
+    const feature = event?.features?.[0];
+    if (!feature || !feature.properties) {
+      return;
+    }
+
+    const properties = feature.properties as Record<string, unknown>;
+
+    if (properties.cluster) {
+      if (!feature.geometry || feature.geometry.type !== 'Point') {
+        return;
+      }
+
+      const coordinates = feature.geometry.coordinates as [number, number];
+
+      clearAutoResumeTimer();
+      setFollowUser(false);
+
+      void (async () => {
+        const zoom = await shapeSourceRef.current?.getClusterExpansionZoom(feature);
+        if (zoom == null) {
+          return;
+        }
+
+        cameraRef.current?.setCamera({
+          centerCoordinate: coordinates,
+          zoomLevel: zoom,
+          animationDuration: 400,
+          animationMode: 'easeTo',
+        });
+
+        scheduleAutoResume();
+      })();
+
+      return;
+    }
+
+    const incidentId = properties.incidentId;
+    if (typeof incidentId === 'string' && incidentId.length > 0) {
+      handleIncidentPress(incidentId);
+    }
+  }, [clearAutoResumeTimer, handleIncidentPress, scheduleAutoResume]);
 
   return (
     <View style={styles.container}>
@@ -230,6 +395,7 @@ export default function MapScreen() {
           >
             {/* Camera with flyTo support */}
             <Mapbox.Camera
+              ref={cameraRef}
               zoomLevel={MAPBOX_CONFIG.DEFAULT_ZOOM}
               centerCoordinate={cameraCenterCoordinate}
               animationMode={animationMode !== 'none' ? animationMode : undefined}
@@ -243,14 +409,37 @@ export default function MapScreen() {
               </Mapbox.PointAnnotation>
             )}
 
-            {/* Incident markers */}
-            {incidents.map((incident) => (
-              <IncidentMarker
-                key={incident.incidentId}
-                incident={incident}
-                onPress={handleMarkerPress}
+            {/* Incident markers (ShapeSource + clustering) */}
+            <Mapbox.ShapeSource
+              id={INCIDENT_SOURCE_ID}
+              ref={shapeSourceRef}
+              shape={incidentFeatureCollection}
+              cluster
+              clusterRadius={CLUSTER_RADIUS}
+              hitbox={{ width: 44, height: 44 }}
+              onPress={handleShapeSourcePress}
+            >
+              <Mapbox.CircleLayer
+                id={CLUSTER_LAYER_ID}
+                filter={clusterFilter}
+                style={clusterCircleStyle}
               />
-            ))}
+              <Mapbox.SymbolLayer
+                id={CLUSTER_COUNT_LAYER_ID}
+                filter={clusterFilter}
+                style={clusterCountStyle}
+              />
+              <Mapbox.CircleLayer
+                id={INCIDENT_LAYER_ID}
+                filter={pointFilter}
+                style={incidentCircleStyle}
+              />
+              <Mapbox.SymbolLayer
+                id={INCIDENT_LABEL_LAYER_ID}
+                filter={pointFilter}
+                style={incidentLabelStyle}
+              />
+            </Mapbox.ShapeSource>
           </Mapbox.MapView>
         ) : (
           <View style={styles.mapPlaceholder}>
@@ -258,6 +447,39 @@ export default function MapScreen() {
           </View>
         )}
       </View>
+
+      {relayStatus && (
+        <View
+          style={[
+            styles.relayBanner,
+            {
+              top: 16 + insets.top,
+              backgroundColor: colors.surface,
+              borderColor: colors.border,
+            },
+          ]}
+        >
+          <View style={styles.relayBannerHeader}>
+            <Icon
+              name={relayStatus.icon}
+              type="material"
+              size={18}
+              color={colors.textMuted}
+            />
+            <Text style={[styles.relayBannerTitle, { color: colors.text }]}>{relayStatus.title}</Text>
+          </View>
+          <Text style={[styles.relayBannerDescription, { color: colors.textMuted }]}>
+            {relayStatus.description}
+          </Text>
+          <Button
+            title={relayStatus.actionLabel}
+            onPress={handleRelaySettings}
+            type="clear"
+            containerStyle={styles.relayBannerActionContainer}
+            titleStyle={[styles.relayBannerActionText, { color: colors.primary }]}
+          />
+        </View>
+      )}
 
       {/* Fly to user location button (FAB) */}
       {userLocation && (
@@ -285,7 +507,7 @@ export default function MapScreen() {
       {/* Stats overlay (top-right) - DEV only */}
       {__DEV__ && (
         <View style={[styles.statsOverlay, { top: 20 + insets.top }]}>
-          <Text style={styles.statsText}>Incidents: {incidents.length}</Text>
+          <Text style={styles.statsText}>Incidents: {visibleIncidents.length}</Text>
           <Text style={styles.statsText}>EOSE: {hasReceivedHistory ? '✓' : '...'}</Text>
         </View>
       )}
@@ -311,7 +533,7 @@ export default function MapScreen() {
       )}
 
       {/* No incidents message - only show after EOSE */}
-      {!isLoadingLocation && hasReceivedHistory && incidents.length === 0 && (
+      {!isLoadingLocation && hasReceivedHistory && visibleIncidents.length === 0 && (
         <View style={[styles.emptyState, { bottom: 40 + insets.bottom }]}>
           <Text style={styles.emptyStateText}>No incidents found</Text>
           <Text style={styles.emptyStateSubtext}>
@@ -381,6 +603,35 @@ const styles = StyleSheet.create({
     color: '#ccc',
     fontSize: 13,
     textAlign: 'center',
+  },
+  relayBanner: {
+    position: 'absolute',
+    left: 16,
+    right: 16,
+    borderWidth: 1,
+    borderRadius: 12,
+    padding: 12,
+  },
+  relayBannerHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  relayBannerTitle: {
+    fontSize: 15,
+    fontWeight: '600',
+  },
+  relayBannerDescription: {
+    fontSize: 13,
+    marginTop: 4,
+  },
+  relayBannerActionContainer: {
+    alignSelf: 'flex-start',
+    marginTop: 4,
+  },
+  relayBannerActionText: {
+    fontSize: 13,
+    fontWeight: '600',
   },
   flyToButton: {
     position: 'absolute',
