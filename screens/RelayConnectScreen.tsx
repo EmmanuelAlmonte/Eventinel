@@ -9,7 +9,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { StyleSheet, View, Alert, Pressable } from 'react-native';
 import { Text, Button, Input, Card, Icon, Switch } from '@rneui/themed';
 import { ndk } from '../lib/ndk';
-import { isConnected, getStatusString } from '../lib/relay/status';
+import { isConnected, isConnecting, getStatusString } from '../lib/relay/status';
 import { addRelayToStorage, removeRelayFromStorage, saveRelays, DEFAULT_RELAYS, LOCAL_RELAYS } from '../lib/relay/storage';
 import type { RelayInfo } from '../types/relay';
 
@@ -250,6 +250,17 @@ export default function RelayConnectScreen() {
     );
   };
 
+  const handleReconnect = (url: string) => {
+    setMessage(`Reconnecting to ${url}...`);
+    try {
+      const relay = ndk.pool.relays.get(url) ?? ndk.addExplicitRelay(url);
+      relay.connect();
+    } catch (error) {
+      console.error('[Relay] Failed to reconnect:', url, error);
+      setMessage(`Failed to reconnect: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  };
+
   // Count connected relays
   const connectedCount = relays.filter(r => r.isConnected).length;
 
@@ -433,20 +444,36 @@ export default function RelayConnectScreen() {
                     </View>
                   </View>
 
-                  {/* Right: remove button */}
-                  <Pressable
-                    onPress={() => handleDisconnect(relay.url)}
-                    hitSlop={10}
-                    style={({ pressed }) => [
-                      styles.removeButton,
-                      { backgroundColor: `${colors.error}15` },
-                      pressed && { opacity: 0.7 },
-                    ]}
-                    accessibilityRole="button"
-                    accessibilityLabel={`Disconnect ${relay.url}`}
-                  >
-                    <Icon name="close" type="material" size={18} color={colors.error} />
-                  </Pressable>
+                  {/* Right: actions */}
+                  <View style={styles.relayActions}>
+                    <Pressable
+                      onPress={() => handleReconnect(relay.url)}
+                      hitSlop={10}
+                      disabled={isConnecting(relay.rawStatus)}
+                      style={({ pressed }) => [
+                        styles.actionButton,
+                        { backgroundColor: `${colors.primary}15` },
+                        (pressed || isConnecting(relay.rawStatus)) && { opacity: 0.7 },
+                      ]}
+                      accessibilityRole="button"
+                      accessibilityLabel={`Reconnect ${relay.url}`}
+                    >
+                      <Icon name="refresh" type="material" size={18} color={colors.primary} />
+                    </Pressable>
+                    <Pressable
+                      onPress={() => handleDisconnect(relay.url)}
+                      hitSlop={10}
+                      style={({ pressed }) => [
+                        styles.actionButton,
+                        { backgroundColor: `${colors.error}15` },
+                        pressed && { opacity: 0.7 },
+                      ]}
+                      accessibilityRole="button"
+                      accessibilityLabel={`Disconnect ${relay.url}`}
+                    >
+                      <Icon name="close" type="material" size={18} color={colors.error} />
+                    </Pressable>
+                  </View>
                 </View>
               );
             })}
@@ -577,13 +604,18 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     textTransform: 'capitalize',
   },
-  removeButton: {
+  relayActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginLeft: 12,
+  },
+  actionButton: {
     width: 36,
     height: 36,
     borderRadius: 10,
     alignItems: 'center',
     justifyContent: 'center',
-    marginLeft: 12,
   },
   infoContainer: {
     flexDirection: 'row',

@@ -1,5 +1,13 @@
 import 'react-native-get-random-values';
 
+if (!__DEV__) {
+  const noop = () => {};
+  // Trim verbose logs in production while keeping warnings/errors.
+  console.log = noop;
+  console.info = noop;
+  console.debug = noop;
+}
+
 import { registerRootComponent } from 'expo';
 
 import App from './App';
