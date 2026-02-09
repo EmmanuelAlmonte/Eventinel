@@ -1,39 +1,57 @@
-# Map Performance Review v2
+# Map Performance Review v2 (Updated)
 
-Date: 2026-02-02
-Scope: Map screen + Mapbox marker rendering + incident data flow.
-Method: Code-path review only (no runtime profiling in this pass).
+Original: 2026-02-02
+Updated: 2026-02-05
+Scope: Map screen + Mapbox rendering + incident data flow.
+Method: Code-path review (no runtime profiling in this pass).
 
-## 1) Executive summary
-- The map rendering path is inherently expensive: every incident becomes a React MarkerView with a View/Text/Pressable, and there is no clustering or viewport/zoom culling. With MAX_CACHE = 250, worst-case render cost is high and scales linearly. (Evidence: screens/MapScreen.tsx, components/map/IncidentMarker.tsx, lib/map/constants.ts)
-- The data pipeline recomputes and re-renders too much: useIncidentSubscription parses/dedups/sorts the full events array on every update, and MapScreen re-renders all markers on any incident change. (Evidence: hooks/useIncidentSubscription.ts, screens/MapScreen.tsx)
-- Several smaller issues (min/max zoom unused, high-frequency onCameraChanged work, non-native user marker) add avoidable JS/UI overhead; they will not fix the core scalability issue but do contribute to jank under load.
+Recent commits reviewed (git log -5):
+- 051d880 relay reconnect
+- 6dc63f3 Patch update
+- 96b0436 chore: update env example relay defaults
+- e450048 feat: improve incident fallback and relay config
+- 9ce0778 docs: update map performance report
+
+## 1) Executive summary (3 bullets)
+- The prior failure mode (React MarkerView per incident) is gone: MapScreen now uses ShapeSource + native layers with clustering and a hard cap (`INCIDENT_LIMITS.MAX_CACHE = 250`), so map interactions should scale materially better at current limits.
+- The subscription pipeline is now incremental and cache queries are constrained again: a local NDK SQLite cache adapter patch restores tag-based cache queries, `cacheUnconstrainFilter` is removed, and the hook applies client-side since/geohash/tag filtering.
+- Remaining perf risks are second-order and mostly about scaling past current caps: potential NDK `events` retention growth, lack of viewport/bounds culling, and shared-context fan-out causing offscreen screen rerenders.
 
 ## 2) P0/P1/P2 table
 
 | Priority | Issue | Files | Impact | Rationale (evidence + assumptions) |
 | --- | --- | --- | --- | --- |
-| P0 | MarkerView per incident with no clustering | screens/MapScreen.tsx, components/map/IncidentMarker.tsx, lib/map/constants.ts | High | Evidence: MapScreen renders `incidents.map(...)` into `<IncidentMarker/>` inside `Mapbox.MapView`; `IncidentMarker` uses `Mapbox.MarkerView` with React `View/Text/Pressable`; `INCIDENT_LIMITS.MAX_CACHE = 250`. Assumption: MarkerView scales poorly with high counts because each marker is a React view; verify in profiling. |
-| P0 | No viewport/zoom culling; all incidents render regardless of camera bounds | screens/MapScreen.tsx | High | Evidence: `handleCameraChanged` only toggles followUser state; there is no bounds/zoom computation and no filtering of `incidents` before render. Assumption: users can view large regions or low zoom where many incidents are offscreen, causing unnecessary render work. |
-| P1 | Full recompute of incident list on every event update (parse/dedup/sort) | hooks/useIncidentSubscription.ts | Med-High | Evidence: `useMemo` iterates all `events`, parses, dedups, sorts the full map, then slices; dependency is `events`, so any new event triggers a full pass. Assumption: `useSubscribe` emits frequent updates (`bufferMs: 100`) and the events list grows over time; confirm with profiling/telemetry. |
-| P1 | Map renders full incident objects without a stable, minimal marker list | screens/MapScreen.tsx, components/map/IncidentMarker.tsx, lib/map/types.ts | Medium | Evidence: MapScreen passes full `incident` objects to `IncidentMarker`; `IncidentMarker` re-derives coordinates and colors each render. There is no memoized, minimal marker data list (id + [lng,lat] + severity). Assumption: reducing object churn and prop diffs will lower re-render cost; verify with React Profiler. |
-| P1 | Marker rerenders on every incident update (no memoization; inline handler) | screens/MapScreen.tsx, components/map/IncidentMarker.tsx | Med-High | Evidence: `IncidentMarker` is not `React.memo`, and `handleMarkerPress` is a new function each render; any `incidents` change re-renders all markers. Assumption: marker re-render cost is material at 100+ markers; verify in profiling. |
-| P1 | Cache workaround can inflate marker count outside geohash/time window | hooks/useIncidentSubscription.ts | Medium | Evidence: `cacheUnconstrainFilter` removes `#g`, `#t`, `since`, `limit` for cache queries; cached events can bypass geohash/time constraints until relay EOSE arrives. Assumption: cache size is large enough to materially increase incidents; confirm by logging cache event counts. |
-| P2 | MAPBOX_CONFIG min/max zoom values are defined but unused | lib/map/constants.ts, screens/MapScreen.tsx | Low-Med | Evidence: `MIN_ZOOM`/`MAX_ZOOM` exist but MapView/Camera in MapScreen only uses `DEFAULT_ZOOM` and does not set min/max. Assumption: extreme zoom levels increase tile density/render cost; impact depends on user behavior. |
-| P2 | onCameraChanged does per-frame JS work during gestures | screens/MapScreen.tsx | Low-Med | Evidence: `onCameraChanged` fires during gestures, clears timers, toggles followUser state, and schedules auto-resume. Assumption: this competes with marker render work; confirm with JS profiler while panning. |
-| P2 | User location rendered as PointAnnotation with React view | screens/MapScreen.tsx | Low | Evidence: `Mapbox.PointAnnotation` with a `View` is used for user dot; native puck is not used. Assumption: native puck is cheaper; confirm by swapping and measuring. |
+| P1 | Potential unbounded `events` retention from `useSubscribe` | `hooks/useIncidentSubscription.ts` | Medium | Evidence: `useSubscribe` is called with `closeOnEose: false` while enabled, and app code does not trim `events` (it only tracks `lastEventCountRef` and processes incrementally). CPU is bounded by incremental processing; memory depends on NDK internals. Assumption: NDK retains an append-only JS array of all events for the lifetime of the subscription. |
+| P1 | No viewport/bounds/zoom culling before building GeoJSON | `screens/MapScreen.tsx`, `lib/map/types.ts` | Low-Med | Evidence: MapScreen gates by focus (`visibleIncidents`), then builds a FeatureCollection for all visible incidents via `incidentsToFeatureCollection()`. There is no bounds filter. At `MAX_CACHE = 250` this is typically acceptable; if caps increase, JS and native source updates scale linearly. |
+| P2 | Shared context fan-out causes offscreen MapScreen rerenders | `contexts/IncidentSubscriptionContext.tsx`, `screens/MapScreen.tsx` | Low | Evidence: Incident updates change the context value, re-rendering all consumers (Map, Feed, notifications). Mitigation exists: MapScreen uses `visibleIncidents = isFocused ? incidents : []`, so GeoJSON rebuild is skipped when unfocused. |
+| P2 | Mapbox min/max zoom constants unused | `lib/map/constants.ts`, `screens/MapScreen.tsx` | Low | Evidence: `MAPBOX_CONFIG.MIN_ZOOM` and `MAPBOX_CONFIG.MAX_ZOOM` are defined but not passed to Mapbox Camera/MapView. |
+| P2 | User location rendered as PointAnnotation with a React view | `screens/MapScreen.tsx` | Low | Evidence: user marker uses `Mapbox.PointAnnotation` and a `View` child; native puck (`LocationPuck`/`UserLocation`) is not used. |
+| P2 | Gesture camera handler does JS work at high frequency | `screens/MapScreen.tsx` | Low | Evidence: `onCameraChanged` runs during active gestures and clears timers / toggles follow state. This is lower risk now that marker rendering is native, but it still competes for JS time during pan/zoom. |
 
-## 3) New opportunities (not in v1 report)
-- Viewport/zoom culling: filter incidents by visible bounds or zoom level before rendering to cut marker count at low zoom. (Evidence: MapScreen has no bounds/zoom filter.)
-- Data-to-map decoupling: derive a minimal, stable marker list with `useMemo` (id, coordinate, severity) and pass stable props to reduce churn. (Evidence: MapScreen passes full incident objects directly.)
-- Apply MIN_ZOOM/MAX_ZOOM: enforce zoom limits to avoid extreme zoom levels that increase tile/label density and render cost. (Evidence: constants exist but unused.)
-- Avoid full recompute on every event update: incremental update of the incident map or a memoized diff to reduce parse/sort cost. (Evidence: useIncidentSubscription fully recomputes on each `events` change.)
+## 3) Implemented since the original reports (key deltas)
+- ShapeSource + clustering marker rendering.
+  - Evidence: `screens/MapScreen.tsx` uses `Mapbox.ShapeSource` with `cluster`, and renders `CircleLayer`/`SymbolLayer` for clusters and points.
+- Minimal marker data flow via GeoJSON feature conversion.
+  - Evidence: `lib/map/types.ts` `incidentsToFeatureCollection()`; MapScreen memoizes it.
+- Offscreen work gating.
+  - Evidence: `contexts/IncidentSubscriptionContext.tsx` gates subscription by focus + AppState; Map/Feed report focus via `setMapFocused`/`setFeedFocused` and render empty lists when unfocused.
+- Cache patch + incremental subscription processing. (commits e450048, 6dc63f3)
+  - Evidence: `patches/@nostr-dev-kit+mobile+0.9.3-beta.70.patch` (tag rows use `referenceId`), `hooks/useIncidentSubscription.ts` (client-side filters + incremental merge, no `cacheUnconstrainFilter`), `lib/ndk.ts` note, and `__tests__/lib/ndkCacheAdapter.test.ts`.
 
 ## 4) Load-failure analysis (what fails first under load)
-1) JS thread stalls during incident bursts: useIncidentSubscription re-parses/re-sorts the full events list, then MapScreen re-renders all markers; you will see panning/zooming jank and delayed taps. Evidence: `bufferMs: 100` updates + `incidents.map` render path. Assumption: incident events arrive in bursts and exceed 100 items.
-2) UI thread/Mapbox render thread drops frames with high marker counts: many MarkerView instances (each a React view with shadow/elevation) increase layout/draw cost; map gestures stutter first. Evidence: MarkerView per incident; `INCIDENT_LIMITS.MAX_CACHE = 250`. Assumption: device is mid/low-tier Android or older iOS.
-3) Memory/GC pressure if events list grows unbounded: `events` from `useSubscribe` is not capped before parsing; GC churn can cause intermittent freezes. Evidence: no trimming of `events`, only `incidents` slice; assumption: NDK retains all events for live subscription.
+1) If incident limits are raised above current caps: GeoJSON rebuild + ShapeSource updates become the first visible cost, especially if updates land during active gestures.
+2) Long focused sessions with continuous live events: memory growth risk shifts to the NDK `events` array (if it is append-only). GC pauses are the first symptom.
+3) Worst-case relay flapping plus incident updates: render frequency rises due to shared context updates. MapScreen mitigates heavy work when unfocused but still re-renders.
 
-## 5) Profiling plan
-1) React render profiling (JS): Use React DevTools Profiler on MapScreen while simulating 100–250 incidents. Metrics: MapScreen commit duration, number of renders per incident update, and JS FPS via RN Perf Monitor. Expected: commit duration and render count scale linearly with incident count; JS FPS dips below 50/30 during bursts. (Assumption: incident updates arrive at least every 100–500ms.)
-2) UI/Mapbox rendering profiling (native): Use Android Studio profiler (Frames/CPU/GPU) or Xcode Instruments (Core Animation + Time Profiler) while panning/zooming at 150–250 markers. Metrics: UI frame time (>16ms on 60Hz), GPU overdraw, and input latency. Expected: frame times spike during gestures; input latency increases as marker count rises.
+## 5) Profiling plan (2 steps + expected metrics)
+1) JS profiling of incident bursts and map source updates
+- Tooling: React DevTools Profiler + RN Perf Monitor (JS FPS).
+- Method: simulate bursts of 50-200 new incident events while Map is focused; record commit durations and frequency.
+- Metrics: MapScreen commit duration, time spent in `incidentsToFeatureCollection()`, commits per minute, JS FPS.
+- Expected: at <=250 incidents, `incidentsToFeatureCollection()` should stay sub-millisecond to a few ms; any spikes should correlate with burst size.
+
+2) Native frame-time profiling during pan/zoom with 250 incidents
+- Tooling: Android Studio FrameTimeline/GPU profiler or Xcode Instruments (Core Animation + Time Profiler).
+- Method: pan/zoom continuously while new events arrive; repeat with Map focused vs unfocused (Feed focused) to validate gating.
+- Metrics: frame time percentiles (P50/P90/P99), input latency, map render thread spikes at ShapeSource updates.
+- Expected: stable 60fps when idle; brief dips during source updates but no sustained hitching on mid-tier devices.

@@ -1,94 +1,61 @@
 # Consolidated Findings (Deduplicated)
 
-Date: 2026-02-02
-Sources: map-performance-report.md, incident-feed-report.md, incident-feed-report-v2.md, relay-lifecycle-report.md, relay-lifecycle-report-v2.md
+Original: 2026-02-02
+Updated: 2026-02-06
+Sources: map-performance-report.md, map-performance-report-v2.md, incident-feed-report.md, incident-feed-report-v2.md, relay-lifecycle-report.md, relay-lifecycle-report-v2.md
 
-This document consolidates all findings across the reports and removes duplicates. Related items are merged into a single entry where appropriate.
+Recent commits reviewed (git log -5):
+- 051d880 relay reconnect
+- 6dc63f3 Patch update
+- 96b0436 chore: update env example relay defaults
+- e450048 feat: improve incident fallback and relay config
+- 9ce0778 docs: update map performance report
+Also reviewed: current working tree changes (uncommitted) on top of these commits.
+
+## Resolved / Implemented Since 2026-02-02
+- Map marker rendering migrated to ShapeSource + native layers with clustering (removes MarkerView-per-incident bottleneck).
+  - Evidence: `screens/MapScreen.tsx`, `lib/map/types.ts`.
+- Subscription work is now focus/AppState gated and offscreen screens render empty lists.
+  - Evidence: `contexts/IncidentSubscriptionContext.tsx`, `screens/MapScreen.tsx`, `screens/IncidentFeedScreen.tsx`.
+- Cache tag queries restored via local NDK SQLite adapter patch; `cacheUnconstrainFilter` removed.
+  - Evidence: `patches/@nostr-dev-kit+mobile+0.9.3-beta.70.patch`, `hooks/useIncidentSubscription.ts`, `__tests__/lib/ndkCacheAdapter.test.ts`.
+- Subscription processing is incremental (no full reparse/dedup/sort per update).
+  - Evidence: `hooks/useIncidentSubscription.ts` uses `incidentMapRef` + `lastEventCountRef`.
+- Startup no longer renders `null`; relay connections are started in the background.
+  - Evidence: `App.tsx` StartupScreen + non-blocking `ndk.connect()`.
+- Startup relay load has a timeout fallback (prevents an indefinite StartupScreen if storage stalls).
+  - Evidence: `App.tsx` timeout path uses `DEFAULT_RELAYS`.
+- Relay defaults are centralized and env-driven.
+  - Evidence: `lib/relay/config.ts`, `.env.example`. (commits e450048, 96b0436)
+- Relay settings can explicitly reconnect; production log volume reduced.
+  - Evidence: `screens/RelayConnectScreen.tsx`, `index.ts`. (commit 051d880)
+- FlashList dependency updated (perf/bugfix surface area).
+  - Evidence: `package.json`. (commit 6dc63f3)
+- Cache context render fan-out removed (writes no longer re-render the provider subtree).
+  - Evidence: `contexts/IncidentCacheContext.tsx` external-store pattern (`useSyncExternalStore`) + split hooks (`useIncidentCacheApi`, `useIncidentCacheVersion`).
+- Theme token identity stabilized (memoized colors object).
+  - Evidence: `hooks/useAppTheme.ts` `useMemo` around `colors`.
 
 ## P0
-1) Map markers use MarkerView per incident with no clustering
-   - Risk: MarkerView is heavy for large counts; performance degrades as incident count grows.
-   - Affected: Map rendering and interactions.
-
-2) Subscription pipeline scales with total cached events (events array grows with uptime)
-   - Risk: CPU/memory growth from full parse/dedup/sort on each update; can saturate JS thread over time.
-   - Affected: Feed + Map + notifications.
+- None identified that are both code-validated and high-likelihood at current caps.
 
 ## P1
-1) Cache queries are unconstrained due to cacheUnconstrainFilter
-   - Removes #g/#t/since/limit for cache lookups, so off-area/old incidents can appear and full cache is reprocessed.
-   - Affected: Feed + Map + cache correctness.
-   - Status (2026-02-03): Fixed locally by patching NDK SQLite cache adapter to align event_tags.event_id with events.id for replaceable events; cacheUnconstrainFilter removed.
+1) Potential NDK `useSubscribe` event retention growth (memory)
+- Evidence: app code does not trim the `events` array returned by `useSubscribe` (`hooks/useIncidentSubscription.ts`).
+- Weak assumption: NDK retains an append-only JS array for subscription lifetime; validate by profiling `events.length` over time.
 
-2) Full-list recompute and rerender churn on each update
-   - Incidents are rebuilt and re-sorted each update; identities change and list/markers rerender broadly.
-   - Includes: map markers rerender on every incident list update (no memoization/identity stability).
-
-3) Cache context fan-out on version changes
-   - Cache updates bump a version value, re-rendering all consumers even when they only need lookups.
-
-4) Offscreen work continues unnecessarily
-   - Map markers and incident subscription processing can keep running when Map/Feed are not focused.
-
-5) Startup UI gating blocks or misleads users
-   - App renders null until relay load finishes (blank screen risk).
-   - Cache-first data is blocked while relays are disconnected, preventing offline cache hydration.
-   - Location denied/unresolved stalls incident pipeline (no EOSE; feeds show indefinite loading states).
+2) No viewport/bounds/zoom culling before building GeoJSON (future scaling)
+- Evidence: MapScreen builds a FeatureCollection for all focused incidents (`screens/MapScreen.tsx`, `lib/map/types.ts`) with no bounds filter.
 
 ## P2
-1) Map camera-change handler does JS work on every gesture update
-   - Clears timers and toggles follow state during active gestures; may add jank under load.
+1) Notification bridge does linear scans over incidents
+- Evidence: `components/notifications/IncidentNotificationBridge.tsx` filters `incidents` to find new IDs on each update.
 
-2) User location marker is a React view
-   - PointAnnotation with a View marker adds React overhead vs native puck.
+2) Map minor performance and scaling gaps
+- Evidence: min/max zoom constants unused (`lib/map/constants.ts`), PointAnnotation user marker (`screens/MapScreen.tsx`), per-gesture JS work in `onCameraChanged` (`screens/MapScreen.tsx`).
 
-3) Theme object identity breaks memoization
-   - Theme colors are re-created on each render, invalidating memoized rows.
+3) Relay connectivity semantics and observability
+- Evidence: auth states are treated as connected (`lib/relay/status.ts`), production logs are suppressed (`index.ts`).
 
-4) Notification bridge scans the full incident list on each update
-   - Linear work per update; duplicates dedup/scan logic.
-
-5) Feed row rendering is heavier than necessary
-   - Per-row relative time compute and RNE Card usage add overhead for long lists.
-
-6) FlashList layout optimizations missing
-   - No overrideItemLayout/getItemType for (mostly) fixed-height rows.
-
-7) Subscription buffering may be too aggressive
-   - bufferMs = 100 can flush state frequently under event bursts.
-
-8) Cache adapter initialization not awaited (possible race)
-   - If initialize is async, early subscriptions may run before tables are ready.
-
-9) Login/session readiness race
-   - Login can surface “NDK not initialized” or flicker before session restore completes.
-
-10) Relay health status is optimistic or inconsistent
-   - Auth-required states counted as connected; RelayConnect does not reflect auth/flapping events; relay status updates may churn UI on flapping networks.
-
-11) Relay connection calls may be redundant
-   - Multiple connect triggers (startup + relay changes + add) could amplify reconnect churn under bad networks.
-
-12) Notification/deep-link lookup ignores SQLite cache
-   - Relay-only fetch path means cached incidents may be treated as missing when offline.
-
-## Post-report updates (2026-02-03)
-Implemented:
-1) Relay config single source of truth
-   - Added `lib/relay/config.ts` with `DEFAULT_RELAYS`, `LOCAL_RELAYS`, env parsing, and normalization helpers.
-   - Updated `lib/relay/storage.ts` to import/re-export relay defaults and use shared normalization.
-   - Updated `lib/nostr/config.ts` to re-export relay config so existing imports keep working.
-
-Potential multi-source-of-truth conflicts (not fixed yet):
-1) Incident type display config is duplicated and inconsistent
-   - Canonical `TYPE_CONFIG` in `lib/nostr/config.ts`, but separate mappings in
-     `components/ui/StatusBadge.tsx` and `components/ui/IncidentCard.tsx`.
-2) Severity colors are defined in two places with different models
-   - Numeric `SEVERITY_COLORS` in `lib/nostr/config.ts` vs named `SEVERITY_COLORS` in
-     `lib/brand/colors.ts` (used by `components/ui/StatusBadge.tsx` and `components/ui/IncidentCard.tsx`).
-3) Relay list display logic is duplicated
-   - `formatRelayList` + `MAX_RELAY_LABELS` in `screens/MapScreen.tsx`,
-     `screens/IncidentFeedScreen.tsx`, `screens/IncidentDetailScreen.tsx`.
-4) Relay URL normalization duplicated
-   - Shared `normalizeRelayUrl` in `lib/relay/config.ts` and local `normalizeUrl` in
-     `screens/RelayConnectScreen.tsx`.
+## Notes
+- `docs/reports/map-marker-manual-test-guide.md` exists for validating clustering behavior and tap interactions on-device.

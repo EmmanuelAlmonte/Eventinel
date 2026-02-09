@@ -1,52 +1,54 @@
 # Map Performance Review
 
-Date: 2026-02-02
-Scope: Map screen + Mapbox marker rendering and incident data flow.
+Original: 2026-02-02
+Updated: 2026-02-05
+Scope: Map screen + Mapbox rendering + incident subscription pipeline.
 
-Reviewed files:
-- screens/MapScreen.tsx
-- components/map/IncidentMarker.tsx
-- hooks/useIncidentSubscription.ts
-- contexts/IncidentSubscriptionContext.tsx
-- lib/map/constants.ts
+Recent commits reviewed (git log -5):
+- 051d880 relay reconnect
+- 6dc63f3 Patch update
+- 96b0436 chore: update env example relay defaults
+- e450048 feat: improve incident fallback and relay config
+- 9ce0778 docs: update map performance report
+
+## Implemented Since Initial Report
+- Marker architecture: moved from React MarkerView-per-incident to Mapbox ShapeSource + CircleLayer/SymbolLayer with clustering.
+  - Evidence: `screens/MapScreen.tsx` uses `Mapbox.ShapeSource` with `cluster` enabled and renders cluster + point layers.
+- Data-to-map decoupling: incidents converted to a minimal GeoJSON FeatureCollection (id + point geometry + {incidentId,severity}).
+  - Evidence: `lib/map/types.ts` `incidentsToFeatureCollection()`; consumed via `useMemo` in `screens/MapScreen.tsx`.
+- Offscreen work gating: subscription runs only when Map/Feed is focused and app is active; MapScreen also renders an empty feature set when unfocused.
+  - Evidence: `contexts/IncidentSubscriptionContext.tsx` gates `enabled` by focus + AppState; `screens/MapScreen.tsx` uses `useIsFocused()` and `visibleIncidents = isFocused ? incidents : []`.
+- Cache correctness/perf: patched NDK SQLite adapter so tag-based cache queries work; removed `cacheUnconstrainFilter`; added client-side filtering + incremental event processing. (commits e450048, 6dc63f3)
+  - Evidence: `patches/@nostr-dev-kit+mobile+0.9.3-beta.70.patch`, `hooks/useIncidentSubscription.ts` (no `cacheUnconstrainFilter`, incremental merge), `__tests__/lib/ndkCacheAdapter.test.ts`.
 
 ## Findings (Prioritized)
 
-### P0
-- MarkerView-per-incident with no clustering (potential jank at current limits)
-  - Files: screens/MapScreen.tsx, components/map/IncidentMarker.tsx, lib/map/constants.ts
-  - Rationale: Map renders one React/JS MarkerView per incident with MAX_CACHE = 250. Mapbox MarkerView is heavy and intended for low counts; at higher counts it can drop frames and delay gestures.
-  - Quick fix: Cap map markers (e.g., slice to 50–100 based on zoom) and/or hide the severity label when zoomed out to reduce view complexity.
-  - Longer-term refactor: Replace MarkerView list with ShapeSource + SymbolLayer (and cluster=true) so clustering and rendering happen on the native map engine.
-
 ### P1
-- Incident list updates trigger full marker rerenders
-  - Files: screens/MapScreen.tsx, components/map/IncidentMarker.tsx, hooks/useIncidentSubscription.ts
-  - Rationale: useIncidentSubscription rebuilds a new array on every update; MapScreen maps directly to <IncidentMarker/> elements without memoization. Even small event deltas rerender all markers, increasing JS/bridge churn.
-  - Quick fix: Memoize IncidentMarker (React.memo) and stabilize the onPress callback (useCallback + pass incidentId) to reduce rerenders for unchanged markers.
-  - Longer-term refactor: Normalize incidents in a store keyed by incidentId and only emit changed items; or move to ShapeSource where data updates are diffed on the native side.
+1) Potential memory growth in `useSubscribe` `events` retention (NDK-internal)
+- Files: `hooks/useIncidentSubscription.ts`
+- Evidence: app code does not and cannot trim the `events` array returned by `useSubscribe`; `closeOnEose: false` keeps the subscription alive while focused.
+- Impact: medium if `useSubscribe` retains an append-only list for the life of the subscription; low if it internally bounds/evicts.
+- Weak assumption to validate: NDK stores every received event in a growing JS array for the entire subscription lifetime.
 
-- Cache workaround can inflate markers outside current geohash/time window
-  - Files: hooks/useIncidentSubscription.ts
-  - Rationale: cacheUnconstrainFilter removes #g/since/limit for cache queries, so cached incidents outside the active geohash/time window can render on the map until relay results arrive, increasing marker count and visual noise.
-  - Quick fix: Client-side filter cached results by geohash neighborhood + occurredAt/createdAt before exposing to the map.
-  - Longer-term refactor: Revisit NDK cache behavior and remove the workaround once the upstream cache bug is fixed for your @nostr-dev-kit/mobile version.
+2) No viewport/bounds culling before building GeoJSON (future-scaling)
+- Files: `screens/MapScreen.tsx`, `lib/map/types.ts`
+- Evidence: incidents are gated by focus, but not filtered by visible camera bounds/zoom before `incidentsToFeatureCollection()`.
+- Impact: low at current `INCIDENT_LIMITS.MAX_CACHE = 250`; becomes meaningful if the cap is raised.
 
 ### P2
-- High-frequency camera change handler work on JS thread
-  - Files: screens/MapScreen.tsx
-  - Rationale: onCameraChanged fires frequently while panning; it clears/resets timers and toggles followUser state on the JS thread, which can contend with marker rendering.
-  - Quick fix: Gate followUser toggling to a single transition (e.g., use a ref to ignore subsequent calls while gesture is active) and throttle auto-resume scheduling.
-  - Longer-term refactor: Use Mapbox tracking modes (followUserLocation / onUserTrackingModeChange) or region-change callbacks that fire on gesture end to reduce per-frame work.
+1) Mapbox min/max zoom constants unused
+- Files: `lib/map/constants.ts`, `screens/MapScreen.tsx`
+- Evidence: `MAPBOX_CONFIG.MIN_ZOOM`/`MAX_ZOOM` are defined but never passed to Mapbox Camera/MapView.
 
-- Custom user marker is a React view
-  - Files: screens/MapScreen.tsx
-  - Rationale: PointAnnotation with a View for the user location adds another React-managed view into the map. Not critical, but it adds overhead and bypasses native puck optimizations.
-  - Quick fix: Replace with Mapbox.UserLocation or LocationPuck for native rendering.
-  - Longer-term refactor: Use a custom puck image via Mapbox.Images and SymbolLayer for consistent styling across zoom levels.
+2) User location uses `PointAnnotation` + React view instead of native puck
+- Files: `screens/MapScreen.tsx`
+- Evidence: user marker is `Mapbox.PointAnnotation` with a `View` child.
+
+3) Gesture camera handler does JS work at high frequency
+- Files: `screens/MapScreen.tsx`
+- Evidence: `onCameraChanged` clears timers and toggles follow state during active gestures.
 
 ## Risks / Testing Notes
-- Switching to ShapeSource + SymbolLayer + clustering will change marker interaction behavior (cluster taps, zooming into clusters). Verify tap-to-open IncidentDetail still works and add a cluster-press behavior spec.
-- Capping or filtering markers can hide incidents; validate UX expectations for “nearby vs all” and consider a UI toggle.
-- After any data-flow changes, stress-test with 200+ incidents on a low-end Android device and profile frame times (Mapbox + React DevTools).
-- Validate cache filtering logic against real relay data to avoid dropping legitimate incidents at the edge of the geohash window.
+- Cluster interactions should be validated on-device. See `docs/reports/map-marker-manual-test-guide.md`.
+- Ensure patch-package applies the NDK cache adapter patch in CI/release builds. Regression test: `__tests__/lib/ndkCacheAdapter.test.ts`.
+- If incident limits or update frequency are increased, re-check GeoJSON build cost and ShapeSource update behavior under pan/zoom.
