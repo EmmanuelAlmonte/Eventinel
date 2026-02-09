@@ -41,9 +41,15 @@ let mockCurrentUser: { pubkey: string; profile?: { displayName?: string } } | nu
   profile: { displayName: 'Test User' },
 };
 
-jest.mock('@nostr-dev-kit/mobile', () => ({
-  useNDKCurrentUser: () => mockCurrentUser,
-}));
+jest.mock('@nostr-dev-kit/mobile', () => {
+  const originalModule = jest.requireActual('../../__mocks__/@nostr-dev-kit/mobile');
+  return {
+    __esModule: true,
+    ...originalModule,
+    default: originalModule.default ?? originalModule,
+    useNDKCurrentUser: () => mockCurrentUser,
+  };
+});
 
 const mockUseIncidentComments = jest.fn<
   UseIncidentCommentsResult,

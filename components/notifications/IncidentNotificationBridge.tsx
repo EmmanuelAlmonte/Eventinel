@@ -1,12 +1,11 @@
 import { useCallback, useEffect, useRef } from 'react';
 import { AppState } from 'react-native';
 import * as Notifications from 'expo-notifications';
-import { useNavigation } from '@react-navigation/native';
-import type { NavigationProp } from '@react-navigation/native';
 
 import { showToast } from '@components/ui';
-import { useIncidentCache, useSharedIncidents } from '@contexts';
+import { useIncidentCacheApi, useSharedIncidents } from '@contexts';
 import { toProcessedIncident } from '@hooks/useIncidentSubscription';
+import { navigationRef, type RootStackParamList } from '@lib/navigation';
 import { saveExpoPushToken } from '@lib/notifications/pushTokenStorage';
 import {
   coerceIncidentNotificationPayload,
@@ -14,10 +13,6 @@ import {
   type IncidentNotificationPayload,
 } from '@lib/notifications/incidentNotifications';
 import { registerForPushNotificationsAsync } from '@lib/notifications/pushRegistration';
-
-type RootStackParamList = {
-  IncidentDetail: { incidentId: string; eventId?: string };
-};
 
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
@@ -29,14 +24,25 @@ Notifications.setNotificationHandler({
 });
 
 export default function IncidentNotificationBridge() {
-  const navigation = useNavigation<NavigationProp<RootStackParamList>>();
   const { incidents, hasReceivedHistory } = useSharedIncidents();
-  const { upsertMany, getIncident } = useIncidentCache();
+  const { upsertMany, getIncident } = useIncidentCacheApi();
   const appStateRef = useRef(AppState.currentState);
   const hasSeededRef = useRef(false);
   const seenIncidentIdsRef = useRef<Set<string>>(new Set());
   const inFlightRef = useRef<Set<string>>(new Set());
   const hasRegisteredRef = useRef(false);
+
+  const navigateToIncidentDetail = useCallback(
+    (params: RootStackParamList['IncidentDetail']) => {
+      if (!navigationRef.isReady()) {
+        console.warn('[Notifications] Navigation is not ready; skipping navigate');
+        return;
+      }
+
+      navigationRef.navigate('IncidentDetail', params);
+    },
+    []
+  );
 
   useEffect(() => {
     const subscription = AppState.addEventListener('change', (nextState) => {
@@ -53,26 +59,26 @@ export default function IncidentNotificationBridge() {
 
       inFlightRef.current.add(key);
       try {
-        const parsed = await fetchIncidentFromRelay(payload);
-        if (parsed) {
-          const processed = toProcessedIncident(parsed);
-          upsertMany([processed]);
-          navigation.navigate('IncidentDetail', {
-            incidentId: processed.incidentId,
-            eventId: processed.eventId,
-          });
-          return;
-        }
-
-        if (payload.incidentId) {
-          const cached = getIncident(payload.incidentId);
-          if (cached) {
-            navigation.navigate('IncidentDetail', {
-              incidentId: cached.incidentId,
-              eventId: cached.eventId,
+          const parsed = await fetchIncidentFromRelay(payload);
+          if (parsed) {
+            const processed = toProcessedIncident(parsed);
+            upsertMany([processed]);
+            navigateToIncidentDetail({
+              incidentId: processed.incidentId,
+              eventId: processed.eventId,
             });
             return;
           }
+
+          if (payload.incidentId) {
+            const cached = getIncident(payload.incidentId);
+            if (cached) {
+              navigateToIncidentDetail({
+                incidentId: cached.incidentId,
+                eventId: cached.eventId,
+              });
+              return;
+            }
         }
 
         showToast.error('Incident not found', 'Try again in a moment');
@@ -80,7 +86,7 @@ export default function IncidentNotificationBridge() {
         inFlightRef.current.delete(key);
       }
     },
-    [getIncident, navigation, upsertMany]
+    [getIncident, navigateToIncidentDetail, upsertMany]
   );
 
   useEffect(() => {

@@ -72,6 +72,27 @@ jest.mock('@lib/nostr/events/incident', () => ({
       return null;
     }
   }),
+  getTagValue: jest.fn((tags: string[][], tagName: string) => {
+    const tag = tags?.find((t) => t[0] === tagName);
+    return tag?.[1];
+  }),
+  getTagValues: jest.fn((tags: string[][], tagName: string) => {
+    return (tags ?? []).filter((t) => t[0] === tagName).map((t) => t[1]);
+  }),
+  parseGeolocation: jest.fn((geoTag: string | undefined) => {
+    if (!geoTag) return null;
+
+    const parts = geoTag.split(',');
+    if (parts.length !== 2) return null;
+
+    const lat = parseFloat(parts[0]);
+    const lng = parseFloat(parts[1]);
+
+    if (Number.isNaN(lat) || Number.isNaN(lng)) return null;
+    if (lat < -90 || lat > 90 || lng < -180 || lng > 180) return null;
+
+    return { lat, lng };
+  }),
 }));
 
 // Import the hook after mocks
@@ -375,15 +396,16 @@ describe('useIncidentSubscription', () => {
 
   describe('Deduplication', () => {
     it('deduplicates events by incidentId', async () => {
+      const nowSec = Math.floor(Date.now() / 1000);
       const incidentId = 'duplicate-incident';
       const event1 = createMockIncidentEvent({
         incidentId,
-        created_at: 1000,
+        created_at: nowSec - 10,
         title: 'First Version',
       });
       const event2 = createMockIncidentEvent({
         incidentId,
-        created_at: 2000,
+        created_at: nowSec - 5,
         title: 'Second Version',
       });
 
@@ -402,15 +424,16 @@ describe('useIncidentSubscription', () => {
     });
 
     it('keeps the latest version by createdAt', async () => {
+      const nowSec = Math.floor(Date.now() / 1000);
       const incidentId = 'duplicate-incident';
       const event1 = createMockIncidentEvent({
         incidentId,
-        created_at: 1000,
+        created_at: nowSec - 10,
         title: 'Old Version',
       });
       const event2 = createMockIncidentEvent({
         incidentId,
-        created_at: 2000,
+        created_at: nowSec - 5,
         title: 'New Version',
       });
 
@@ -429,16 +452,17 @@ describe('useIncidentSubscription', () => {
     });
 
     it('handles events with same incidentId regardless of order', async () => {
+      const nowSec = Math.floor(Date.now() / 1000);
       const incidentId = 'duplicate-incident';
       // Newer event comes first in array
       const newerEvent = createMockIncidentEvent({
         incidentId,
-        created_at: 2000,
+        created_at: nowSec - 5,
         title: 'Newer',
       });
       const olderEvent = createMockIncidentEvent({
         incidentId,
-        created_at: 1000,
+        created_at: nowSec - 10,
         title: 'Older',
       });
 

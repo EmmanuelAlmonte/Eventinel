@@ -45,6 +45,7 @@ jest.mock('../lib/ndk', () => ({
 }));
 
 jest.mock('../lib/relay/storage', () => ({
+  DEFAULT_RELAYS: ['wss://relay.default.com'],
   loadRelays: jest.fn().mockResolvedValue(['wss://relay.test.com']),
 }));
 
@@ -215,9 +216,9 @@ describe('App', () => {
   // =============================================================================
 
   describe('Loading States', () => {
-    it('returns null initially while loading', () => {
+    it('renders StartupScreen while relays are still loading', () => {
       // This tests the isReady state before initialization completes
-      // The App returns null when !isReady
+      // The App renders StartupScreen when !isReady
 
       // We need to delay the relay loading to test this
       let resolveRelays: (value: string[]) => void;
@@ -227,10 +228,9 @@ describe('App', () => {
         })
       );
 
-      const { toJSON } = render(<App />);
+      const { getByText } = render(<App />);
 
-      // Initially should render nothing (null)
-      expect(toJSON()).toBeNull();
+      expect(getByText('Starting Eventinel')).toBeTruthy();
 
       // Now resolve the relay loading
       resolveRelays!([]);

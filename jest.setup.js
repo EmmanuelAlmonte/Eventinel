@@ -69,6 +69,12 @@ jest.mock('@rnmapbox/maps', () => ({
   setAccessToken: jest.fn(),
 }));
 
+// FlashList relies on native layout measurement; use FlatList in tests.
+jest.mock('@shopify/flash-list', () => {
+  const { FlatList } = require('react-native');
+  return { FlashList: FlatList };
+});
+
 // Mock NavigationContainer
 jest.mock('@react-navigation/native', () => {
   const actual = jest.requireActual('@react-navigation/native');

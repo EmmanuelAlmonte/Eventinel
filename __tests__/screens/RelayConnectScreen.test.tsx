@@ -59,6 +59,7 @@ jest.mock('../../lib/ndk', () => {
 // Mock relay status utilities
 jest.mock('../../lib/relay/status', () => ({
   isConnected: (status: number) => status >= 5,
+  isConnecting: (status: number) => status === 4,
   getStatusString: (status: number) => {
     if (status >= 5) return 'connected';
     if (status === 4) return 'connecting';

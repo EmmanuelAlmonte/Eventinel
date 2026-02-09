@@ -423,6 +423,7 @@ describe('IncidentSubscriptionContext', () => {
       mockUseIncidentSubscription.mockReturnValue({
         ...defaultSubscriptionMock,
         incidents: mockIncidents,
+        updatedIncidents: mockIncidents,
       });
 
       const { getByTestId } = render(
@@ -445,6 +446,7 @@ describe('IncidentSubscriptionContext', () => {
       mockUseIncidentSubscription.mockReturnValue({
         ...defaultSubscriptionMock,
         incidents: initialIncidents,
+        updatedIncidents: initialIncidents,
       });
 
       const { getByTestId, rerender } = render(
@@ -464,6 +466,7 @@ describe('IncidentSubscriptionContext', () => {
       mockUseIncidentSubscription.mockReturnValue({
         ...defaultSubscriptionMock,
         incidents: newIncidents,
+        updatedIncidents: newIncidents,
       });
 
       rerender(

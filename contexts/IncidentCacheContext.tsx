@@ -8,19 +8,33 @@
  * This enables incidentId-only navigation (no serialization warnings).
  */
 
-import React, { createContext, useContext, useCallback, useRef, useState } from 'react';
+import React, {
+  createContext,
+  useCallback,
+  useContext,
+  useMemo,
+  useRef,
+  useSyncExternalStore,
+} from 'react';
 import type { ProcessedIncident } from '@hooks/useIncidentSubscription';
 
-interface IncidentCacheContextValue {
+export interface IncidentCacheApi {
   /** Get an incident by ID */
   getIncident: (incidentId: string) => ProcessedIncident | undefined;
   /** Upsert multiple incidents into the cache */
   upsertMany: (incidents: ProcessedIncident[]) => void;
-  /** Version number - changes when cache updates (triggers re-renders) */
-  version: number;
 }
 
-const IncidentCacheContext = createContext<IncidentCacheContextValue | null>(null);
+type IncidentCacheListener = () => void;
+
+interface IncidentCacheStore extends IncidentCacheApi {
+  /** Current version (increments on mutation) */
+  getVersion: () => number;
+  /** Subscribe to mutations */
+  subscribe: (listener: IncidentCacheListener) => () => void;
+}
+
+const IncidentCacheContext = createContext<IncidentCacheStore | null>(null);
 
 /** Max cache size to prevent unbounded growth */
 const MAX_CACHE_SIZE = 500;
@@ -28,11 +42,32 @@ const MAX_CACHE_SIZE = 500;
 export function IncidentCacheProvider({ children }: { children: React.ReactNode }) {
   // Cache stored in ref (fast reads, no re-render on mutation)
   const cacheRef = useRef<Map<string, ProcessedIncident>>(new Map());
-  // Version triggers re-renders in consumers when cache updates
-  const [version, setVersion] = useState(0);
+  // External-store pattern: provider does NOT re-render on writes; subscribers do.
+  const versionRef = useRef(0);
+  const listenersRef = useRef<Set<IncidentCacheListener>>(new Set());
 
   const getIncident = useCallback((incidentId: string) => {
     return cacheRef.current.get(incidentId);
+  }, []);
+
+  const getVersion = useCallback(() => versionRef.current, []);
+
+  const subscribe = useCallback((listener: IncidentCacheListener) => {
+    listenersRef.current.add(listener);
+    return () => {
+      listenersRef.current.delete(listener);
+    };
+  }, []);
+
+  const emitChange = useCallback(() => {
+    versionRef.current += 1;
+    for (const listener of listenersRef.current) {
+      try {
+        listener();
+      } catch (error) {
+        console.warn('[IncidentCache] listener error:', error);
+      }
+    }
   }, []);
 
   const upsertMany = useCallback((incidents: ProcessedIncident[]) => {
@@ -60,23 +95,79 @@ export function IncidentCacheProvider({ children }: { children: React.ReactNode 
       didUpdate = true;
     }
 
-    // Bump version to trigger re-renders in consumers
+    // Notify subscribers only when the cache actually changes.
     if (didUpdate) {
-      setVersion(v => v + 1);
+      emitChange();
     }
-  }, []);
+  }, [emitChange]);
+
+  const store = useMemo<IncidentCacheStore>(
+    () => ({
+      getIncident,
+      upsertMany,
+      getVersion,
+      subscribe,
+    }),
+    [getIncident, getVersion, subscribe, upsertMany]
+  );
 
   return (
-    <IncidentCacheContext.Provider value={{ getIncident, upsertMany, version }}>
+    <IncidentCacheContext.Provider value={store}>
       {children}
     </IncidentCacheContext.Provider>
   );
 }
 
-export function useIncidentCache() {
-  const context = useContext(IncidentCacheContext);
-  if (!context) {
+function useIncidentCacheStore(): IncidentCacheStore {
+  const store = useContext(IncidentCacheContext);
+  if (!store) {
     throw new Error('useIncidentCache must be used within IncidentCacheProvider');
   }
-  return context;
+  return store;
+}
+
+/**
+ * useIncidentCacheApi
+ *
+ * Accessor/mutator API without subscribing to cache changes.
+ * Use this in producers (subscription provider, notification bridge) to avoid render fan-out.
+ */
+export function useIncidentCacheApi(): IncidentCacheApi {
+  const store = useIncidentCacheStore();
+  return useMemo(
+    () => ({
+      getIncident: store.getIncident,
+      upsertMany: store.upsertMany,
+    }),
+    [store]
+  );
+}
+
+/**
+ * useIncidentCacheVersion
+ *
+ * Subscribes to cache mutations. Use sparingly (detail screens that need live updates).
+ */
+export function useIncidentCacheVersion(): number {
+  const store = useIncidentCacheStore();
+  return useSyncExternalStore(store.subscribe, store.getVersion, store.getVersion);
+}
+
+/**
+ * useIncidentCache
+ *
+ * Backwards-compatible hook that includes `version` for subscription-based rerenders.
+ */
+export function useIncidentCache(): IncidentCacheApi & { version: number } {
+  const store = useIncidentCacheStore();
+  const version = useIncidentCacheVersion();
+
+  return useMemo(
+    () => ({
+      getIncident: store.getIncident,
+      upsertMany: store.upsertMany,
+      version,
+    }),
+    [store, version]
+  );
 }

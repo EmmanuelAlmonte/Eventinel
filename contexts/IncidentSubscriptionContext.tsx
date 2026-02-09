@@ -29,7 +29,7 @@ import { AppState, type AppStateStatus } from 'react-native';
 import { useIncidentSubscription } from '@hooks';
 import type { ProcessedIncident } from '@hooks';
 import { useSharedLocation } from './LocationContext';
-import { useIncidentCache } from './IncidentCacheContext';
+import { useIncidentCacheApi } from './IncidentCacheContext';
 import type { Severity } from '@lib/nostr/config';
 
 interface IncidentSubscriptionContextValue {
@@ -59,17 +59,19 @@ const IncidentSubscriptionContext = createContext<IncidentSubscriptionContextVal
  */
 export function IncidentSubscriptionProvider({ children }: { children: React.ReactNode }) {
   const { location } = useSharedLocation();
-  const { upsertMany } = useIncidentCache();
+  const { upsertMany } = useIncidentCacheApi();
   const [isMapFocused, setIsMapFocused] = useState(false);
   const [isFeedFocused, setIsFeedFocused] = useState(false);
   const [isAppActive, setIsAppActive] = useState(() => {
     const currentState = AppState.currentState;
-    return !currentState || currentState === 'active';
+    // AppState can be 'unknown' on startup in some environments; treat that as active
+    // to avoid suppressing cache hydration and subscriptions on cold start.
+    return currentState !== 'background' && currentState !== 'inactive';
   });
 
   useEffect(() => {
     const handleAppStateChange = (nextState: AppStateStatus) => {
-      setIsAppActive(nextState === 'active');
+      setIsAppActive(nextState !== 'background' && nextState !== 'inactive');
     };
 
     const subscription = AppState.addEventListener?.('change', handleAppStateChange);

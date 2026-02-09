@@ -5,6 +5,7 @@
  * Extracted from lib/theme for proper separation of concerns.
  */
 
+import { useCallback, useMemo } from 'react';
 import { useTheme as useRNETheme, useThemeMode } from '@rneui/themed';
 import { PRIMARY, SEMANTIC, SEVERITY_COLORS } from '@lib/brand/colors';
 
@@ -26,36 +27,68 @@ export function useAppTheme() {
 
   const isDark = mode === 'dark';
 
-  // Semantic color tokens that adapt to theme
-  const colors = {
-    // Backgrounds
-    background: theme.colors.background,
-    surface: theme.colors.searchBg, // Elevated surface (cards)
-    surfaceAlt: isDark ? '#27272A' : '#F4F4F5',
+  // Pull primitives so memoization works even if `theme.colors` is a new object per render.
+  const {
+    background,
+    searchBg,
+    grey0,
+    grey2,
+    grey5,
+    primary,
+    success,
+    error,
+    warning,
+  } = theme.colors;
 
-    // Text
-    text: theme.colors.grey0, // Primary text
-    textMuted: theme.colors.grey2, // Secondary text
-    textInverse: isDark ? '#18181B' : '#FAFAFA',
+  // Semantic color tokens that adapt to theme.
+  // Memoized to keep object identity stable between renders (improves list row memoization).
+  const colors = useMemo(
+    () => ({
+      // Backgrounds
+      background,
+      surface: searchBg, // Elevated surface (cards)
+      surfaceAlt: isDark ? '#27272A' : '#F4F4F5',
 
-    // Borders
-    border: theme.colors.grey5,
-    borderMuted: isDark ? '#3F3F46' : '#D4D4D8',
+      // Text
+      text: grey0, // Primary text
+      textMuted: grey2, // Secondary text
+      textInverse: isDark ? '#18181B' : '#FAFAFA',
 
-    // Brand
-    primary: theme.colors.primary,
-    primaryDark: PRIMARY.dark,
-    primaryLight: PRIMARY.light,
+      // Borders
+      border: grey5,
+      borderMuted: isDark ? '#3F3F46' : '#D4D4D8',
 
-    // Semantic
-    success: theme.colors.success,
-    error: theme.colors.error,
-    warning: theme.colors.warning,
-    info: SEMANTIC.info,
+      // Brand
+      primary,
+      primaryDark: PRIMARY.dark,
+      primaryLight: PRIMARY.light,
 
-    // Severity (for incidents)
-    severity: SEVERITY_COLORS,
-  };
+      // Semantic
+      success,
+      error,
+      warning,
+      info: SEMANTIC.info,
+
+      // Severity (for incidents)
+      severity: SEVERITY_COLORS,
+    }),
+    [
+      background,
+      searchBg,
+      grey0,
+      grey2,
+      grey5,
+      primary,
+      success,
+      error,
+      warning,
+      isDark,
+    ]
+  );
+
+  const toggleMode = useCallback(() => {
+    setMode(isDark ? 'light' : 'dark');
+  }, [isDark, setMode]);
 
   return {
     theme,
@@ -63,6 +96,6 @@ export function useAppTheme() {
     isDark,
     mode,
     setMode,
-    toggleMode: () => setMode(isDark ? 'light' : 'dark'),
+    toggleMode,
   };
 }

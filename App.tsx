@@ -16,7 +16,8 @@ import ProfileScreen from './screens/ProfileScreen';
 import RelayConnectScreen from './screens/RelayConnectScreen';
 import LoginScreen from './screens/LoginScreen';
 import { ndk } from './lib/ndk';
-import { loadRelays } from './lib/relay/storage';
+import { navigationRef } from './lib/navigation';
+import { DEFAULT_RELAYS, loadRelays } from './lib/relay/storage';
 import { theme } from './lib/theme';
 import { useAppTheme } from '@hooks';
 import { IncidentCacheProvider, LocationProvider, IncidentSubscriptionProvider, RelayStatusProvider } from '@contexts';
@@ -96,7 +97,7 @@ function MainNavigation() {
   const { isDark, colors } = useAppTheme();
 
   return (
-    <NavigationContainer>
+    <NavigationContainer ref={navigationRef}>
       <StatusBar style={isDark ? 'light' : 'dark'} />
       <IncidentNotificationBridge />
       <Stack.Navigator screenOptions={{ headerShown: false }}>
@@ -190,38 +191,79 @@ export default function App() {
   });
 
   useEffect(() => {
-    async function initializeRelays() {
-      try {
-        console.log('🚀 [App] Initializing relay connections...');
+    let isCancelled = false;
+    let didProceed = false;
+    let didStartConnect = false;
 
-        // Load saved relays from storage
-        const savedRelays = await loadRelays();
-        console.log('📥 [App] Loaded', savedRelays.length, 'saved relays:', savedRelays);
+    // Guardrail: never let a stalled AsyncStorage read block the UI indefinitely.
+    const RELAY_LOAD_TIMEOUT_MS = __DEV__ ? 5000 : 2500;
 
-        if (savedRelays.length === 0) {
-          console.warn('⚠️ [App] No saved relays found. Add relays in Profile > Relay Settings.');
+    const addRelaysToPool = (urls: string[]) => {
+      for (const url of urls) {
+        ndk.addExplicitRelay(url);
+      }
+    };
+
+    const connectPoolOnce = () => {
+      if (didStartConnect) return;
+      didStartConnect = true;
+      ndk.connect().catch((err) => console.warn('⚠️ [App] Relay connection warning:', err));
+    };
+
+    const proceedWithRelays = (urls: string[], source: string) => {
+      if (isCancelled) return;
+
+      if (!didProceed) {
+        didProceed = true;
+
+        console.log(`📥 [App] Using ${urls.length} relays (${source}):`, urls);
+        if (urls.length === 0) {
+          console.warn('⚠️ [App] No relays available. Add relays in Profile > Relay Settings.');
         }
 
-        // Add them to NDK pool
-        for (const url of savedRelays) {
-          console.log('➕ [App] Adding relay to pool:', url);
-          ndk.addExplicitRelay(url);
-        }
+        addRelaysToPool(urls);
+        connectPoolOnce();
 
-        // Start connecting (don't wait - let it happen in background)
-        ndk.connect().catch((err) => console.warn('⚠️ [App] Relay connection warning:', err));
-        console.log('🔄 [App] Started relay connections in background');
-
-        // Don't wait for connections - show UI immediately
         setIsReady(true);
         console.log('✅ [App] UI ready, relays connecting...');
-      } catch (error) {
-        console.error('❌ [App] Failed to initialize relays:', error);
-        setIsReady(true); // Continue anyway
+        return;
       }
-    }
 
-    initializeRelays();
+      // If we already proceeded (timeout path), merge in any saved relays when they arrive.
+      const missing = urls.filter((url) => !ndk.pool.relays.has(url));
+      if (missing.length > 0) {
+        console.log(`➕ [App] Adding ${missing.length} relays (${source}):`, missing);
+        addRelaysToPool(missing);
+        for (const url of missing) {
+          ndk.pool.relays.get(url)?.connect();
+        }
+      }
+    };
+
+    console.log('🚀 [App] Initializing relay connections...');
+
+    const timeoutId = setTimeout(() => {
+      console.warn(
+        `⏰ [App] loadRelays() timed out after ${RELAY_LOAD_TIMEOUT_MS}ms; starting with defaults`
+      );
+      proceedWithRelays(DEFAULT_RELAYS, 'timeout-defaults');
+    }, RELAY_LOAD_TIMEOUT_MS);
+
+    loadRelays()
+      .then((savedRelays) => {
+        clearTimeout(timeoutId);
+        proceedWithRelays(savedRelays, 'storage');
+      })
+      .catch((error) => {
+        clearTimeout(timeoutId);
+        console.error('❌ [App] Failed to load relays:', error);
+        proceedWithRelays(DEFAULT_RELAYS, 'storage-error-defaults');
+      });
+
+    return () => {
+      isCancelled = true;
+      clearTimeout(timeoutId);
+    };
   }, []);
 
   const content = !isReady ? (
