@@ -27,6 +27,7 @@ import {
 } from 'react-native';
 import { Text, Card, Icon, Button, Avatar, Divider } from '@rneui/themed';
 import { LinearGradient } from 'expo-linear-gradient';
+import Constants from 'expo-constants';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Mapbox from '@rnmapbox/maps';
@@ -42,6 +43,8 @@ import { useIncidentCache } from '@contexts';
 import { MAP_STYLES } from '@lib/map/types';
 import { showToast } from '@components/ui';
 import { fetchIncidentFromRelay } from '@lib/notifications/incidentNotifications';
+import { pickMediaFromLibrary } from '@lib/media/pickMedia';
+import { uploadToNip96 } from '@lib/media/nip96';
 
 // Route params type - now uses incidentId only (no serialization warning)
 type DetailRouteParams = {
@@ -143,6 +146,7 @@ export default function IncidentDetailScreen() {
   // Comment composer state
   const [commentText, setCommentText] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isUploadingMedia, setIsUploadingMedia] = useState(false);
 
   // Nostr-native comments for this incident
   const {
@@ -187,7 +191,7 @@ export default function IncidentDetailScreen() {
 
   // Handle comment submit
   const handleCommentSubmit = useCallback(async () => {
-    if (!commentText.trim() || isSubmitting) return;
+    if (!commentText.trim() || isSubmitting || isUploadingMedia) return;
     setIsSubmitting(true);
     try {
       await postComment(commentText.trim());
@@ -198,7 +202,55 @@ export default function IncidentDetailScreen() {
     } finally {
       setIsSubmitting(false);
     }
-  }, [commentText, isSubmitting, postComment]);
+  }, [commentText, isSubmitting, isUploadingMedia, postComment]);
+
+  const handleAddMedia = useCallback(async () => {
+    const extra = (Constants?.expoConfig?.extra ?? {}) as Record<string, unknown>;
+    const endpoint =
+      process.env.EXPO_PUBLIC_EVENTINEL_NIP96_ENDPOINT ||
+      process.env.EVENTINEL_NIP96_ENDPOINT ||
+      (typeof extra.EVENTINEL_NIP96_ENDPOINT === 'string' ? extra.EVENTINEL_NIP96_ENDPOINT : '') ||
+      (typeof extra.EVENTINEL_NIP96_UPLOAD_URL === 'string' ? extra.EVENTINEL_NIP96_UPLOAD_URL : '') ||
+      process.env.EVENTINEL_NIP96_UPLOAD_URL ||
+      '';
+
+    if (!endpoint) {
+      showToast.error(
+        'Upload server not configured',
+        'Set EVENTINEL_NIP96_ENDPOINT in .env.local (dev) or .env (prod)'
+      );
+      return;
+    }
+
+    if (isUploadingMedia) return;
+
+    setIsUploadingMedia(true);
+    try {
+      const picked = await pickMediaFromLibrary();
+      if (!picked) return;
+
+      const fileName = picked.fileName || `eventinel-${Date.now()}`;
+      const mimeType = picked.mimeType || (picked.type === 'video' ? 'video/mp4' : 'image/jpeg');
+
+      const res = await uploadToNip96({
+        endpoint,
+        fileUri: picked.uri,
+        fileName,
+        mimeType,
+      });
+
+      setCommentText((prev) => (prev.trim() ? `${prev.trim()}\n${res.url}` : res.url));
+      showToast.success('Uploaded', 'Link added to your comment');
+    } catch (error) {
+      console.warn('[Media] Upload failed:', error);
+      showToast.error(
+        'Upload failed',
+        error instanceof Error ? error.message : 'Please try again'
+      );
+    } finally {
+      setIsUploadingMedia(false);
+    }
+  }, [isUploadingMedia]);
 
   useEffect(() => {
     if (!hasMountedRef.current) {
@@ -556,6 +608,21 @@ export default function IncidentDetailScreen() {
       <View style={[styles.actionBar, { paddingBottom: insets.bottom + 16, backgroundColor: colors.background, borderTopColor: colors.border }]}>
         {currentUser ? (
           <View style={styles.composerRow}>
+            <Pressable
+              onPress={handleAddMedia}
+              disabled={isSubmitting || isUploadingMedia}
+              style={[
+                styles.attachButton,
+                { backgroundColor: colors.surface, borderColor: colors.border },
+              ]}
+              hitSlop={8}
+            >
+              {isUploadingMedia ? (
+                <ActivityIndicator size="small" color={colors.primary} />
+              ) : (
+                <Icon name="attach-file" type="material" size={20} color={colors.textMuted} />
+              )}
+            </Pressable>
             <TextInput
               style={[styles.composerInput, { backgroundColor: colors.surface, borderColor: colors.border, color: colors.text }]}
               placeholder="Add a comment..."
@@ -567,7 +634,7 @@ export default function IncidentDetailScreen() {
             />
             <Pressable
               onPress={handleCommentSubmit}
-              disabled={!commentText.trim() || isSubmitting}
+              disabled={!commentText.trim() || isSubmitting || isUploadingMedia}
               style={[
                 styles.sendButton,
                 { backgroundColor: commentText.trim() ? colors.primary : colors.surface },
@@ -969,6 +1036,14 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'flex-end',
     gap: 10,
+  },
+  attachButton: {
+    width: 44,
+    height: 44,
+    borderRadius: 12,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   composerInput: {
     flex: 1,

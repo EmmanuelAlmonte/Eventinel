@@ -48,6 +48,7 @@ module.exports = {
     newArchEnabled: true,
     plugins: [
       'expo-secure-store',
+      'expo-image-picker',
       [
         'expo-location',
         {
@@ -119,6 +120,11 @@ module.exports = {
       eas: {
         projectId: '095741fd-0726-4560-9b50-528a8e167252',
       },
+      // Media upload (NIP-96). This is safe to expose in app config (it's just a URL).
+      // Prefer the unprefixed var per repo docs, but allow EXPO_PUBLIC_ as a fallback.
+      EVENTINEL_NIP96_ENDPOINT:
+        process.env.EVENTINEL_NIP96_ENDPOINT ?? process.env.EXPO_PUBLIC_EVENTINEL_NIP96_ENDPOINT,
+      EVENTINEL_NIP96_UPLOAD_URL: process.env.EVENTINEL_NIP96_UPLOAD_URL,
     },
   },
 };

@@ -45,8 +45,8 @@ function walletStatusLabel(status: NDKWalletStatus | undefined): string {
       return 'ready';
     case NDKWalletStatus.LOADING:
       return 'loading';
-    case NDKWalletStatus.ERROR:
-      return 'error';
+    case NDKWalletStatus.FAILED:
+      return 'failed';
     case NDKWalletStatus.INITIAL:
       return 'initial';
     default:
@@ -855,4 +855,3 @@ const styles = StyleSheet.create({
     fontSize: 12,
   },
 });
-
