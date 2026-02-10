@@ -14,6 +14,7 @@ import IncidentFeedScreen from './screens/IncidentFeedScreen';
 import IncidentDetailScreen from './screens/IncidentDetailScreen';
 import ProfileScreen from './screens/ProfileScreen';
 import RelayConnectScreen from './screens/RelayConnectScreen';
+import WalletScreen from './screens/WalletScreen';
 import LoginScreen from './screens/LoginScreen';
 import { ndk } from './lib/ndk';
 import { navigationRef } from './lib/navigation';
@@ -103,6 +104,26 @@ function MainNavigation() {
       <Stack.Navigator screenOptions={{ headerShown: false }}>
         <Stack.Screen name="Main" component={TabNavigator} />
         <Stack.Screen name="IncidentDetail" component={IncidentDetailScreen} />
+        <Stack.Screen
+          name="Wallet"
+          component={WalletScreen}
+          options={({ navigation }) => ({
+            presentation: 'modal',
+            headerShown: true,
+            headerTitle: 'Wallet',
+            headerStyle: { backgroundColor: colors.background },
+            headerTintColor: colors.text,
+            headerLeft: () => (
+              <Pressable
+                onPress={() => navigation.goBack()}
+                style={{ paddingHorizontal: 16 }}
+                hitSlop={{ top: 11, bottom: 11, left: 8, right: 8 }}
+              >
+                <Text style={{ fontSize: 22, color: colors.text }}>✕</Text>
+              </Pressable>
+            ),
+          })}
+        />
         <Stack.Screen
           name="Relays"
           component={RelayConnectScreen}

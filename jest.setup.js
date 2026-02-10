@@ -30,6 +30,7 @@ jest.mock('expo-status-bar', () => ({
 }));
 
 jest.mock('expo-clipboard');
+jest.mock('expo-secure-store');
 
 // Mock SafeAreaProvider
 jest.mock('react-native-safe-area-context', () => {
