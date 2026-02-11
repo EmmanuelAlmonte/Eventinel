@@ -5,7 +5,7 @@
  */
 
 const DEFAULT_PRODUCTION_RELAYS = ['wss://relay.eventinel.com'];
-const DEFAULT_LOCAL_RELAYS = ['ws://10.0.2.2:8085'];
+const DEFAULT_LOCAL_RELAYS = ['wss://relay.eventinel.com'];
 
 /**
  * Normalize relay URL for consistent comparison.

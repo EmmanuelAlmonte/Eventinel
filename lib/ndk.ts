@@ -52,6 +52,65 @@ export const ndk = new NDK({
 
   // Enable AI guardrails in dev to catch common Nostr/NDK mistakes early.
   aiGuardrails: __DEV__,
+
+  // DEV-only network tracing to verify NIP-42 AUTH handshakes are actually sent.
+  netDebug: __DEV__
+    ? (message, relay, direction) => {
+        if (
+          direction === 'send' &&
+          typeof message === 'string' &&
+          message.startsWith('["AUTH"')
+        ) {
+          console.log('🔐 [NDK net] SEND AUTH ->', relay?.url);
+        }
+      }
+    : undefined,
+});
+
+/**
+ * NIP-42 relay auth (["AUTH", <challenge>])
+ *
+ * Returning `true` tells NDK to authenticate. If `ndk.signer` isn't ready yet,
+ * NDK will wait for `signer:ready` and then complete the auth handshake.
+ */
+ndk.relayAuthDefaultPolicy = async (relay, _challenge) => {
+  // Some signers (NIP-46/NIP-55) can exist but not be ready to sign yet.
+  // If we try to sign immediately, NDK can appear "stuck" in AUTHENTICATING.
+  const signer: any = ndk.signer;
+  if (signer?.blockUntilReady) {
+    await signer.blockUntilReady();
+  }
+
+  if (__DEV__) {
+    if (ndk.signer) {
+      console.log('🔐 [NDK] Relay requested AUTH; signer ready:', relay?.url);
+    } else {
+      console.log(
+        '🔐 [NDK] Relay requested AUTH; signer not ready yet (will auth on signer:ready):',
+        relay?.url
+      );
+    }
+  }
+
+  return true;
+};
+
+// When a signer becomes available (session restore/login), reconnect once so relays that
+// dropped during unauthenticated startup get a fresh AUTH challenge.
+let reconnectOnSignerReadyScheduled = false;
+// Note: some Jest tests mock `ndk` as a plain object without EventEmitter methods.
+// Guard against that so importing this module doesn't crash tests.
+(ndk as any).on?.('signer:ready', () => {
+  if (reconnectOnSignerReadyScheduled) return;
+  reconnectOnSignerReadyScheduled = true;
+  setTimeout(() => {
+    reconnectOnSignerReadyScheduled = false;
+    ndk
+      .connect()
+      .catch((err) =>
+        console.warn('⚠️ [NDK] Relay reconnect after signer ready warning:', err)
+      );
+  }, 50);
 });
 
 // Set bidirectional reference for cache adapter

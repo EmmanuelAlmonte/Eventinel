@@ -18,7 +18,7 @@ const RELAY_STORAGE_KEY = 'eventinel:saved-relays';
  *
  * @example
  * ```typescript
- * await saveRelays(['ws://10.0.0.197:8085']);
+ * await saveRelays(['wss://relay.eventinel.com']);
  * ```
  */
 export async function saveRelays(urls: string[]): Promise<void> {
@@ -40,7 +40,7 @@ export async function saveRelays(urls: string[]): Promise<void> {
  * @example
  * ```typescript
  * const relays = await loadRelays();
- * // Returns: ['ws://10.0.0.197:8085', ...]
+ * // Returns: ['wss://relay.eventinel.com', ...]
  * ```
  */
 export async function loadRelays(): Promise<string[]> {
@@ -49,8 +49,9 @@ export async function loadRelays(): Promise<string[]> {
 
     if (stored) {
       const parsed = JSON.parse(stored) as string[];
-      console.log('[Relay Storage] Loaded', parsed.length, 'saved relays');
-      return parsed;
+      const normalized = [...new Set(parsed.map(normalizeRelayUrl))];
+      console.log('[Relay Storage] Loaded', normalized.length, 'saved relays');
+      return normalized;
     }
 
     console.log('[Relay Storage] No saved relays, using defaults');

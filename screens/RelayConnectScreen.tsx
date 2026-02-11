@@ -5,12 +5,13 @@
  * Uses RNE components with BRAND theme support.
  */
 
-import { useState, useEffect, useMemo } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { StyleSheet, View, Alert, Pressable } from 'react-native';
 import { Text, Button, Input, Card, Icon, Switch } from '@rneui/themed';
 import { ndk } from '../lib/ndk';
 import { isConnected, isConnecting, getStatusString } from '../lib/relay/status';
 import { addRelayToStorage, removeRelayFromStorage, saveRelays, DEFAULT_RELAYS, LOCAL_RELAYS } from '../lib/relay/storage';
+import { normalizeRelayUrl } from '../lib/relay/config';
 import type { RelayInfo } from '../types/relay';
 
 import { ScreenContainer } from '@components/ui';
@@ -32,7 +33,25 @@ function getStatusColor(status: string, colors: ReturnType<typeof useAppTheme>['
 }
 
 function normalizeUrl(url: string): string {
-  return url.trim().toLowerCase().replace(/\/$/, '');
+  return normalizeRelayUrl(url);
+}
+
+function areRelayInfosEqual(a: RelayInfo[], b: RelayInfo[]): boolean {
+  if (a === b) return true;
+  if (a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i++) {
+    const ra = a[i];
+    const rb = b[i];
+    if (
+      ra.url !== rb.url ||
+      ra.status !== rb.status ||
+      ra.rawStatus !== rb.rawStatus ||
+      ra.isConnected !== rb.isConnected
+    ) {
+      return false;
+    }
+  }
+  return true;
 }
 
 export default function RelayConnectScreen() {
@@ -46,16 +65,31 @@ export default function RelayConnectScreen() {
   const { colors } = useAppTheme();
 
   // Update relay list from NDK pool
-  const updateRelays = () => {
+  const updateRelays = useCallback(() => {
     const poolRelays = Array.from(ndk.pool.relays.values());
-    const relayInfos: RelayInfo[] = poolRelays.map(relay => ({
-      url: relay.url,
-      status: getStatusString(relay.status),
-      rawStatus: relay.status,
-      isConnected: isConnected(relay.status),
-    }));
-    setRelays(relayInfos);
-  };
+    const relayInfos: RelayInfo[] = poolRelays
+      .map((relay) => ({
+        // Always display canonical URL (no trailing slash)
+        url: normalizeUrl(relay.url),
+        status: getStatusString(relay.status),
+        rawStatus: relay.status,
+        isConnected: isConnected(relay.status),
+      }))
+      .sort((a, b) => a.url.localeCompare(b.url));
+
+    // NDK can emit repeated pool events without meaningful state changes.
+    setRelays((prev) => (areRelayInfosEqual(prev, relayInfos) ? prev : relayInfos));
+  }, []);
+
+  const getPoolRelayByUrl = useCallback((url: string) => {
+    const normalized = normalizeUrl(url);
+    for (const relay of ndk.pool.relays.values()) {
+      if (normalizeUrl(relay.url) === normalized) {
+        return relay;
+      }
+    }
+    return undefined;
+  }, []);
 
   const normalizedLocalRelays = useMemo(
     () => LOCAL_RELAYS.map((relay) => normalizeUrl(relay)),
@@ -76,20 +110,24 @@ export default function RelayConnectScreen() {
     updateRelays();
 
     // Event-based updates (no polling!)
-    const handleConnect = () => updateRelays();
-    const handleDisconnect = () => updateRelays();
-    const handleConnecting = () => updateRelays();
+    const handleUpdate = () => updateRelays();
 
-    ndk.pool.on('relay:connect', handleConnect);
-    ndk.pool.on('relay:disconnect', handleDisconnect);
-    ndk.pool.on('relay:connecting', handleConnecting);
+    ndk.pool.on('relay:connect', handleUpdate);
+    ndk.pool.on('relay:disconnect', handleUpdate);
+    ndk.pool.on('relay:connecting', handleUpdate);
+    ndk.pool.on('relay:auth', handleUpdate);
+    ndk.pool.on('relay:authed', handleUpdate);
+    ndk.pool.on('flapping', handleUpdate);
 
     return () => {
-      ndk.pool.off('relay:connect', handleConnect);
-      ndk.pool.off('relay:disconnect', handleDisconnect);
-      ndk.pool.off('relay:connecting', handleConnecting);
+      ndk.pool.off('relay:connect', handleUpdate);
+      ndk.pool.off('relay:disconnect', handleUpdate);
+      ndk.pool.off('relay:connecting', handleUpdate);
+      ndk.pool.off('relay:auth', handleUpdate);
+      ndk.pool.off('relay:authed', handleUpdate);
+      ndk.pool.off('flapping', handleUpdate);
     };
-  }, []);
+  }, [updateRelays]);
 
   useEffect(() => {
     if (!__DEV__) return;
@@ -181,28 +219,29 @@ export default function RelayConnectScreen() {
       // Add relay to NDK pool
       console.log('[Relay] Adding to NDK pool:', url);
       const relay = ndk.addExplicitRelay(url);
+      const canonicalUrl = normalizeUrl(relay.url);
 
       // Save to persistent storage immediately
-      console.log('[Relay] Saving to storage:', url);
-      await addRelayToStorage(url);
+      console.log('[Relay] Saving to storage:', canonicalUrl);
+      await addRelayToStorage(canonicalUrl);
 
       // Attempt connection
-      console.log('[Relay] Initiating connection:', url);
+      console.log('[Relay] Initiating connection:', canonicalUrl);
       relay.connect();
 
       // Wait a moment to check actual status
       setTimeout(() => {
-        const poolRelay = ndk.pool.relays.get(url);
+        const poolRelay = getPoolRelayByUrl(canonicalUrl);
         if (poolRelay && isConnected(poolRelay.status)) {
-          console.log('[Relay] Connection successful:', url, 'status:', poolRelay.status);
-          setMessage(`Connected to ${url}`);
+          console.log('[Relay] Connection successful:', canonicalUrl, 'status:', poolRelay.status);
+          setMessage(`Connected to ${canonicalUrl}`);
         } else if (poolRelay) {
           const status = getStatusString(poolRelay.status);
-          console.warn('[Relay] Connection not established:', url, 'status:', status, 'rawStatus:', poolRelay.status);
-          setMessage(`Added ${url} (${status})`);
+          console.warn('[Relay] Connection not established:', canonicalUrl, 'status:', status, 'rawStatus:', poolRelay.status);
+          setMessage(`Added ${canonicalUrl} (${status})`);
         } else {
-          console.warn('[Relay] Relay not in pool:', url);
-          setMessage(`Added ${url} - attempting connection...`);
+          console.warn('[Relay] Relay not in pool:', canonicalUrl);
+          setMessage(`Added ${canonicalUrl} - attempting connection...`);
         }
       }, 2000);
 
@@ -215,7 +254,8 @@ export default function RelayConnectScreen() {
     }
   };
 
-  const handleDisconnect = async (url: string) => {
+  const handleDisconnect = async (rawUrl: string) => {
+    const url = normalizeUrl(rawUrl);
     Alert.alert(
       'Disconnect Relay',
       `Remove ${url}?`,
@@ -227,10 +267,12 @@ export default function RelayConnectScreen() {
           onPress: async () => {
             try {
               console.log('[Relay] User removing relay:', url);
+              const poolRelay = getPoolRelayByUrl(url);
+              const poolUrl = poolRelay?.url ?? url;
 
               // Remove from NDK pool
-              console.log('[Relay] Removing from NDK pool:', url);
-              ndk.pool.removeRelay(url);
+              console.log('[Relay] Removing from NDK pool:', poolUrl);
+              ndk.pool.removeRelay(poolUrl);
 
               // Remove from persistent storage
               console.log('[Relay] Removing from storage:', url);
@@ -250,10 +292,11 @@ export default function RelayConnectScreen() {
     );
   };
 
-  const handleReconnect = (url: string) => {
+  const handleReconnect = (rawUrl: string) => {
+    const url = normalizeUrl(rawUrl);
     setMessage(`Reconnecting to ${url}...`);
     try {
-      const relay = ndk.pool.relays.get(url) ?? ndk.addExplicitRelay(url);
+      const relay = getPoolRelayByUrl(url) ?? ndk.addExplicitRelay(url);
       relay.connect();
     } catch (error) {
       console.error('[Relay] Failed to reconnect:', url, error);
@@ -272,16 +315,17 @@ export default function RelayConnectScreen() {
     message.includes('Relay list is empty');
   const messageColor = isError ? colors.error : colors.success;
 
-  // DEV-only: Log relay info and check for duplicates
-  if (__DEV__) {
-    console.log('[RelayScreen] Rendering with', relays.length, 'relays');
-    const urls = relays.map(r => r.url);
+  // DEV-only: Log relay list changes and check for duplicates.
+  useEffect(() => {
+    if (!__DEV__) return;
+    console.log('[RelayScreen] Relays updated:', relays.length);
+    const urls = relays.map((r) => r.url);
     const uniqueUrls = new Set(urls);
     if (urls.length !== uniqueUrls.size) {
       console.error('[RelayScreen] ⚠️ DUPLICATE RELAY URLS DETECTED!');
       console.error('[RelayScreen] Duplicates:', urls.filter((url, i) => urls.indexOf(url) !== i));
     }
-  }
+  }, [relays]);
 
   return (
     <ScreenContainer scroll>

@@ -176,14 +176,15 @@ describe('lib/relay/storage', () => {
       expect(result).toEqual([]);
     });
 
-    it('preserves exact saved URLs without re-normalization', async () => {
-      const savedRelays = ['wss://relay.example.com', 'ws://localhost:8085'];
+    it('normalizes saved URLs on load for stable comparisons', async () => {
+      const savedRelays = ['wss://relay.example.com/', 'WS://LOCALHOST:8085/'];
       mockedAsyncStorage.getItem.mockResolvedValueOnce(JSON.stringify(savedRelays));
 
       const result = await loadRelays();
 
-      expect(result).toEqual(savedRelays);
+      expect(result).toEqual(['wss://relay.example.com', 'ws://localhost:8085']);
     });
+
   });
 
   // ===========================================================================
@@ -252,6 +253,7 @@ describe('lib/relay/storage', () => {
 
       expect(parsed).toContain('wss://new.relay.com');
     });
+
   });
 
   // ===========================================================================

@@ -94,7 +94,7 @@ import 'react-native-get-random-values'; // MUST be first!
 ### NDK Initialization Pattern
 
 NDK is initialized once in App.tsx with:
-- Hardcoded relay URLs (ws://10.0.0.197:8085)
+- Relay URLs loaded from AsyncStorage (fallback: `wss://relay.eventinel.com`)
 - SQLite cache adapter using expo-sqlite
 - NDKProvider wrapping the navigation tree
 - Immediate connection on app startup

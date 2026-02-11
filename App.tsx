@@ -19,6 +19,7 @@ import LoginScreen from './screens/LoginScreen';
 import { ndk } from './lib/ndk';
 import { navigationRef } from './lib/navigation';
 import { DEFAULT_RELAYS, loadRelays } from './lib/relay/storage';
+import { normalizeRelayUrl } from './lib/relay/config';
 import { theme } from './lib/theme';
 import { useAppTheme } from '@hooks';
 import { IncidentCacheProvider, LocationProvider, IncidentSubscriptionProvider, RelayStatusProvider } from '@contexts';
@@ -219,9 +220,29 @@ export default function App() {
     // Guardrail: never let a stalled AsyncStorage read block the UI indefinitely.
     const RELAY_LOAD_TIMEOUT_MS = __DEV__ ? 5000 : 2500;
 
+    const getPoolRelays = () => {
+      // Some tests provide partial NDK mocks without a full Map-like relays object.
+      const relaysMap: any = (ndk.pool as any)?.relays;
+      if (!relaysMap?.values) return [];
+      return Array.from(relaysMap.values());
+    };
+
+    const getPoolRelayByUrl = (url: string) => {
+      const normalized = normalizeRelayUrl(url);
+      for (const relay of getPoolRelays()) {
+        if (normalizeRelayUrl(relay.url) === normalized) {
+          return relay;
+        }
+      }
+      return undefined;
+    };
+
     const addRelaysToPool = (urls: string[]) => {
       for (const url of urls) {
-        ndk.addExplicitRelay(url);
+        const normalized = normalizeRelayUrl(url);
+        if (!getPoolRelayByUrl(normalized)) {
+          ndk.addExplicitRelay(normalized);
+        }
       }
     };
 
@@ -251,12 +272,12 @@ export default function App() {
       }
 
       // If we already proceeded (timeout path), merge in any saved relays when they arrive.
-      const missing = urls.filter((url) => !ndk.pool.relays.has(url));
+      const missing = urls.filter((url) => !getPoolRelayByUrl(url));
       if (missing.length > 0) {
         console.log(`➕ [App] Adding ${missing.length} relays (${source}):`, missing);
         addRelaysToPool(missing);
         for (const url of missing) {
-          ndk.pool.relays.get(url)?.connect();
+          getPoolRelayByUrl(url)?.connect();
         }
       }
     };

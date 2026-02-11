@@ -331,11 +331,11 @@ describe('relayToInfo', () => {
   });
 
   it('preserves URL exactly as provided', () => {
-    const relay = createMockRelay('ws://10.0.0.197:8085/', NDKRelayStatus.CONNECTED);
+    const relay = createMockRelay('wss://relay.eventinel.com/', NDKRelayStatus.CONNECTED);
 
     const info = relayToInfo(relay as any);
 
-    expect(info.url).toBe('ws://10.0.0.197:8085/');
+    expect(info.url).toBe('wss://relay.eventinel.com/');
   });
 });
 
