@@ -2,8 +2,7 @@
  * useIncidentSubscription Hook Tests
  *
  * Tests the incident subscription hook including:
- * - Geohash calculation from location
- * - NDK filter construction
+ * - Simple global NDK filter construction
  * - Event parsing and deduplication
  * - Severity counting
  * - Loading states
@@ -223,19 +222,26 @@ describe('useIncidentSubscription', () => {
   });
 
   // =============================================================================
-  // LOCATION / GEOHASH TESTS
+  // FILTER CONSTRUCTION TESTS
   // =============================================================================
 
-  describe('Location and Geohash', () => {
-    it('does not subscribe when location is null', () => {
+  describe('Filter Construction', () => {
+    it('subscribes when location is null (global mode)', () => {
       renderHook(() =>
         useIncidentSubscription({
           location: null,
         })
       );
 
-      // useSubscribe should be called with false (disabled)
-      expect(useSubscribe).toHaveBeenCalledWith(false, expect.any(Object));
+      expect(useSubscribe).toHaveBeenCalledWith(
+        expect.arrayContaining([
+          expect.objectContaining({
+            kinds: [30911],
+            limit: 200,
+          }),
+        ]),
+        expect.any(Object)
+      );
     });
 
     it('subscribes when location is provided', () => {
@@ -256,7 +262,7 @@ describe('useIncidentSubscription', () => {
       );
     });
 
-    it('includes geohash and neighbors in filter', () => {
+    it('uses simple global filter without geohash/since', () => {
       renderHook(() =>
         useIncidentSubscription({
           location: [-75.1652, 39.9526],
@@ -266,22 +272,11 @@ describe('useIncidentSubscription', () => {
       const filterCall = (useSubscribe as jest.Mock).mock.calls[0];
       const filters = filterCall[0];
 
-      // Should have #g tag with geohashes
-      expect(filters[0]['#g']).toBeDefined();
-      expect(filters[0]['#g'].length).toBeGreaterThan(1); // Main hash + neighbors
-    });
-
-    it('includes incident tag filter', () => {
-      renderHook(() =>
-        useIncidentSubscription({
-          location: [-75.1652, 39.9526],
-        })
-      );
-
-      const filterCall = (useSubscribe as jest.Mock).mock.calls[0];
-      const filters = filterCall[0];
-
-      expect(filters[0]['#t']).toContain('incident');
+      expect(filters[0].kinds).toEqual([30911]);
+      expect(filters[0].limit).toBe(200);
+      expect(filters[0].since).toBeUndefined();
+      expect(filters[0]['#g']).toBeUndefined();
+      expect(filters[0]['#t']).toBeUndefined();
     });
   });
 
@@ -706,27 +701,23 @@ describe('useIncidentSubscription', () => {
   });
 
   // =============================================================================
-  // SINCE DAYS FILTER TESTS
+  // SIMPLE FILTER TESTS
   // =============================================================================
 
-  describe('Since Days Filter', () => {
-    it('includes since timestamp in filter', () => {
-      const sinceDays = 7;
-      const expectedSince = Math.floor(Date.now() / 1000) - sinceDays * 86400;
-
+  describe('Simple Filter', () => {
+    it('always uses limit 200 with no since filter', () => {
       renderHook(() =>
         useIncidentSubscription({
           location: [-75.1652, 39.9526],
-          sinceDays,
+          maxIncidents: 9999, // Runtime cap should still be 200
         })
       );
 
       const filterCall = (useSubscribe as jest.Mock).mock.calls[0];
       const filters = filterCall[0];
 
-      // Should have since timestamp close to expected (within 10 seconds)
-      expect(filters[0].since).toBeGreaterThan(expectedSince - 10);
-      expect(filters[0].since).toBeLessThan(expectedSince + 10);
+      expect(filters[0].limit).toBe(200);
+      expect(filters[0].since).toBeUndefined();
     });
   });
 
@@ -811,7 +802,7 @@ describe('useIncidentSubscription', () => {
       );
     });
 
-    it('handles location change by updating filters', () => {
+    it('handles location change without altering simple filter', () => {
       const { rerender } = renderHook(
         ({ location }) =>
           useIncidentSubscription({
@@ -822,14 +813,14 @@ describe('useIncidentSubscription', () => {
         }
       );
 
-      const firstCall = (useSubscribe as jest.Mock).mock.calls.length;
-
       rerender({ location: [-74.006, 40.7128] as [number, number] });
 
-      // useSubscribe should be called again with new filters
-      expect((useSubscribe as jest.Mock).mock.calls.length).toBeGreaterThan(
-        firstCall
-      );
+      const calls = (useSubscribe as jest.Mock).mock.calls;
+      const lastCall = calls[calls.length - 1];
+      const filters = lastCall?.[0];
+      expect(filters[0].kinds).toEqual([30911]);
+      expect(filters[0].limit).toBe(200);
+      expect(filters[0].since).toBeUndefined();
     });
 
     it('handles rapid enabled toggling', () => {

@@ -54,17 +54,23 @@ export type NostrKind = (typeof NOSTR_KINDS)[keyof typeof NOSTR_KINDS];
 /**
  * Standard tag names used in Eventinel events
  *
- * Note: 'g' tag follows NIP-52 standard for geohash (single-letter, filterable by relays)
+ * Notes:
+ * - 'g' follows NIP-52 geohash usage.
+ * - 'location' is a human-readable location string.
+ * - 'l' is reserved for NIP-32 labels (not coordinates).
  */
 export const TAGS = {
   /** Unique identifier for parameterized replaceable events */
   IDENTIFIER: 'd',
 
-  /** Precise geolocation as "lat,lng" */
-  GEOLOCATION: 'l',
+  /** Human-readable location string (NIP-52) */
+  LOCATION: 'location',
 
   /** Geohash for location-based filtering (NIP-52 standard) */
   GEOHASH: 'g',
+
+  /** Label value (NIP-32), not used for incident coordinates */
+  LABEL: 'l',
 
   /** Incident type classification */
   TYPE: 'type',

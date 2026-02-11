@@ -49,7 +49,8 @@ function getTagValues(tags: string[][], tagName: string): string[] {
 }
 
 /**
- * Parses geolocation from 'g' tag ("lat,lng" format)
+ * Parses "lat,lng" coordinate strings.
+ * Kept as a utility helper for legacy coordinate tag values.
  */
 function parseGeolocation(
   geoTag: string | undefined
@@ -65,6 +66,19 @@ function parseGeolocation(
   if (isNaN(lat) || isNaN(lng)) return null;
   if (lat < -90 || lat > 90 || lng < -180 || lng > 180) return null;
 
+  return { lat, lng };
+}
+
+/**
+ * Parses geolocation from content lat/lng fields.
+ */
+function parseContentLocation(
+  lat: unknown,
+  lng: unknown
+): { lat: number; lng: number } | null {
+  if (typeof lat !== 'number' || typeof lng !== 'number') return null;
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+  if (lat < -90 || lat > 90 || lng < -180 || lng > 180) return null;
   return { lat, lng };
 }
 
@@ -86,8 +100,8 @@ function buildIncidentTags(input: CreateIncidentInput): string[][] {
   const tags: string[][] = [
     // Required identifiers
     [TAGS.IDENTIFIER, incidentId],
-    [TAGS.GEOLOCATION, `${input.location.lat},${input.location.lng}`],
     [TAGS.GEOHASH, hash],
+    [TAGS.LOCATION, input.location.address],
 
     // Classification
     [TAGS.TYPE, input.type],
@@ -193,7 +207,6 @@ export function parseIncidentEvent(
 
   // Extract required tags
   const incidentId = getTagValue(event.tags, TAGS.IDENTIFIER);
-  const geoTag = getTagValue(event.tags, TAGS.GEOLOCATION);
   const geohashTag = getTagValue(event.tags, TAGS.GEOHASH);
   const typeTag = getTagValue(event.tags, TAGS.TYPE);
   const severityTag = getTagValue(event.tags, TAGS.SEVERITY);
@@ -201,13 +214,7 @@ export function parseIncidentEvent(
   const addressTag = getTagValue(event.tags, TAGS.ADDRESS);
 
   // Validate required fields
-  if (!incidentId || !geoTag || !typeTag || !severityTag || !sourceTag) {
-    return null;
-  }
-
-  // Parse geolocation
-  const geo = parseGeolocation(geoTag);
-  if (!geo) {
+  if (!incidentId || !typeTag || !severityTag || !sourceTag) {
     return null;
   }
 
@@ -234,6 +241,12 @@ export function parseIncidentEvent(
     }
     content = parsed;
   } catch {
+    return null;
+  }
+
+  // Coordinates are sourced from content lat/lng.
+  const geo = parseContentLocation(content.lat, content.lng);
+  if (!geo) {
     return null;
   }
 
@@ -292,7 +305,6 @@ export function validateIncidentEvent(event: NDKEvent): VerificationResult {
   // Check required tags
   const requiredTags = [
     TAGS.IDENTIFIER,
-    TAGS.GEOLOCATION,
     TAGS.TYPE,
     TAGS.SEVERITY,
     TAGS.SOURCE,
@@ -302,12 +314,6 @@ export function validateIncidentEvent(event: NDKEvent): VerificationResult {
     if (!getTagValue(event.tags, tag)) {
       errors.push(`Missing required tag: ${tag}`);
     }
-  }
-
-  // Validate geolocation format
-  const geoTag = getTagValue(event.tags, TAGS.GEOLOCATION);
-  if (geoTag && !parseGeolocation(geoTag)) {
-    errors.push(`Invalid geolocation format: ${geoTag}`);
   }
 
   // Validate type
@@ -335,9 +341,14 @@ export function validateIncidentEvent(event: NDKEvent): VerificationResult {
     errors.push('Content is not valid JSON');
   }
 
-  // Check for geohash tag (recommended but not required)
+  // Check for NIP-52 geohash tag (recommended but not required)
   if (!getTagValue(event.tags, TAGS.GEOHASH)) {
     warnings.push('Missing geohash tag (recommended for filtering)');
+  }
+
+  // Check for human-readable location tag (recommended but not required)
+  if (!getTagValue(event.tags, TAGS.LOCATION)) {
+    warnings.push('Missing location tag (recommended for NIP-52 compatibility)');
   }
 
   // Check for address tag

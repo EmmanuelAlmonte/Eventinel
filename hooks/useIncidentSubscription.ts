@@ -6,18 +6,16 @@
  */
 
 import { useMemo, useRef, useEffect, useState } from 'react';
-import geohash from 'ngeohash';
 import { useSubscribe, NDKSubscriptionCacheUsage } from '@nostr-dev-kit/mobile';
 import type { NDKEvent, NDKFilter } from '@nostr-dev-kit/mobile';
-import { parseIncidentEvent, parseGeolocation, getTagValue, getTagValues } from '@lib/nostr/events/incident';
+import { parseIncidentEvent } from '@lib/nostr/events/incident';
 import type { ParsedIncident } from '@lib/nostr/events/types';
 import type { Severity } from '@lib/nostr/config';
-import { DEFAULT_GEOHASH_PRECISION, EVENTINEL_TAGS, TAGS } from '@lib/nostr/config';
-import { INCIDENT_LIMITS } from '@lib/map/constants';
 
 // Debug flag - set to true to enable cache debugging logs
 const DEBUG_CACHE = __DEV__;
 const EMPTY_SEVERITY_COUNTS: Record<Severity, number> = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 };
+const SIMPLE_FETCH_LIMIT = 200;
 
 /**
  * Extended incident with precomputed timestamps for safe sorting
@@ -44,12 +42,10 @@ export function toProcessedIncident(parsed: ParsedIncident): ProcessedIncident {
 }
 
 export interface UseIncidentSubscriptionOptions {
-  /** User location as [longitude, latitude] */
+  /** Kept for call-site compatibility. Unused in global fetch mode. */
   location: [number, number] | null;
   /** Whether subscription is enabled */
   enabled?: boolean;
-  /** Days of history to fetch */
-  sinceDays?: number;
   /** Maximum incidents to return */
   maxIncidents?: number;
 }
@@ -74,16 +70,16 @@ export interface UseIncidentSubscriptionResult {
 }
 
 export function useIncidentSubscription({
-  location,
+  location: _location,
   enabled = true,
-  sinceDays = INCIDENT_LIMITS.SINCE_DAYS,
-  maxIncidents = INCIDENT_LIMITS.MAX_CACHE,
+  maxIncidents = SIMPLE_FETCH_LIMIT,
 }: UseIncidentSubscriptionOptions): UseIncidentSubscriptionResult {
+  const effectiveMaxIncidents = Math.min(maxIncidents, SIMPLE_FETCH_LIMIT);
   const lastUpdatedRef = useRef<number | null>(null);
   const incidentMapRef = useRef<Map<string, ProcessedIncident>>(new Map());
   const lastEventCountRef = useRef(0);
   const lastFilterKeyRef = useRef<string | null>(null);
-  const lastMaxIncidentsRef = useRef(maxIncidents);
+  const lastMaxIncidentsRef = useRef(effectiveMaxIncidents);
   const lastTotalEventsRef = useRef(0);
 
   const [state, setState] = useState<{
@@ -98,58 +94,24 @@ export function useIncidentSubscription({
     totalEventsReceived: 0,
   });
 
-  // Calculate geohashes for NIP-52 filtering
-  const geohashes = useMemo(() => {
-    if (!location) return null;
-
-    const userGeohash = geohash.encode(
-      location[1], // latitude
-      location[0], // longitude
-      DEFAULT_GEOHASH_PRECISION
-    );
-    const neighbors = geohash.neighbors(userGeohash);
-    const allGeohashes = [userGeohash, ...Object.values(neighbors)];
-
-    if (DEBUG_CACHE) {
-      console.log(`🗺️ [IncidentSub] User location: [${location[0].toFixed(4)}, ${location[1].toFixed(4)}]`);
-      console.log(`🗺️ [IncidentSub] User geohash: ${userGeohash} (precision: ${DEFAULT_GEOHASH_PRECISION})`);
-      console.log(`🗺️ [IncidentSub] Query geohashes: ${allGeohashes.join(', ')}`);
-    }
-
-    return allGeohashes;
-  }, [location]);
-
-  const geohashSet = useMemo(() => {
-    if (!geohashes) return null;
-    return new Set(geohashes);
-  }, [geohashes]);
-
-  const sinceTimestamp = useMemo(() => {
-    if (!enabled || !geohashes) return null;
-    return Math.floor(Date.now() / 1000) - sinceDays * 86400;
-  }, [enabled, geohashes, sinceDays]);
-
   // Build NDK filter
   const filter = useMemo((): NDKFilter[] | false => {
-    if (!enabled || !geohashes || sinceTimestamp === null) return false;
+    if (!enabled) return false;
 
     return [
       {
         kinds: [30911 as number],
-        '#g': geohashes,
-        '#t': ['incident'],
-        since: sinceTimestamp,
-        limit: INCIDENT_LIMITS.FETCH_LIMIT,
+        limit: SIMPLE_FETCH_LIMIT,
       },
     ];
-  }, [enabled, geohashes, sinceTimestamp]);
+  }, [enabled]);
 
   const filterKey = useMemo(() => {
-    if (!enabled || !geohashes || sinceTimestamp === null) {
+    if (!enabled) {
       return 'disabled';
     }
-    return `${sinceTimestamp}:${geohashes.join(',')}`;
-  }, [enabled, geohashes, sinceTimestamp]);
+    return `global:${SIMPLE_FETCH_LIMIT}`;
+  }, [enabled]);
 
   // Subscribe with explicit CACHE_FIRST to ensure cached events load immediately.
   // groupable: false - Prevents NDK timer race condition that causes "No filters to merge"
@@ -198,45 +160,8 @@ export function useIncidentSubscription({
     }
   }, [eose, events.length]);
 
-  function matchesIncidentTag(tags: string[][]): boolean {
-    const hashtags = getTagValues(tags, TAGS.HASHTAG);
-    if (hashtags.length === 0) return true;
-    return hashtags.includes(EVENTINEL_TAGS.INCIDENT);
-  }
-
-  function matchesGeohash(tags: string[][], set: Set<string>): boolean {
-    const geohashTag = getTagValue(tags, TAGS.GEOHASH);
-    if (geohashTag && set.has(geohashTag)) {
-      return true;
-    }
-
-    const geoTag = getTagValue(tags, TAGS.GEOLOCATION);
-    const geo = parseGeolocation(geoTag);
-    if (!geo) return false;
-
-    const computed = geohash.encode(
-      geo.lat,
-      geo.lng,
-      DEFAULT_GEOHASH_PRECISION
-    );
-    return set.has(computed);
-  }
-
-  function shouldIncludeEvent(
-    event: NDKEvent,
-    set: Set<string>,
-    since: number
-  ): boolean {
-    const createdAt = event.created_at ?? Math.floor(Date.now() / 1000);
-    if (createdAt < since) return false;
-
-    const tags = event.tags ?? [];
-    if (!matchesIncidentTag(tags)) return false;
-    return matchesGeohash(tags, set);
-  }
-
   useEffect(() => {
-    if (!enabled || !geohashSet || sinceTimestamp === null) {
+    if (!enabled) {
       if (lastFilterKeyRef.current !== 'disabled' || lastTotalEventsRef.current !== 0) {
         setState({
           incidents: [],
@@ -250,16 +175,14 @@ export function useIncidentSubscription({
       lastTotalEventsRef.current = 0;
       lastFilterKeyRef.current = 'disabled';
       lastUpdatedRef.current = null;
-      lastMaxIncidentsRef.current = maxIncidents;
+      lastMaxIncidentsRef.current = effectiveMaxIncidents;
       return;
     }
 
-    let reset = lastFilterKeyRef.current !== filterKey;
+    const filterChanged = lastFilterKeyRef.current !== filterKey;
+    const eventsShrunk = events.length < lastEventCountRef.current;
+    let reset = filterChanged || eventsShrunk;
     lastFilterKeyRef.current = filterKey;
-
-    if (events.length < lastEventCountRef.current) {
-      reset = true;
-    }
 
     if (reset) {
       incidentMapRef.current.clear();
@@ -272,10 +195,14 @@ export function useIncidentSubscription({
     let didUpdate = false;
 
     for (const event of newEvents) {
-      if (!shouldIncludeEvent(event, geohashSet, sinceTimestamp)) continue;
+      if ((event as NDKEvent).kind !== 30911) {
+        continue;
+      }
 
       const parsed = parseIncidentEvent(event);
-      if (!parsed) continue;
+      if (!parsed) {
+        continue;
+      }
 
       const processed = toProcessedIncident(parsed);
 
@@ -289,9 +216,9 @@ export function useIncidentSubscription({
 
     lastEventCountRef.current = events.length;
 
-    const maxChanged = lastMaxIncidentsRef.current !== maxIncidents;
+    const maxChanged = lastMaxIncidentsRef.current !== effectiveMaxIncidents;
     if (maxChanged) {
-      lastMaxIncidentsRef.current = maxIncidents;
+      lastMaxIncidentsRef.current = effectiveMaxIncidents;
     }
 
     const totalChanged = events.length !== lastTotalEventsRef.current;
@@ -301,9 +228,9 @@ export function useIncidentSubscription({
         (a, b) => b.occurredAtMs - a.occurredAtMs
       );
 
-      const sliced = sorted.slice(0, maxIncidents);
+      const sliced = sorted.slice(0, effectiveMaxIncidents);
 
-      if (incidentMapRef.current.size > maxIncidents) {
+      if (incidentMapRef.current.size > effectiveMaxIncidents) {
         const keepIds = new Set(sliced.map((incident) => incident.incidentId));
         for (const key of incidentMapRef.current.keys()) {
           if (!keepIds.has(key)) {
@@ -343,10 +270,8 @@ export function useIncidentSubscription({
   }, [
     enabled,
     events,
+    effectiveMaxIncidents,
     filterKey,
-    geohashSet,
-    maxIncidents,
-    sinceTimestamp,
   ]);
 
   return {
