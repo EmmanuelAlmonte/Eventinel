@@ -166,7 +166,7 @@ export const GEOHASH_PRECISION = {
 } as const;
 
 /** Default geohash precision for incident events */
-export const DEFAULT_GEOHASH_PRECISION = GEOHASH_PRECISION.CITY;
+export const DEFAULT_GEOHASH_PRECISION = GEOHASH_PRECISION.NEIGHBORHOOD;
 
 // =============================================================================
 // SUBSCRIPTION DEFAULTS

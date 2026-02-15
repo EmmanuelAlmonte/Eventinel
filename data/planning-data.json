@@ -1,78 +1,16 @@
 {
-  "goals": {
-    "e59f7c5f-67b9-463f-938b-e9b259adf1a3": {
-      "id": "e59f7c5f-67b9-463f-938b-e9b259adf1a3",
-      "title": "Geo + Recent Incident Retrieval via DVM",
-      "description": "Design and implement a standards-aligned DVM workflow to retrieve incidents prioritized by user proximity and recency while keeping relay REQ filters NIP-compliant.",
-      "createdAt": "2026-02-15T05:11:28.783Z",
-      "updatedAt": "2026-02-15T05:11:28.783Z",
-      "status": "active",
-      "complexity": 8,
-      "tags": [
-        "nostr",
-        "dvm",
-        "geo",
-        "incidents",
-        "planning"
-      ]
-    }
-  },
-  "plans": {
-    "e59f7c5f-67b9-463f-938b-e9b259adf1a3": {
-      "id": "73ab8f0b-c07a-4282-bba9-bfe3d9fa77e2",
-      "goalId": "e59f7c5f-67b9-463f-938b-e9b259adf1a3",
-      "title": "Geo + Recent Incident Retrieval via DVM - Implementation Plan",
-      "content": "Auto-generated plan",
-      "todos": [
-        {
-          "id": "156f73ef-e43f-4817-9490-2334cef4705d",
-          "goalId": "e59f7c5f-67b9-463f-938b-e9b259adf1a3",
-          "title": "Implement DVM geo+recent query workflow from plan",
-          "description": "Implement DVM geo+recent workflow per ../Eventinel-dvm/DVM_Implementation_Spec.md rev2: use NIP-90 param-tag request encoding, request/result kinds 5990/6990, response modes (refs_only|enriched|both) with precedence and parity, relay source wss://relay.eventinel.com, publish NIP-89 kind:31990 handler info, integrate app behind EXPO_PUBLIC_USE_DVM_GEO_QUERY + EXPO_PUBLIC_DVM_RESPONSE_MODE with fallback.",
-          "complexity": 8,
-          "status": "in_progress",
-          "isComplete": false,
-          "priority": "high",
-          "humanRequired": false,
-          "createdAt": "2026-02-15T05:11:32.523Z",
-          "updatedAt": "2026-02-15T06:08:37.607Z"
-        }
-      ],
-      "createdAt": "2026-02-15T05:11:32.523Z",
-      "updatedAt": "2026-02-15T06:08:37.607Z",
-      "version": 6,
-      "totalComplexity": 8,
-      "completedComplexity": 0,
-      "estimatedTotalHours": 0,
-      "actualTotalHours": 0,
-      "progressPercentage": 0
-    }
-  },
+  "goals": {},
+  "plans": {},
   "session": {
-    "currentGoal": {
-      "id": "e59f7c5f-67b9-463f-938b-e9b259adf1a3",
-      "title": "Geo + Recent Incident Retrieval via DVM",
-      "description": "Design and implement a standards-aligned DVM workflow to retrieve incidents prioritized by user proximity and recency while keeping relay REQ filters NIP-compliant.",
-      "createdAt": "2026-02-15T05:11:28.783Z",
-      "updatedAt": "2026-02-15T05:11:28.783Z",
-      "status": "active",
-      "complexity": 8,
-      "tags": [
-        "nostr",
-        "dvm",
-        "geo",
-        "incidents",
-        "planning"
-      ]
-    },
+    "currentGoal": null,
     "currentPlan": null,
-    "sessionStartTime": "2026-02-15T05:11:28.785Z",
-    "lastActivity": "2026-02-15T05:11:28.785Z",
-    "isActive": true
+    "sessionStartTime": "2026-02-15T02:36:12.725Z",
+    "lastActivity": "2026-02-15T02:36:12.725Z",
+    "isActive": false
   },
   "metadata": {
     "version": "1.0.0",
     "lastBackup": "2026-02-15T02:36:12.725Z",
-    "totalSessions": 1
+    "totalSessions": 0
   }
 }

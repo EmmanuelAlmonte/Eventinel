@@ -45,10 +45,7 @@ module.exports = {
     developmentClient: {
       silentLaunch: true,
     },
-    // Mapbox RN in this app currently fails on Fabric mount with
-    // "ViewManager using codegen must override getDelegate" soft exceptions.
-    // Keep new architecture disabled until RNMapbox/Fabric compatibility is stable here.
-    newArchEnabled: false,
+    newArchEnabled: true,
     plugins: [
       'expo-secure-store',
       'expo-image-picker',
