@@ -10,7 +10,8 @@ import { useSubscribe, NDKSubscriptionCacheUsage } from '@nostr-dev-kit/mobile';
 import type { NDKEvent, NDKFilter } from '@nostr-dev-kit/mobile';
 import { parseIncidentEvent } from '@lib/nostr/events/incident';
 import type { ParsedIncident } from '@lib/nostr/events/types';
-import type { Severity } from '@lib/nostr/config';
+import { DEFAULT_GEOHASH_PRECISION, type Severity } from '@lib/nostr/config';
+import geohash from 'ngeohash';
 
 // Debug flag - set to true to enable cache debugging logs
 const DEBUG_CACHE = __DEV__;
@@ -18,9 +19,6 @@ const EMPTY_SEVERITY_COUNTS: Record<Severity, number> = { 1: 0, 2: 0, 3: 0, 4: 0
 const SIMPLE_FETCH_LIMIT = 200;
 const CANDIDATE_RETENTION_LIMIT = 600;
 const EARTH_RADIUS_METERS = 6371000;
-const METERS_PER_MILE = 1609.344;
-const G_FANOUT_MAX_TAGS = 50;
-const G_FANOUT_MAX_DISTANCE_MILES = 25;
 
 /**
  * Extended incident with precomputed timestamps for safe sorting
@@ -121,63 +119,11 @@ function sortIncidentsForRetention(incidents: ProcessedIncident[]): ProcessedInc
   });
 }
 
-function parseCoordinateTagValue(value: string): { lat: number; lng: number } | null {
-  const parts = value.split(',');
-  if (parts.length !== 2) {
-    return null;
-  }
-
-  const lat = Number.parseFloat(parts[0]);
-  const lng = Number.parseFloat(parts[1]);
-
-  if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
-    return null;
-  }
-
-  if (lat < -90 || lat > 90 || lng < -180 || lng > 180) {
-    return null;
-  }
-
-  return { lat, lng };
-}
-
-function buildNearbyGTagFilterValues(
-  incidents: ProcessedIncident[],
-  location: [number, number] | null
-): string[] {
-  if (!location || incidents.length === 0) {
-    return [];
-  }
-
-  const maxDistanceMeters = G_FANOUT_MAX_DISTANCE_MILES * METERS_PER_MILE;
-  const sorted = sortIncidentsForDisplay(incidents, location);
-  const seen = new Set<string>();
-  const values: string[] = [];
-
-  for (const incident of sorted) {
-    const gTagValue = incident.location.geohash;
-    if (!gTagValue || seen.has(gTagValue)) {
-      continue;
-    }
-
-    if (!parseCoordinateTagValue(gTagValue)) {
-      continue;
-    }
-
-    const distanceMeters = distanceFromLocationMeters(incident, location);
-    if (!Number.isFinite(distanceMeters) || distanceMeters > maxDistanceMeters) {
-      continue;
-    }
-
-    seen.add(gTagValue);
-    values.push(gTagValue);
-
-    if (values.length >= G_FANOUT_MAX_TAGS) {
-      break;
-    }
-  }
-
-  return values;
+function getGeohashGrid9(center: string): string[] {
+  const neighbors = geohash.neighbors(center);
+  const candidateCells = [center, ...neighbors].filter(Boolean);
+  // Keep order stable so filterKey stays stable and useSubscribe doesn't churn.
+  return Array.from(new Set(candidateCells)).sort();
 }
 
 export interface UseIncidentSubscriptionOptions {
@@ -221,8 +167,6 @@ export function useIncidentSubscription({
   const lastLocationKeyRef = useRef<string>('none');
   const lastMaxIncidentsRef = useRef(effectiveMaxIncidents);
   const lastTotalEventsRef = useRef(0);
-  const nearbyGTagsKeyRef = useRef<string>('');
-  const [nearbyGTags, setNearbyGTags] = useState<string[]>([]);
 
   const [state, setState] = useState<{
     incidents: ProcessedIncident[];
@@ -236,38 +180,57 @@ export function useIncidentSubscription({
     totalEventsReceived: 0,
   });
 
-  // Build NDK filter
-  const globalFilter = useMemo((): NDKFilter[] | false => {
+  const centerGeohash = useMemo(() => {
+    if (!enabled || !location) {
+      return null;
+    }
+
+    const [userLng, userLat] = location;
+    if (!Number.isFinite(userLat) || !Number.isFinite(userLng)) {
+      return null;
+    }
+
+    return geohash.encode(userLat, userLng, DEFAULT_GEOHASH_PRECISION);
+  }, [enabled, location?.[0], location?.[1]]);
+
+  const geohashGrid9 = useMemo(() => {
+    if (!centerGeohash) {
+      return null;
+    }
+    return getGeohashGrid9(centerGeohash);
+  }, [centerGeohash]);
+
+  // Build NDK filter (single subscription). If location is available, prefilter to 3x3 grid.
+  const subscriptionFilter = useMemo((): NDKFilter[] | false => {
     if (!enabled) return false;
 
-    return [
-      {
-        kinds: [30911 as number],
-        limit: SIMPLE_FETCH_LIMIT,
-      },
-    ];
-  }, [enabled]);
-
-  const gFanoutFilter = useMemo((): NDKFilter[] | false => {
-    if (!enabled || nearbyGTags.length === 0) {
-      return false;
+    if (geohashGrid9 && geohashGrid9.length > 0) {
+      return [
+        {
+          kinds: [30911 as number],
+          '#g': geohashGrid9,
+          limit: SIMPLE_FETCH_LIMIT,
+        },
+      ];
     }
 
     return [
       {
         kinds: [30911 as number],
-        '#g': nearbyGTags,
         limit: SIMPLE_FETCH_LIMIT,
       },
     ];
-  }, [enabled, nearbyGTags]);
+  }, [enabled, geohashGrid9]);
 
   const filterKey = useMemo(() => {
     if (!enabled) {
       return 'disabled';
     }
+    if (geohashGrid9 && geohashGrid9.length > 0) {
+      return `g9:${geohashGrid9.join('|')}:limit:${SIMPLE_FETCH_LIMIT}`;
+    }
     return `global:${SIMPLE_FETCH_LIMIT}`;
-  }, [enabled]);
+  }, [enabled, geohashGrid9]);
 
   const locationKey = useMemo(() => {
     if (!location) {
@@ -289,34 +252,17 @@ export function useIncidentSubscription({
   // Subscribe with explicit CACHE_FIRST to ensure cached events load immediately.
   // groupable: false - Prevents NDK timer race condition that causes "No filters to merge"
   // error when subscription is stopped before EOSE (see NDK removeItem bug).
-  const { events: globalEvents, eose: globalEose } = useSubscribe(globalFilter, subscriptionOptions);
-  const { events: gFanoutEvents, eose: gFanoutEose } = useSubscribe(gFanoutFilter, subscriptionOptions);
-
-  const events = useMemo(() => {
-    if (gFanoutEvents.length === 0) {
-      return globalEvents;
-    }
-
-    const deduped = new Map<string, NDKEvent>();
-    for (const event of globalEvents) {
-      deduped.set((event as NDKEvent).id, event as NDKEvent);
-    }
-    for (const event of gFanoutEvents) {
-      deduped.set((event as NDKEvent).id, event as NDKEvent);
-    }
-    return Array.from(deduped.values());
-  }, [globalEvents, gFanoutEvents]);
-
-  const eose = globalEose && (gFanoutFilter === false || gFanoutEose);
+  const { events, eose } = useSubscribe(subscriptionFilter, subscriptionOptions);
 
   // Debug: Track event count changes to see cache vs relay timing
   const prevEventCountForDebug = useRef(0);
   const subscriptionStartTime = useRef(Date.now());
+  const loggedEoseForCycleRef = useRef(false);
 
   useEffect(() => {
     if (!DEBUG_CACHE) return;
 
-    if (globalFilter && prevEventCountForDebug.current === 0 && events.length === 0) {
+    if (subscriptionFilter && prevEventCountForDebug.current === 0 && events.length === 0) {
       subscriptionStartTime.current = Date.now();
       console.log('🔍 [IncidentSub] Subscription started, waiting for events...');
     }
@@ -334,16 +280,24 @@ export function useIncidentSubscription({
     }
 
     prevEventCountForDebug.current = events.length;
-  }, [events.length, eose, globalFilter]);
+  }, [events.length, eose, subscriptionFilter]);
 
   // Debug: Log when EOSE is received
   useEffect(() => {
     if (!DEBUG_CACHE) return;
 
-    if (eose) {
-      const elapsed = Date.now() - subscriptionStartTime.current;
-      console.log(`✅ [IncidentSub] EOSE received @ ${elapsed}ms (${events.length} total events)`);
+    if (!eose) {
+      loggedEoseForCycleRef.current = false;
+      return;
     }
+
+    if (loggedEoseForCycleRef.current) {
+      return;
+    }
+
+    loggedEoseForCycleRef.current = true;
+    const elapsed = Date.now() - subscriptionStartTime.current;
+    console.log(`✅ [IncidentSub] EOSE received @ ${elapsed}ms (${events.length} total events)`);
   }, [eose, events.length]);
 
   useEffect(() => {
@@ -363,10 +317,6 @@ export function useIncidentSubscription({
       lastLocationKeyRef.current = locationKey;
       lastUpdatedRef.current = null;
       lastMaxIncidentsRef.current = effectiveMaxIncidents;
-      nearbyGTagsKeyRef.current = '';
-      if (nearbyGTags.length > 0) {
-        setNearbyGTags([]);
-      }
       return;
     }
 
@@ -444,15 +394,6 @@ export function useIncidentSubscription({
         location
       );
       const sliced = sorted.slice(0, effectiveMaxIncidents);
-      const nextNearbyGTags = buildNearbyGTagFilterValues(
-        Array.from(incidentMapRef.current.values()),
-        location
-      );
-      const nextNearbyGTagsKey = nextNearbyGTags.join('|');
-      if (nextNearbyGTagsKey !== nearbyGTagsKeyRef.current) {
-        nearbyGTagsKeyRef.current = nextNearbyGTagsKey;
-        setNearbyGTags(nextNearbyGTags);
-      }
 
       const severityCounts: SeverityCounts = { ...EMPTY_SEVERITY_COUNTS };
       for (const incident of sliced) {
@@ -489,7 +430,6 @@ export function useIncidentSubscription({
     filterKey,
     location,
     locationKey,
-    nearbyGTags.length,
   ]);
 
   return {

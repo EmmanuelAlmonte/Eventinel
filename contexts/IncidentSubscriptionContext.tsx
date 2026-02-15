@@ -90,6 +90,8 @@ export function IncidentSubscriptionProvider({ children }: { children: React.Rea
   const isSubscriptionEnabled = !!location && isScreenFocused && isAppActive;
 
   // Single subscription shared by all screens
+  // NOTE: useIncidentSubscription() now prefilters to a 3x3 (9-cell) geohash grid
+  // around the user's location via `#g` (p6) when `location` is available.
   const {
     incidents,
     isInitialLoading,

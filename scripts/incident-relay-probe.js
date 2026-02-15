@@ -17,6 +17,14 @@
 const geohash = require('ngeohash');
 const { finalizeEvent, generateSecretKey, getPublicKey, nip19 } = require('nostr-tools');
 
+try {
+  const dotenv = require('dotenv');
+  dotenv.config({ path: '.env', quiet: true });
+  dotenv.config({ path: '.env.local', override: true, quiet: true });
+} catch {
+  // Ignore missing dotenv in non-repo contexts.
+}
+
 const KIND_INCIDENT = 30911;
 const DEFAULT_LIMIT = 200;
 const DEFAULT_RUNS = 5;

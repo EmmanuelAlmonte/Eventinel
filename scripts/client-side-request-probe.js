@@ -27,6 +27,14 @@
 const geohash = require('ngeohash');
 const { finalizeEvent, generateSecretKey, nip19 } = require('nostr-tools');
 
+try {
+  const dotenv = require('dotenv');
+  dotenv.config({ path: '.env', quiet: true });
+  dotenv.config({ path: '.env.local', override: true, quiet: true });
+} catch {
+  // Ignore missing dotenv in non-repo contexts.
+}
+
 const KIND_INCIDENT = 30911;
 const DAY_MS = 24 * 60 * 60 * 1000;
 const MILES_TO_METERS = 1609.344;

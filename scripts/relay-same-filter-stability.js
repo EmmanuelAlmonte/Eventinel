@@ -15,6 +15,14 @@
 
 const { finalizeEvent, nip19 } = require('nostr-tools');
 
+try {
+  const dotenv = require('dotenv');
+  dotenv.config({ path: '.env', quiet: true });
+  dotenv.config({ path: '.env.local', override: true, quiet: true });
+} catch {
+  // Ignore missing dotenv in non-repo contexts.
+}
+
 const DEFAULTS = {
   relay: 'wss://relay.eventinel.com/',
   runs: 5,
