@@ -33,7 +33,7 @@ import { useIncidentCacheApi } from './IncidentCacheContext';
 import type { Severity } from '@lib/nostr/config';
 
 interface IncidentSubscriptionContextValue {
-  /** Parsed incidents (sorted by occurredAt, deduplicated) */
+  /** Parsed incidents (sorted by distance, then recency, then id) */
   incidents: ProcessedIncident[];
   /** True until first EOSE received */
   isInitialLoading: boolean;

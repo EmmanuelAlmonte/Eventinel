@@ -17,7 +17,6 @@ import { renderHook, waitFor } from '@testing-library/react-native';
 import {
   mockSubscription,
   useSubscribe,
-  NDKEvent,
 } from '../../__mocks__/@nostr-dev-kit/mobile';
 
 // Mock ngeohash
@@ -57,8 +56,8 @@ jest.mock('@lib/nostr/events/incident', () => ({
         title: content.title || 'Test Incident',
         description: content.description || '',
         location: {
-          lat: content.lat || 0,
-          lng: content.lng || 0,
+          lat: content.lat ?? 0,
+          lng: content.lng ?? 0,
           address: content.address || '',
           geohash: 'gh4075',
         },
@@ -102,16 +101,23 @@ import type { UseIncidentSubscriptionOptions } from '../../hooks/useIncidentSubs
 // HELPERS
 // =============================================================================
 
+let mockEventSequence = 0;
+
+function nextMockId(prefix: string): string {
+  mockEventSequence += 1;
+  return `${prefix}_${mockEventSequence}`;
+}
+
 function createMockIncidentEvent(overrides: Partial<any> = {}) {
-  const id = overrides.id || 'event_' + Math.random().toString(36).slice(2);
-  const incidentId = overrides.incidentId || 'incident_' + Math.random().toString(36).slice(2);
-  const severity = overrides.severity || 3;
-  const createdAt = overrides.created_at || Math.floor(Date.now() / 1000);
-  const occurredAt = overrides.occurredAt || new Date().toISOString();
+  const id = overrides.id ?? nextMockId('event');
+  const incidentId = overrides.incidentId ?? nextMockId('incident');
+  const severity = overrides.severity ?? 3;
+  const createdAt = overrides.created_at ?? Math.floor(Date.now() / 1000);
+  const occurredAt = overrides.occurredAt ?? new Date().toISOString();
 
   return {
     id,
-    pubkey: overrides.pubkey || 'mock_pubkey',
+    pubkey: overrides.pubkey ?? 'mock_pubkey',
     kind: 30911,
     created_at: createdAt,
     tags: [
@@ -119,18 +125,18 @@ function createMockIncidentEvent(overrides: Partial<any> = {}) {
       ['severity', String(severity)],
       ['g', 'gh4075'],
       ['t', 'incident'],
-      ...(overrides.tags || []),
+      ...(overrides.tags ?? []),
     ],
     content: JSON.stringify({
-      title: overrides.title || 'Test Incident',
-      description: overrides.description || 'Test description',
-      lat: overrides.lat || 39.9526,
-      lng: overrides.lng || -75.1652,
-      type: overrides.type || 'fire',
+      title: overrides.title ?? 'Test Incident',
+      description: overrides.description ?? 'Test description',
+      lat: overrides.lat ?? 39.9526,
+      lng: overrides.lng ?? -75.1652,
+      type: overrides.type ?? 'fire',
       severity,
       occurredAt,
-      source: overrides.source || 'community',
-      sourceId: overrides.sourceId || 'test-123',
+      source: overrides.source ?? 'community',
+      sourceId: overrides.sourceId ?? 'test-123',
     }),
   };
 }
@@ -143,6 +149,7 @@ describe('useIncidentSubscription', () => {
   beforeEach(() => {
     mockSubscription.reset();
     jest.clearAllMocks();
+    mockEventSequence = 0;
   });
 
   // =============================================================================
@@ -482,7 +489,42 @@ describe('useIncidentSubscription', () => {
   // =============================================================================
 
   describe('Sorting', () => {
-    it('sorts incidents by occurredAt descending (newest first)', async () => {
+    it('prioritizes nearer incidents ahead of newer but farther incidents', async () => {
+      const now = Date.now();
+      const nearOlder = createMockIncidentEvent({
+        id: 'event-near',
+        incidentId: 'incident-near',
+        title: 'Nearby Older',
+        occurredAt: new Date(now - 60_000).toISOString(),
+        lat: 39.953,
+        lng: -75.165,
+      });
+      const farNewer = createMockIncidentEvent({
+        id: 'event-far',
+        incidentId: 'incident-far',
+        title: 'Far Newer',
+        occurredAt: new Date(now).toISOString(),
+        lat: 34.0522,
+        lng: -118.2437,
+      });
+
+      mockSubscription.setEvents([farNewer, nearOlder]);
+      mockSubscription.setEose(true);
+
+      const { result } = renderHook(() =>
+        useIncidentSubscription({
+          location: [-75.1652, 39.9526],
+        })
+      );
+
+      await waitFor(() => {
+        expect(result.current.incidents.length).toBe(2);
+        expect(result.current.incidents[0].title).toBe('Nearby Older');
+        expect(result.current.incidents[1].title).toBe('Far Newer');
+      });
+    });
+
+    it('uses occurredAt descending when incident distances are equal', async () => {
       const now = Date.now();
       const event1 = createMockIncidentEvent({
         incidentId: 'older',
@@ -508,6 +550,83 @@ describe('useIncidentSubscription', () => {
         expect(result.current.incidents.length).toBe(2);
         expect(result.current.incidents[0].title).toBe('Newer Incident');
         expect(result.current.incidents[1].title).toBe('Older Incident');
+      });
+    });
+
+    it('uses incidentId as a stable tie-breaker when distance and recency match', async () => {
+      const fixedOccurredAt = '2026-01-01T12:00:00.000Z';
+
+      const incidentB = createMockIncidentEvent({
+        id: 'event-b',
+        incidentId: 'incident-b',
+        title: 'Incident B',
+        occurredAt: fixedOccurredAt,
+        lat: 40.7128,
+        lng: -74.006,
+      });
+      const incidentA = createMockIncidentEvent({
+        id: 'event-a',
+        incidentId: 'incident-a',
+        title: 'Incident A',
+        occurredAt: fixedOccurredAt,
+        lat: 40.7128,
+        lng: -74.006,
+      });
+
+      mockSubscription.setEvents([incidentB, incidentA]);
+      mockSubscription.setEose(true);
+
+      const { result } = renderHook(() =>
+        useIncidentSubscription({
+          location: [-74.006, 40.7128],
+        })
+      );
+
+      await waitFor(() => {
+        expect(result.current.incidents.length).toBe(2);
+        expect(result.current.incidents[0].incidentId).toBe('incident-a');
+        expect(result.current.incidents[1].incidentId).toBe('incident-b');
+      });
+    });
+
+    it('re-sorts existing incidents when location changes', async () => {
+      const fixedOccurredAt = '2026-01-01T12:00:00.000Z';
+
+      const phillyIncident = createMockIncidentEvent({
+        id: 'event-philly',
+        incidentId: 'incident-philly',
+        title: 'Philadelphia Incident',
+        occurredAt: fixedOccurredAt,
+        lat: 39.9526,
+        lng: -75.1652,
+      });
+      const nycIncident = createMockIncidentEvent({
+        id: 'event-nyc',
+        incidentId: 'incident-nyc',
+        title: 'NYC Incident',
+        occurredAt: fixedOccurredAt,
+        lat: 40.7128,
+        lng: -74.006,
+      });
+
+      mockSubscription.setEvents([phillyIncident, nycIncident]);
+      mockSubscription.setEose(true);
+
+      const { result, rerender } = renderHook(
+        (props: UseIncidentSubscriptionOptions) => useIncidentSubscription(props),
+        {
+          initialProps: { location: [-75.1652, 39.9526] },
+        }
+      );
+
+      await waitFor(() => {
+        expect(result.current.incidents[0].incidentId).toBe('incident-philly');
+      });
+
+      rerender({ location: [-74.006, 40.7128] });
+
+      await waitFor(() => {
+        expect(result.current.incidents[0].incidentId).toBe('incident-nyc');
       });
     });
   });
@@ -816,8 +935,15 @@ describe('useIncidentSubscription', () => {
       rerender({ location: [-74.006, 40.7128] as [number, number] });
 
       const calls = (useSubscribe as jest.Mock).mock.calls;
-      const lastCall = calls[calls.length - 1];
-      const filters = lastCall?.[0];
+      const globalFilterCall = calls.find(([filters]) => {
+        if (!Array.isArray(filters) || filters.length === 0) {
+          return false;
+        }
+        return Array.isArray(filters[0]?.kinds) && filters[0].kinds.includes(30911);
+      });
+      const filters = globalFilterCall?.[0];
+
+      expect(filters).toBeDefined();
       expect(filters[0].kinds).toEqual([30911]);
       expect(filters[0].limit).toBe(200);
       expect(filters[0].since).toBeUndefined();
