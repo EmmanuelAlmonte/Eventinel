@@ -37,6 +37,13 @@
 - PRs should include a brief summary, linked issue, commands/tests run, and screenshots or screen recordings for UI-visible changes. Call out adherence to NDK mobile rules and any env vars touched.
 - Keep changes focused; update docs or templates (e.g., `templates/DeveloperProtocol.md`) when altering workflows.
 
+## Project Memory Policy
+- Keep project-specific durable knowledge in `.codex/MEMORY.md`.
+- Keep daily project notes in `.codex/memory/YYYY-MM-DD.md`.
+- Search `.codex/MEMORY.md` and `.codex/memory/*.md` before answering project-history questions.
+- If asked to "remember this", write to disk immediately.
+- Do not store secrets, tokens, API keys, or credentials in memory files.
+
 ## Security & Configuration Tips
 - Copy `.env.example` to `.env.local` for local development and to `.env` for production builds; keep secrets out of VCS. `app.config.js` loads `.env.local` in dev and `.env` in production and requires `MAPBOX_ACCESS_TOKEN` for Mapbox.
 - Sensitive data persists via `expo-secure-store`; never use browser-only storage. Avoid committing build artifacts from `dist/`, `android/`, or `ios/`.

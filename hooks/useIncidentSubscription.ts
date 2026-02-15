@@ -6,11 +6,16 @@
  */
 
 import { useMemo, useRef, useEffect, useState } from 'react';
-import { useSubscribe, NDKSubscriptionCacheUsage } from '@nostr-dev-kit/mobile';
-import type { NDKEvent, NDKFilter } from '@nostr-dev-kit/mobile';
+import {
+  useSubscribe,
+  NDKEvent,
+  NDKSubscriptionCacheUsage,
+} from '@nostr-dev-kit/mobile';
+import type { NDKFilter } from '@nostr-dev-kit/mobile';
 import { parseIncidentEvent } from '@lib/nostr/events/incident';
 import type { ParsedIncident } from '@lib/nostr/events/types';
 import type { Severity } from '@lib/nostr/config';
+import { ndk } from '@lib/ndk';
 
 // Debug flag - set to true to enable cache debugging logs
 const DEBUG_CACHE = __DEV__;
@@ -21,6 +26,44 @@ const EARTH_RADIUS_METERS = 6371000;
 const METERS_PER_MILE = 1609.344;
 const G_FANOUT_MAX_TAGS = 50;
 const G_FANOUT_MAX_DISTANCE_MILES = 25;
+const DVM_REQUEST_KIND = 5990;
+const DVM_RESULT_KIND = 6990;
+const DVM_DEFAULT_RADIUS_MILES = 5;
+const DVM_DEFAULT_MAX_RESULTS = 200;
+const DVM_DEFAULT_SINCE_DAYS = 7;
+const NON_DVM_DEFAULT_RADIUS_MILES = 5;
+const MIN_RADIUS_MILES = 0.05;
+const MAX_RADIUS_MILES = 50;
+
+function envFlagEnabled(value: string | undefined): boolean {
+  return value === 'true';
+}
+
+function getDvmResponseMode(): 'refs_only' | 'enriched' | 'both' {
+  const raw = process.env.EXPO_PUBLIC_DVM_RESPONSE_MODE;
+  if (raw === 'refs_only' || raw === 'enriched' || raw === 'both') {
+    return raw;
+  }
+  return 'enriched';
+}
+
+function clampRadiusMiles(value: number): number {
+  return Math.max(MIN_RADIUS_MILES, Math.min(MAX_RADIUS_MILES, value));
+}
+
+function getNonDvmRadiusMiles(): number {
+  const raw = process.env.EXPO_PUBLIC_INCIDENT_RADIUS_MILES;
+  if (!raw) {
+    return NON_DVM_DEFAULT_RADIUS_MILES;
+  }
+
+  const parsed = Number.parseFloat(raw);
+  if (!Number.isFinite(parsed)) {
+    return NON_DVM_DEFAULT_RADIUS_MILES;
+  }
+
+  return clampRadiusMiles(parsed);
+}
 
 /**
  * Extended incident with precomputed timestamps for safe sorting
@@ -180,6 +223,31 @@ function buildNearbyGTagFilterValues(
   return values;
 }
 
+function dedupeStringArray(values: string[]): string[] {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const value of values) {
+    if (!value || seen.has(value)) continue;
+    seen.add(value);
+    out.push(value);
+  }
+  return out;
+}
+
+function quantizeCoordinate(value: number, decimals = 4): string {
+  const factor = 10 ** decimals;
+  return (Math.round(value * factor) / factor).toFixed(decimals);
+}
+
+function extractDvmIncidentEventIds(resultEvent: NDKEvent, requestId: string): string[] {
+  const ids = resultEvent.tags
+    .filter((tag) => Array.isArray(tag) && tag[0] === 'e' && typeof tag[1] === 'string')
+    .map((tag) => tag[1] as string)
+    .filter((id) => id && id !== requestId);
+
+  return dedupeStringArray(ids);
+}
+
 export interface UseIncidentSubscriptionOptions {
   /** User location used for display ordering (nearest first). */
   location: [number, number] | null;
@@ -223,6 +291,8 @@ export function useIncidentSubscription({
   const lastTotalEventsRef = useRef(0);
   const nearbyGTagsKeyRef = useRef<string>('');
   const [nearbyGTags, setNearbyGTags] = useState<string[]>([]);
+  const [dvmRequestId, setDvmRequestId] = useState<string | null>(null);
+  const dvmRequestKeyRef = useRef<string>('none');
 
   const [state, setState] = useState<{
     incidents: ProcessedIncident[];
@@ -235,6 +305,14 @@ export function useIncidentSubscription({
     updatedIncidents: [],
     totalEventsReceived: 0,
   });
+
+  const dvmEnabled = useMemo(() => {
+    return enabled && !!location && envFlagEnabled(process.env.EXPO_PUBLIC_USE_DVM_GEO_QUERY);
+  }, [enabled, location]);
+
+  const displayRadiusMiles = useMemo(() => {
+    return dvmEnabled ? DVM_DEFAULT_RADIUS_MILES : getNonDvmRadiusMiles();
+  }, [dvmEnabled]);
 
   // Build NDK filter
   const globalFilter = useMemo((): NDKFilter[] | false => {
@@ -249,6 +327,10 @@ export function useIncidentSubscription({
   }, [enabled]);
 
   const gFanoutFilter = useMemo((): NDKFilter[] | false => {
+    if (dvmEnabled) {
+      return false;
+    }
+
     if (!enabled || nearbyGTags.length === 0) {
       return false;
     }
@@ -260,7 +342,87 @@ export function useIncidentSubscription({
         limit: SIMPLE_FETCH_LIMIT,
       },
     ];
-  }, [enabled, nearbyGTags]);
+  }, [enabled, nearbyGTags, dvmEnabled]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function publishDvmRequest() {
+      if (!dvmEnabled || !location) {
+        if (dvmRequestId !== null) {
+          setDvmRequestId(null);
+        }
+        dvmRequestKeyRef.current = 'none';
+        return;
+      }
+
+      const [lng, lat] = location;
+      const requestKey = `${quantizeCoordinate(lat)},${quantizeCoordinate(lng)}`;
+      if (requestKey === dvmRequestKeyRef.current) {
+        return;
+      }
+
+      dvmRequestKeyRef.current = requestKey;
+      const now = Math.floor(Date.now() / 1000);
+      const since = now - DVM_DEFAULT_SINCE_DAYS * 24 * 60 * 60;
+
+      const requestEvent = new NDKEvent(ndk);
+      requestEvent.kind = DVM_REQUEST_KIND;
+      requestEvent.content = '';
+      requestEvent.tags = [
+        ['param', 'lat', String(lat)],
+        ['param', 'lng', String(lng)],
+        ['param', 'radius_miles', String(DVM_DEFAULT_RADIUS_MILES)],
+        ['param', 'since', String(since)],
+        ['param', 'max_results', String(DVM_DEFAULT_MAX_RESULTS)],
+        ['param', 'sort_profile', 'distance_then_recent'],
+        ['param', 'response_mode', getDvmResponseMode()],
+      ];
+
+      try {
+        if (!ndk.signer) {
+          if (__DEV__) {
+            console.warn('[IncidentSub][DVM] signer unavailable; skipping DVM request publish');
+          }
+          setDvmRequestId(null);
+          return;
+        }
+
+        await requestEvent.sign();
+        await requestEvent.publish();
+        if (!cancelled) {
+          setDvmRequestId(requestEvent.id);
+        }
+      } catch (error) {
+        if (__DEV__) {
+          console.warn('[IncidentSub][DVM] Failed to publish DVM request', error);
+        }
+        if (!cancelled) {
+          setDvmRequestId(null);
+        }
+      }
+    }
+
+    publishDvmRequest();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [dvmEnabled, dvmRequestId, location]);
+
+  const dvmResultFilter = useMemo((): NDKFilter[] | false => {
+    if (!dvmEnabled || !dvmRequestId) {
+      return false;
+    }
+
+    return [
+      {
+        kinds: [DVM_RESULT_KIND as number],
+        '#e': [dvmRequestId],
+        limit: 10,
+      },
+    ];
+  }, [dvmEnabled, dvmRequestId]);
 
   const filterKey = useMemo(() => {
     if (!enabled) {
@@ -276,7 +438,19 @@ export function useIncidentSubscription({
     return `${location[0]},${location[1]}`;
   }, [location]);
 
-  const subscriptionOptions = useMemo(
+  const incidentSubscriptionOptions = useMemo(
+    () => ({
+      // In DVM mode we want a bounded snapshot from incidents and let DVM drive ranking.
+      // Keeping this live causes unbounded event growth and UI churn on mobile.
+      closeOnEose: dvmEnabled,
+      bufferMs: 100,
+      cacheUsage: NDKSubscriptionCacheUsage.CACHE_FIRST,
+      groupable: false, // Execute immediately, avoid timer race on cleanup
+    }),
+    [dvmEnabled]
+  );
+
+  const dvmSubscriptionOptions = useMemo(
     () => ({
       closeOnEose: false,
       bufferMs: 100,
@@ -289,8 +463,15 @@ export function useIncidentSubscription({
   // Subscribe with explicit CACHE_FIRST to ensure cached events load immediately.
   // groupable: false - Prevents NDK timer race condition that causes "No filters to merge"
   // error when subscription is stopped before EOSE (see NDK removeItem bug).
-  const { events: globalEvents, eose: globalEose } = useSubscribe(globalFilter, subscriptionOptions);
-  const { events: gFanoutEvents, eose: gFanoutEose } = useSubscribe(gFanoutFilter, subscriptionOptions);
+  const { events: globalEvents, eose: globalEose } = useSubscribe(
+    globalFilter,
+    incidentSubscriptionOptions
+  );
+  const { events: gFanoutEvents, eose: gFanoutEose } = useSubscribe(
+    gFanoutFilter,
+    incidentSubscriptionOptions
+  );
+  const { events: dvmResultEvents } = useSubscribe(dvmResultFilter, dvmSubscriptionOptions);
 
   const events = useMemo(() => {
     if (gFanoutEvents.length === 0) {
@@ -309,9 +490,26 @@ export function useIncidentSubscription({
 
   const eose = globalEose && (gFanoutFilter === false || gFanoutEose);
 
+  const dvmOrderedEventIds = useMemo(() => {
+    if (!dvmEnabled || !dvmRequestId || dvmResultEvents.length === 0) {
+      return [];
+    }
+
+    const latestResult = [...dvmResultEvents]
+      .filter((event) => (event as NDKEvent).kind === DVM_RESULT_KIND)
+      .sort((a, b) => ((b as NDKEvent).created_at || 0) - ((a as NDKEvent).created_at || 0))[0];
+
+    if (!latestResult) {
+      return [];
+    }
+
+    return extractDvmIncidentEventIds(latestResult as NDKEvent, dvmRequestId);
+  }, [dvmEnabled, dvmRequestId, dvmResultEvents]);
+
   // Debug: Track event count changes to see cache vs relay timing
   const prevEventCountForDebug = useRef(0);
   const subscriptionStartTime = useRef(Date.now());
+  const loggedEoseForCycleRef = useRef(false);
 
   useEffect(() => {
     if (!DEBUG_CACHE) return;
@@ -336,11 +534,17 @@ export function useIncidentSubscription({
     prevEventCountForDebug.current = events.length;
   }, [events.length, eose, globalFilter]);
 
-  // Debug: Log when EOSE is received
+  // Debug: Log EOSE once per subscription cycle.
   useEffect(() => {
     if (!DEBUG_CACHE) return;
 
-    if (eose) {
+    if (!eose) {
+      loggedEoseForCycleRef.current = false;
+      return;
+    }
+
+    if (!loggedEoseForCycleRef.current) {
+      loggedEoseForCycleRef.current = true;
       const elapsed = Date.now() - subscriptionStartTime.current;
       console.log(`✅ [IncidentSub] EOSE received @ ${elapsed}ms (${events.length} total events)`);
     }
@@ -443,7 +647,26 @@ export function useIncidentSubscription({
         Array.from(incidentMapRef.current.values()),
         location
       );
-      const sliced = sorted.slice(0, effectiveMaxIncidents);
+      let displayOrdered = sorted;
+      if (location) {
+        const maxDistanceMeters = clampRadiusMiles(displayRadiusMiles) * METERS_PER_MILE;
+        displayOrdered = sorted.filter((incident) => {
+          const distanceMeters = distanceFromLocationMeters(incident, location);
+          return Number.isFinite(distanceMeters) && distanceMeters <= maxDistanceMeters;
+        });
+      }
+
+      if (dvmEnabled && dvmOrderedEventIds.length > 0) {
+        const byEventId = new Map(displayOrdered.map((incident) => [incident.eventId, incident]));
+        const preferred = dvmOrderedEventIds
+          .map((eventId) => byEventId.get(eventId))
+          .filter((incident): incident is ProcessedIncident => Boolean(incident));
+        const preferredSet = new Set(preferred.map((incident) => incident.eventId));
+        const remainder = displayOrdered.filter((incident) => !preferredSet.has(incident.eventId));
+        displayOrdered = [...preferred, ...remainder];
+      }
+
+      const sliced = displayOrdered.slice(0, effectiveMaxIncidents);
       const nextNearbyGTags = buildNearbyGTagFilterValues(
         Array.from(incidentMapRef.current.values()),
         location
@@ -490,6 +713,9 @@ export function useIncidentSubscription({
     location,
     locationKey,
     nearbyGTags.length,
+    dvmEnabled,
+    dvmOrderedEventIds,
+    displayRadiusMiles,
   ]);
 
   return {

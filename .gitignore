@@ -67,3 +67,9 @@ package-lock.json
 /docs/tasks
 /docs/tasks
 ndk-metro-release-bug.md
+
+.codex/.env
+
+.codex/memory/.semantic/
+
+.codex/memory/

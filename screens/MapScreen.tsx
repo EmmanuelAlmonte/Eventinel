@@ -5,11 +5,10 @@
  * Uses extracted hooks for location and subscription logic.
  */
 
-import { useEffect, useState, useCallback, useRef, useMemo, type ElementRef } from 'react';
+import { useEffect, useState, useCallback, useRef, useMemo } from 'react';
 import { View, Text, StyleSheet, Pressable, ActivityIndicator } from 'react-native';
 import { useIsFocused, useNavigation } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import Mapbox, { type MapState } from '@rnmapbox/maps';
 import { Button, Icon } from '@rneui/themed';
 
 import { LocationRequiredEmpty, MapSkeleton, ScreenContainer } from '@components/ui';
@@ -31,6 +30,12 @@ const INCIDENT_LABEL_LAYER_ID = 'incident-point-labels';
 const CLUSTER_RADIUS = 52;
 const EMPTY_INCIDENTS: ProcessedIncident[] = [];
 
+type MapState = {
+  gestures?: {
+    isGestureActive?: boolean;
+  };
+};
+
 type ShapeSourcePressEvent = {
   features: Array<GeoJSON.Feature>;
   coordinates: {
@@ -43,8 +48,32 @@ type ShapeSourcePressEvent = {
   };
 };
 
-type CameraRef = ElementRef<typeof Mapbox.Camera>;
-type ShapeSourceRef = ElementRef<typeof Mapbox.ShapeSource>;
+type MapboxModule = {
+  MapView: any;
+  Camera: any;
+  PointAnnotation: any;
+  ShapeSource: any;
+  CircleLayer: any;
+  SymbolLayer: any;
+};
+
+function getMapboxModule(): MapboxModule | null {
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const mod = require('@rnmapbox/maps');
+    return (mod?.default ?? mod) as MapboxModule;
+  } catch (error) {
+    if (__DEV__) {
+      console.warn('[MapScreen] @rnmapbox/maps not available in this runtime', error);
+    }
+    return null;
+  }
+}
+
+const Mapbox = getMapboxModule();
+
+type CameraRef = any;
+type ShapeSourceRef = any;
 
 const clusterFilter = ['has', 'point_count'] as const;
 const pointFilter = ['!', ['has', 'point_count']] as const;
@@ -372,6 +401,17 @@ export default function MapScreen() {
     );
   }
 
+  if (!Mapbox) {
+    return (
+      <ScreenContainer centerContent>
+        <Text style={styles.mapUnavailableTitle}>Map unavailable in this build</Text>
+        <Text style={styles.mapUnavailableSubtitle}>
+          Reload using the custom dev client build that includes Mapbox native modules.
+        </Text>
+      </ScreenContainer>
+    );
+  }
+
   // Determine effective camera center (fallback to default if not set)
   const effectiveCameraCenter = cameraCenter || userLocation || DEFAULT_CAMERA.centerCoordinate;
   const cameraCenterCoordinate = followUser ? effectiveCameraCenter : undefined;
@@ -560,6 +600,19 @@ const styles = StyleSheet.create({
     backgroundColor: '#1a1a2e',
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  mapUnavailableTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#111827',
+    textAlign: 'center',
+  },
+  mapUnavailableSubtitle: {
+    marginTop: 8,
+    fontSize: 14,
+    color: '#6b7280',
+    textAlign: 'center',
+    paddingHorizontal: 20,
   },
   userMarker: {
     width: USER_LOCATION.MARKER_SIZE,
