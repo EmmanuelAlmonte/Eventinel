@@ -7,7 +7,7 @@ export function createSubscriptionRegistry(): SubscriptionLifecycle {
 
   const start = (key: string, subscription: NDKSubscription) => {
     subscriptions.set(key, subscription);
-    eoseBySubscriptionKey.set(key, false);
+    eoseBySubscriptionKey.set(key, eoseBySubscriptionKey.get(key) ?? false);
   };
 
   const stop = (key: string) => {
@@ -46,4 +46,3 @@ export function createSubscriptionRegistry(): SubscriptionLifecycle {
     eoseBySubscriptionKey,
   };
 }
-

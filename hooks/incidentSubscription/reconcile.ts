@@ -37,7 +37,8 @@ export function computeReconcilePlan({
 export function computeHasReceivedHistory(
   enabled: boolean,
   activeSubscriptionKeys: Iterable<string>,
-  eoseBySubscriptionKey: Map<string, boolean>
+  eoseBySubscriptionKey: Map<string, boolean>,
+  desiredSubscriptionCount = 0
 ): boolean {
   if (!enabled) {
     return false;
@@ -49,6 +50,12 @@ export function computeHasReceivedHistory(
     if (eoseBySubscriptionKey.get(key) !== true) {
       return false;
     }
+  }
+
+  // If we intentionally have zero desired subscriptions, treat history as complete
+  // so consumers don't stay in an infinite "initial loading" state.
+  if (!hasAny && desiredSubscriptionCount === 0) {
+    return true;
   }
 
   return hasAny;

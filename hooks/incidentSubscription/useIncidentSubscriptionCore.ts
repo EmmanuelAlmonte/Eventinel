@@ -148,8 +148,13 @@ export function useIncidentSubscription({
   }, [location?.[0], location?.[1]]);
 
   const hasReceivedHistory = useCallback(() => {
-    return computeHasReceivedHistory(enabled, subscriptionRegistry.subscriptions.keys(), subscriptionRegistry.eoseBySubscriptionKey);
-  }, [enabled, subscriptionRegistry]);
+    return computeHasReceivedHistory(
+      enabled,
+      subscriptionRegistry.subscriptions.keys(),
+      subscriptionRegistry.eoseBySubscriptionKey,
+      desiredCells.length
+    );
+  }, [enabled, desiredCells.length, subscriptionRegistry]);
 
   const recomputeVisibleState = useCallback(
     (updatedIncidents: ProcessedIncident[] = []) => {
