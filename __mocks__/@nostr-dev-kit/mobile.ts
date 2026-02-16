@@ -33,9 +33,29 @@ const createMockNDK = () => ({
   connect: jest.fn().mockResolvedValue(undefined),
   addExplicitRelay: jest.fn(),
   fetchEvents: jest.fn().mockResolvedValue(new Set()),
-  subscribe: jest.fn((_filters: any, _options: any) => ({
-    stop: jest.fn(),
-  })),
+  subscribe: jest.fn((_filters: any, options: any) => {
+    const record = {
+      onEvents: options?.onEvents,
+      onEvent: options?.onEvent,
+      onEose: options?.onEose,
+      stop: jest.fn(),
+      stopped: false,
+    };
+
+    mockSubscription.register(record);
+
+    if (typeof options?.onEvents === 'function') {
+      options.onEvents(subscriptionState.events);
+    }
+
+    if (subscriptionState.eose && typeof options?.onEose === 'function') {
+      options.onEose();
+    }
+
+    return {
+      stop: record.stop,
+    };
+  }),
   pool: {
     on: jest.fn(),
     off: jest.fn(),
@@ -502,29 +522,75 @@ export class NDKCacheAdapterSqlite {
 interface MockSubscriptionState {
   events: any[];
   eose: boolean;
+  records: MockSubscriptionRecord[];
+}
+
+interface MockSubscriptionRecord {
+  onEvents?: (events: any[]) => void;
+  onEvent?: (event: any) => void;
+  onEose?: () => void;
+  stop: jest.Mock;
+  stopped: boolean;
 }
 
 const subscriptionState: MockSubscriptionState = {
   events: [],
   eose: false,
+  records: [],
 };
 
 /**
  * Helper to control useSubscribe mock state from tests
  */
 export const mockSubscription = {
+  register: (record: MockSubscriptionRecord) => {
+    subscriptionState.records.push(record);
+    record.stop.mockImplementation(() => {
+      const activeIndex = subscriptionState.records.indexOf(record);
+      if (activeIndex >= 0) {
+        subscriptionState.records.splice(activeIndex, 1);
+      }
+      record.stopped = true;
+    });
+  },
   setEvents: (events: any[]) => {
     subscriptionState.events = events;
+    subscriptionState.records.forEach((subscription) => {
+      if (!subscription.stopped && typeof subscription.onEvents === 'function') {
+        subscription.onEvents(events);
+      }
+    });
   },
   setEose: (eose: boolean) => {
     subscriptionState.eose = eose;
+    if (!eose) {
+      return;
+    }
+
+    subscriptionState.records.forEach((subscription) => {
+      if (!subscription.stopped && typeof subscription.onEose === 'function') {
+        subscription.onEose();
+      }
+    });
   },
   addEvent: (event: any) => {
     subscriptionState.events.push(event);
+    subscriptionState.records.forEach((subscription) => {
+      if (!subscription.stopped && typeof subscription.onEvent === 'function') {
+        subscription.onEvent(event);
+      }
+    });
   },
   reset: () => {
     subscriptionState.events = [];
     subscriptionState.eose = false;
+    subscriptionState.records.forEach((subscription) => {
+      if (!subscription.stopped) {
+        subscription.stop();
+      }
+      subscription.stopped = true;
+    });
+    subscriptionState.records = [];
   },
 };
 

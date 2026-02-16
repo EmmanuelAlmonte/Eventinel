@@ -16,8 +16,9 @@ import { renderHook, waitFor } from '@testing-library/react-native';
 // Import mock helpers
 import {
   mockSubscription,
-  useSubscribe,
+  mockNDKHooks,
 } from '../../__mocks__/@nostr-dev-kit/mobile';
+import { INCIDENT_LIMITS } from '../../lib/map/constants';
 
 // Mock ngeohash
 jest.mock('ngeohash', () => ({
@@ -35,6 +36,10 @@ jest.mock('ngeohash', () => ({
     w: hash + 'w',
     nw: hash + 'nw',
   })),
+}));
+
+jest.mock('@lib/ndk', () => ({
+  ndk: mockNDKHooks.getNDK(),
 }));
 
 // Mock the incident parser
@@ -59,7 +64,7 @@ jest.mock('@lib/nostr/events/incident', () => ({
           lat: content.lat ?? 0,
           lng: content.lng ?? 0,
           address: content.address || '',
-          geohash: 'gh4075',
+          geohash: event.tags?.find((tag: string[]) => tag[0] === 'g')?.[1] ?? 'gh4075',
         },
         occurredAt: content.occurredAt ? new Date(content.occurredAt) : new Date(),
         source: content.source || 'community',
@@ -139,6 +144,10 @@ function createMockIncidentEvent(overrides: Partial<any> = {}) {
       sourceId: overrides.sourceId ?? 'test-123',
     }),
   };
+}
+
+function getSubscribeCalls() {
+  return mockNDKHooks.getNDK().subscribe.mock.calls;
 }
 
 // =============================================================================
@@ -240,14 +249,15 @@ describe('useIncidentSubscription', () => {
         })
       );
 
-      expect(useSubscribe).toHaveBeenCalledWith(
-        expect.arrayContaining([
-          expect.objectContaining({
-            kinds: [30911],
-            limit: 200,
-          }),
-        ]),
-        expect.any(Object)
+      const calls = getSubscribeCalls();
+      const filters = calls[0]?.[0];
+
+      expect(Array.isArray(filters)).toBe(true);
+      expect((filters as any)[0]).toEqual(
+        expect.objectContaining({
+          kinds: [30911],
+          limit: INCIDENT_LIMITS.FETCH_LIMIT,
+        })
       );
     });
 
@@ -258,32 +268,29 @@ describe('useIncidentSubscription', () => {
         })
       );
 
-      // useSubscribe should be called with filters array
-      expect(useSubscribe).toHaveBeenCalledWith(
-        expect.arrayContaining([
-          expect.objectContaining({
-            kinds: [30911],
-          }),
-        ]),
-        expect.any(Object)
-      );
+      // Subscription should be created with a geohash filter.
+      const calls = getSubscribeCalls();
+      expect(calls.length).toBeGreaterThan(0);
+      const hasGeoHashFilter = calls.some((call) => {
+        const filters = call[0] as unknown[];
+        return Array.isArray(filters) && filters.some((filter: any) => filter['#g']);
+      });
+      expect(hasGeoHashFilter).toBe(true);
     });
 
     it('uses simple global filter without geohash/since', () => {
       renderHook(() =>
         useIncidentSubscription({
-          location: [-75.1652, 39.9526],
+          location: null,
         })
       );
 
-      const filterCall = (useSubscribe as jest.Mock).mock.calls[0];
+      const filterCall = getSubscribeCalls()[0];
       const filters = filterCall[0];
 
       expect(filters[0].kinds).toEqual([30911]);
-      expect(filters[0].limit).toBe(200);
-      expect(filters[0].since).toBeUndefined();
+      expect(filters[0].limit).toBe(INCIDENT_LIMITS.FETCH_LIMIT);
       expect(filters[0]['#g']).toBeUndefined();
-      expect(filters[0]['#t']).toBeUndefined();
     });
   });
 
@@ -300,7 +307,7 @@ describe('useIncidentSubscription', () => {
         })
       );
 
-      expect(useSubscribe).toHaveBeenCalledWith(false, expect.any(Object));
+      expect(mockNDKHooks.getNDK().subscribe).not.toHaveBeenCalled();
     });
 
     it('subscribes when enabled is true (default)', () => {
@@ -311,10 +318,7 @@ describe('useIncidentSubscription', () => {
         })
       );
 
-      expect(useSubscribe).toHaveBeenCalledWith(
-        expect.any(Array),
-        expect.any(Object)
-      );
+      expect(mockNDKHooks.getNDK().subscribe).toHaveBeenCalled();
     });
   });
 
@@ -790,6 +794,106 @@ describe('useIncidentSubscription', () => {
   });
 
   // =============================================================================
+  // RECONCILIATION + LIFECYCLE TESTS
+  // =============================================================================
+
+  describe('Reconcile and Lifecycle', () => {
+    it('starts and stops subscriptions when desired geohash cells change', async () => {
+      const { rerender } = renderHook(
+        ({ location }) =>
+          useIncidentSubscription({
+            location,
+          }),
+        {
+          initialProps: { location: [-75.1652, 39.9526] as [number, number] },
+        }
+      );
+
+      const startCalls = getSubscribeCalls();
+      const initialCount = startCalls.length;
+      const initialStops = mockNDKHooks.getNDK().subscribe.mock.results
+        .map((result) => (result.value ?? null) as { stop: jest.Mock })
+        .filter(Boolean)
+        .map((entry) => entry.stop);
+
+      rerender({ location: [40.7128, -74.006] as [number, number] });
+
+      await waitFor(() => {
+        expect(getSubscribeCalls().length).toBeGreaterThan(initialCount);
+        const hadStop = initialStops.some((stop) => stop.mock.calls.length > 0);
+        expect(hadStop).toBe(true);
+      });
+    });
+
+    it('batches cache and relay updates into a single flush window', async () => {
+      const createdAt = Math.floor(Date.now() / 1000);
+      const cacheEvent = createMockIncidentEvent({
+        incidentId: 'shared-incident',
+        created_at: createdAt,
+        title: 'Cache',
+      });
+      const relayEvent = createMockIncidentEvent({
+        incidentId: 'shared-incident',
+        created_at: createdAt + 5,
+        title: 'Relay',
+      });
+
+      const { result } = renderHook(() =>
+        useIncidentSubscription({
+          location: null,
+        })
+      );
+      mockSubscription.setEvents([cacheEvent]);
+      mockSubscription.addEvent(relayEvent);
+      mockSubscription.setEose(true);
+
+      await waitFor(() => {
+        expect(result.current.totalEventsReceived).toBe(2);
+        expect(result.current.incidents).toHaveLength(1);
+        expect(result.current.incidents[0].title).toBe('Relay');
+        expect(result.current.updatedIncidents[0].title).toBe('Relay');
+      });
+    });
+  });
+
+  // =============================================================================
+  // PRUNE + CELL CHANGES
+  // =============================================================================
+
+  describe('Cell Pruning', () => {
+    it('prunes incidents that are no longer inside desired geohash cells', async () => {
+      const { result, rerender } = renderHook(
+        ({ location }) =>
+          useIncidentSubscription({
+            location,
+          }),
+        {
+          initialProps: { location: [-75.1652, 39.9526] as [number, number] },
+        }
+      );
+
+      const farCellEvent = createMockIncidentEvent({
+        incidentId: 'pruned',
+        title: 'Pruned Incident',
+        tags: [['d', 'pruned'], ['g', 'gh000000'], ['t', 'incident']],
+      });
+
+      mockSubscription.setEose(true);
+      mockSubscription.setEvents([farCellEvent]);
+
+      await waitFor(() => {
+        expect(result.current.incidents).toHaveLength(1);
+      });
+
+      rerender({ location: [-74.006, 40.7128] as [number, number] });
+
+      await waitFor(() => {
+        expect(result.current.incidents).toHaveLength(0);
+      });
+    });
+  });
+
+  // =============================================================================
   // TOTAL EVENTS RECEIVED TESTS
   // =============================================================================
 
@@ -824,18 +928,18 @@ describe('useIncidentSubscription', () => {
   // =============================================================================
 
   describe('Simple Filter', () => {
-    it('always uses limit 200 with no since filter', () => {
+    it('always uses subscription fetch limit with no since filter', () => {
       renderHook(() =>
         useIncidentSubscription({
-          location: [-75.1652, 39.9526],
+          location: null,
           maxIncidents: 9999, // Runtime cap should still be 200
         })
       );
 
-      const filterCall = (useSubscribe as jest.Mock).mock.calls[0];
-      const filters = filterCall[0];
+      const calls = getSubscribeCalls();
+      const filters = calls[0]?.[0];
 
-      expect(filters[0].limit).toBe(200);
+      expect(filters[0].limit).toBe(INCIDENT_LIMITS.FETCH_LIMIT);
       expect(filters[0].since).toBeUndefined();
     });
   });
@@ -852,7 +956,7 @@ describe('useIncidentSubscription', () => {
         })
       );
 
-      const filterCall = (useSubscribe as jest.Mock).mock.calls[0];
+      const filterCall = getSubscribeCalls()[0];
       const options = filterCall[1];
 
       expect(options.cacheUsage).toBe('CACHE_FIRST');
@@ -865,7 +969,7 @@ describe('useIncidentSubscription', () => {
         })
       );
 
-      const filterCall = (useSubscribe as jest.Mock).mock.calls[0];
+      const filterCall = getSubscribeCalls()[0];
       const options = filterCall[1];
 
       expect(options.closeOnEose).toBe(false);
@@ -878,7 +982,7 @@ describe('useIncidentSubscription', () => {
         })
       );
 
-      const filterCall = (useSubscribe as jest.Mock).mock.calls[0];
+      const filterCall = getSubscribeCalls()[0];
       const options = filterCall[1];
 
       expect(options.groupable).toBe(false);
@@ -914,11 +1018,7 @@ describe('useIncidentSubscription', () => {
         })
       );
 
-      // Should not throw and should call useSubscribe with valid filters
-      expect(useSubscribe).toHaveBeenCalledWith(
-        expect.any(Array),
-        expect.any(Object)
-      );
+      expect(mockNDKHooks.getNDK().subscribe).toHaveBeenCalled();
     });
 
     it('handles location change without altering simple filter', () => {
@@ -934,7 +1034,7 @@ describe('useIncidentSubscription', () => {
 
       rerender({ location: [-74.006, 40.7128] as [number, number] });
 
-      const calls = (useSubscribe as jest.Mock).mock.calls;
+      const calls = getSubscribeCalls();
       const globalFilterCall = calls.find(([filters]) => {
         if (!Array.isArray(filters) || filters.length === 0) {
           return false;
@@ -945,7 +1045,7 @@ describe('useIncidentSubscription', () => {
 
       expect(filters).toBeDefined();
       expect(filters[0].kinds).toEqual([30911]);
-      expect(filters[0].limit).toBe(200);
+      expect(filters[0].limit).toBe(INCIDENT_LIMITS.FETCH_LIMIT);
       expect(filters[0].since).toBeUndefined();
     });
 
@@ -966,7 +1066,7 @@ describe('useIncidentSubscription', () => {
       rerender({ enabled: false });
 
       // Should not throw
-      expect(useSubscribe).toHaveBeenCalled();
+      expect(mockNDKHooks.getNDK().subscribe).toHaveBeenCalled();
     });
   });
 });

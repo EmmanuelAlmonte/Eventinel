@@ -42,6 +42,7 @@ npm test
 
 ## Next steps
 
-- Review all command flags in [Commands](./commands)
-- Set team defaults in [Configuration](./config)
-- Copy ready-to-use patterns from [Examples](./examples)
+- Review documentation priority in [Stability Scope](./stability-scope)
+- Start with [Profile and Settings](./features/profile-settings)
+- Continue with [Relay Management](./features/relay-management)
+- Then cover [Login and Authentication](./features/login-authentication)
