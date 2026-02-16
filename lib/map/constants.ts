@@ -113,13 +113,22 @@ export const INCIDENT_LIMITS = {
    * Maximum number of incidents to keep in memory at once
    * Oldest incidents are evicted when this limit is exceeded (LRU strategy)
    */
-  MAX_CACHE: 250,
+  MAX_CACHE: 1000,
 
   /**
-   * Maximum number of events to fetch per subscription request
-   * Higher values = more initial data but slower first load
+   * Maximum number of events requested per active relay subscription filter.
    */
-  FETCH_LIMIT: 100,
+  FETCH_LIMIT: 400,
+
+  /**
+   * Maximum incidents rendered from the live subscription set.
+   */
+  MAX_VISIBLE: 400,
+
+  /**
+   * Internal upper bound for candidate incidents kept before pruning/sorting.
+   */
+  CANDIDATE_RETENTION: 1000,
 
   /**
    * How many days back to fetch incident events

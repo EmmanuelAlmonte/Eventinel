@@ -17,6 +17,7 @@ import React, {
   useSyncExternalStore,
 } from 'react';
 import type { ProcessedIncident } from '@hooks/useIncidentSubscription';
+import { INCIDENT_LIMITS } from '@lib/map/constants';
 
 export interface IncidentCacheApi {
   /** Get an incident by ID */
@@ -35,9 +36,6 @@ interface IncidentCacheStore extends IncidentCacheApi {
 }
 
 const IncidentCacheContext = createContext<IncidentCacheStore | null>(null);
-
-/** Max cache size to prevent unbounded growth */
-const MAX_CACHE_SIZE = 500;
 
 export function IncidentCacheProvider({ children }: { children: React.ReactNode }) {
   // Cache stored in ref (fast reads, no re-render on mutation)
@@ -83,12 +81,12 @@ export function IncidentCacheProvider({ children }: { children: React.ReactNode 
     }
 
     // Evict oldest if over limit
-    if (cacheRef.current.size > MAX_CACHE_SIZE) {
+    if (cacheRef.current.size > INCIDENT_LIMITS.MAX_CACHE) {
       const entries = Array.from(cacheRef.current.entries());
       // Sort by createdAt ascending (oldest first)
       entries.sort((a, b) => a[1].createdAt - b[1].createdAt);
       // Remove oldest entries
-      const toRemove = entries.slice(0, cacheRef.current.size - MAX_CACHE_SIZE);
+      const toRemove = entries.slice(0, cacheRef.current.size - INCIDENT_LIMITS.MAX_CACHE);
       for (const [key] of toRemove) {
         cacheRef.current.delete(key);
       }

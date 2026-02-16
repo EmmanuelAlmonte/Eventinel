@@ -12,14 +12,12 @@ import { ndk } from '@lib/ndk';
 import { parseIncidentEvent } from '@lib/nostr/events/incident';
 import type { ParsedIncident } from '@lib/nostr/events/types';
 import { type Severity } from '@lib/nostr/config';
-import { MAPBOX_CONFIG, MAP_SUBSCRIPTION } from '@lib/map/constants';
+import { INCIDENT_LIMITS, MAPBOX_CONFIG, MAP_SUBSCRIPTION } from '@lib/map/constants';
 import { planIncidentCells, type MapSubscriptionViewport } from '@lib/map/subscriptionPlanner';
 
 // Debug flag - set to true to enable cache debugging logs
 const DEBUG_CACHE = __DEV__;
 const EMPTY_SEVERITY_COUNTS: Record<Severity, number> = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 };
-const SIMPLE_FETCH_LIMIT = 200;
-const CANDIDATE_RETENTION_LIMIT = 600;
 const EARTH_RADIUS_METERS = 6371000;
 const SUBSCRIPTION_BUFFER_MS = 100;
 const GLOBAL_SUBSCRIPTION_KEY = '__global__';
@@ -167,9 +165,9 @@ export function useIncidentSubscription({
   subscriptionLocation,
   subscriptionViewport,
   enabled = true,
-  maxIncidents = SIMPLE_FETCH_LIMIT,
+  maxIncidents = INCIDENT_LIMITS.MAX_VISIBLE,
 }: UseIncidentSubscriptionOptions): UseIncidentSubscriptionResult {
-  const effectiveMaxIncidents = Math.min(maxIncidents, SIMPLE_FETCH_LIMIT);
+  const effectiveMaxIncidents = Math.min(maxIncidents, INCIDENT_LIMITS.MAX_VISIBLE);
   const lastUpdatedRef = useRef<number | null>(null);
   const incidentMapRef = useRef<Map<string, ProcessedIncident>>(new Map());
   const lastTotalEventsRef = useRef(0);
@@ -282,15 +280,15 @@ export function useIncidentSubscription({
         return;
       }
 
-      if (incidentMapRef.current.size > CANDIDATE_RETENTION_LIMIT) {
+      if (incidentMapRef.current.size > INCIDENT_LIMITS.CANDIDATE_RETENTION) {
         const retained = stableLocation
           ? sortIncidentsForDisplay(Array.from(incidentMapRef.current.values()), stableLocation).slice(
               0,
-              CANDIDATE_RETENTION_LIMIT
+              INCIDENT_LIMITS.CANDIDATE_RETENTION
             )
           : sortIncidentsForRetention(Array.from(incidentMapRef.current.values())).slice(
               0,
-              CANDIDATE_RETENTION_LIMIT
+              INCIDENT_LIMITS.CANDIDATE_RETENTION
             );
 
         incidentMapRef.current = new Map(
@@ -459,12 +457,12 @@ export function useIncidentSubscription({
         key === GLOBAL_SUBSCRIPTION_KEY
           ? {
               kinds: [30911 as number],
-              limit: SIMPLE_FETCH_LIMIT,
+              limit: INCIDENT_LIMITS.FETCH_LIMIT,
             }
           : {
               kinds: [30911 as number],
               '#g': [key],
-              limit: SIMPLE_FETCH_LIMIT,
+              limit: INCIDENT_LIMITS.FETCH_LIMIT,
             };
 
       const subscription = ndk.subscribe([filter], {
