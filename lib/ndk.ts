@@ -28,10 +28,31 @@ if (__DEV__) {
       const incidentCount = cacheAdapter.db.getFirstSync(
         'SELECT COUNT(*) as count FROM events WHERE kind = 30911'
       ) as { count: number } | null;
+      const pageSizeRow = cacheAdapter.db.getFirstSync(
+        'PRAGMA page_size'
+      ) as { page_size: number } | null;
+      const pageCountRow = cacheAdapter.db.getFirstSync(
+        'PRAGMA page_count'
+      ) as { page_count: number } | null;
+      const freeListRow = cacheAdapter.db.getFirstSync(
+        'PRAGMA freelist_count'
+      ) as { freelist_count: number } | null;
+
+      const pageSize = pageSizeRow?.page_size ?? 0;
+      const pageCount = pageCountRow?.page_count ?? 0;
+      const freePages = freeListRow?.freelist_count ?? 0;
+      const totalBytes = pageSize * pageCount;
+      const usedBytes = pageSize * Math.max(0, pageCount - freePages);
 
       console.log('💾 [Cache] SQLite cache stats:');
       console.log(`   → Total events: ${eventCount?.count ?? 0}`);
       console.log(`   → Incidents (kind:30911): ${incidentCount?.count ?? 0}`);
+      console.log(
+        `   → Total DB size: ${(totalBytes / (1024 * 1024)).toFixed(2)} MB`
+      );
+      console.log(
+        `   → Used DB size: ${(usedBytes / (1024 * 1024)).toFixed(2)} MB`
+      );
     } catch (e) {
       console.warn('💾 [Cache] Could not read cache stats:', e);
     }
