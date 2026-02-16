@@ -22,6 +22,7 @@ import {
   useIncidentCache,
 } from '../../contexts/IncidentCacheContext';
 import type { ProcessedIncident } from '../../hooks/useIncidentSubscription';
+import { INCIDENT_LIMITS } from '../../lib/map/constants';
 
 // =============================================================================
 // TEST UTILITIES
@@ -596,12 +597,13 @@ describe('IncidentCacheContext', () => {
 
   describe('Cache Eviction', () => {
     it('evicts oldest incidents when exceeding max size', async () => {
-      // MAX_CACHE_SIZE is 500, so we need to exceed it
+      const maxCacheSize = INCIDENT_LIMITS.MAX_CACHE;
+      const overflowCount = 10;
       const incidents: ProcessedIncident[] = [];
       const baseTime = Math.floor(Date.now() / 1000);
 
-      // Create 510 incidents with different timestamps
-      for (let i = 0; i < 510; i++) {
+      // Create incidents beyond max size with strictly increasing timestamps.
+      for (let i = 0; i < maxCacheSize + overflowCount; i++) {
         incidents.push(createMockIncident(`evict-${i}`, baseTime + i));
       }
 
@@ -621,20 +623,22 @@ describe('IncidentCacheContext', () => {
         cacheApi!.upsertMany(incidents);
       });
 
-      // Oldest incidents (0-9) should be evicted
+      // Oldest overflowed incidents should be evicted.
       expect(cacheApi!.getIncident('evict-0')).toBeUndefined();
-      expect(cacheApi!.getIncident('evict-9')).toBeUndefined();
+      expect(cacheApi!.getIncident(`evict-${overflowCount - 1}`)).toBeUndefined();
 
-      // Newer incidents should still exist
-      expect(cacheApi!.getIncident('evict-10')).toBeDefined();
-      expect(cacheApi!.getIncident('evict-509')).toBeDefined();
+      // Newer incidents should still exist.
+      expect(cacheApi!.getIncident(`evict-${overflowCount}`)).toBeDefined();
+      expect(cacheApi!.getIncident(`evict-${maxCacheSize + overflowCount - 1}`)).toBeDefined();
     });
 
-    it('keeps 500 most recent incidents after eviction', async () => {
+    it('keeps max cache size most recent incidents after eviction', async () => {
+      const maxCacheSize = INCIDENT_LIMITS.MAX_CACHE;
+      const overflowCount = 50;
       const incidents: ProcessedIncident[] = [];
       const baseTime = Math.floor(Date.now() / 1000);
 
-      for (let i = 0; i < 550; i++) {
+      for (let i = 0; i < maxCacheSize + overflowCount; i++) {
         incidents.push(createMockIncident(`count-${i}`, baseTime + i));
       }
 
@@ -656,13 +660,13 @@ describe('IncidentCacheContext', () => {
 
       // Count how many incidents are in cache
       let count = 0;
-      for (let i = 0; i < 550; i++) {
+      for (let i = 0; i < maxCacheSize + overflowCount; i++) {
         if (cacheApi!.getIncident(`count-${i}`)) {
           count++;
         }
       }
 
-      expect(count).toBe(500);
+      expect(count).toBe(maxCacheSize);
     });
   });
 
