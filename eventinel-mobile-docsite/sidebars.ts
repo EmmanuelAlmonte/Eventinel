@@ -23,7 +23,22 @@ const sidebars: SidebarsConfig = {
     {
       type: 'category',
       label: 'Architecture',
-      items: ['architecture/location-provider'],
+      items: [
+        'architecture/location-provider',
+        'architecture/incident-detail-modules',
+        'architecture/map-overlays-and-viewport-subscription',
+        'architecture/incident-subscription-api-surface',
+      ],
+    },
+    {
+      type: 'category',
+      label: 'Deferred',
+      items: ['deferred/incident-subscription-refactor'],
+    },
+    {
+      type: 'category',
+      label: 'Development',
+      items: ['development/tsconfig-review'],
     },
     {
       type: 'category',

@@ -41,6 +41,7 @@ const logLocation = (tag: string, data?: unknown) => {
 type LocationContext = {
   fallback: 'default' | 'none';
   defaultLocation?: [number, number];
+  accuracy: Location.Accuracy;
   timeout: number;
   lastKnownMaxAgeMs: number;
   currentLocation: [number, number] | null;
@@ -103,7 +104,10 @@ async function resolveCachedLocation(
   }
 }
 
-async function resolveFreshLocation(timeout: number): Promise<Location.LocationObject | null> {
+async function resolveFreshLocation(
+  timeout: number,
+  accuracy: Location.Accuracy
+): Promise<Location.LocationObject | null> {
   logLocation(`🛰️ Fetching FRESH location via watchPosition (timeout: ${timeout}ms)...`);
 
   return new Promise<Location.LocationObject | null>((resolve) => {
@@ -120,7 +124,7 @@ async function resolveFreshLocation(timeout: number): Promise<Location.LocationO
 
     Location.watchPositionAsync(
       {
-        accuracy: Location.Accuracy.High,
+        accuracy,
         distanceInterval: 0,
         timeInterval: 100,
       },
@@ -163,7 +167,7 @@ async function updateFromFreshLocation(
   const freshStartTime = Date.now();
 
   try {
-    const freshLocation = await resolveFreshLocation(context.timeout);
+    const freshLocation = await resolveFreshLocation(context.timeout, context.accuracy);
     const elapsed = Date.now() - freshStartTime;
 
     if (freshLocation) {
@@ -219,6 +223,7 @@ export function useUserLocation(options: UseUserLocationOptions = {}): UseUserLo
   const {
     fallback = 'none',
     defaultLocation,
+    accuracy = Location.Accuracy.High,
     timeout = DEFAULT_TIMEOUT,
     lastKnownMaxAgeMs = DEFAULT_LAST_KNOWN_MAX_AGE_MS,
   } = options;
@@ -237,6 +242,7 @@ export function useUserLocation(options: UseUserLocationOptions = {}): UseUserLo
     const context: LocationContext = {
       fallback,
       defaultLocation,
+      accuracy,
       timeout,
       lastKnownMaxAgeMs,
       currentLocation: location,
@@ -259,7 +265,7 @@ export function useUserLocation(options: UseUserLocationOptions = {}): UseUserLo
       logLocation('🏁 END getLocation()');
       setters.setIsLoading(false);
     }
-  }, [defaultLocation, fallback, lastKnownMaxAgeMs, location, timeout]);
+  }, [accuracy, defaultLocation, fallback, lastKnownMaxAgeMs, location, timeout]);
 
   useEffect(() => {
     getLocation();

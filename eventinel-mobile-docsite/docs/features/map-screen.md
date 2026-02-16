@@ -5,6 +5,10 @@ description: User-facing guide for map interactions and visual states.
 
 `MapScreen` is documented here at the UX level only.
 
+As of `2026-02-16`, map UI and viewport subscription responsibilities are split
+into `screens/MapScreen.tsx`, `screens/map/MapOverlays.tsx`, and
+`screens/map/useMapViewportSubscription.ts`.
+
 ## Entry point
 
 - Bottom tab: `Map`
@@ -33,6 +37,17 @@ description: User-facing guide for map interactions and visual states.
 - If relays are disconnected or unavailable, a top banner explains status and
   links to Relay Settings.
 
+## Viewport subscription hinting
+
+- When focused viewport is not covered by active subscription grid, map displays
+  a hint to zoom in.
+- Focus changes clear viewport anchor and subscription viewport state.
+
+## Developer overlays
+
+- In dev builds, overlay diagnostics show incident count, EOSE status, and
+  location source metadata.
+
 ## Empty state
 
 - After historical data is received, map shows "No incidents found" when none
@@ -43,3 +58,8 @@ description: User-facing guide for map interactions and visual states.
 Detailed subscription planning internals (viewport anchoring, geohash cell
 reconciliation, and active cell management) are intentionally deferred while
 those modules are under active development.
+
+See:
+
+- [Map Overlays And Viewport Subscription](../architecture/map-overlays-and-viewport-subscription)
+- [Incident Subscription Refactor (Deferred)](../deferred/incident-subscription-refactor)
