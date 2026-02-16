@@ -15,6 +15,9 @@ into `screens/MapScreen.tsx`, `screens/map/MapOverlays.tsx`, and
 
 ## Core behaviors
 
+- `MapScreen` is one consumer of the shared incident subscription context
+  (`useSharedIncidents`). It does not manage subscription state itself.
+
 ## Location-first render
 
 - Uses shared location provider.
@@ -29,29 +32,41 @@ into `screens/MapScreen.tsx`, `screens/map/MapOverlays.tsx`, and
 
 ## Camera controls
 
-- Includes "fly to my location" floating action button.
-- Follow mode resumes automatically after user interactions.
+- Includes a **fly to my location** floating action button.
+- Follow mode pauses when users pan/zoom; resume happens when the control is used.
+- Cluster tap behavior:
+  - calls Mapbox cluster expansion zoom,
+  - animates camera to that zoom level and center,
+  - then resumes follow handling.
 
 ## Relay awareness
 
 - If relays are disconnected or unavailable, a top banner explains status and
   links to Relay Settings.
+- Banner logic is driven by `screens/map/helpers.ts` and only appears when relay
+  status is non-healthy.
 
 ## Viewport subscription hinting
 
-- When focused viewport is not covered by active subscription grid, map displays
-  a hint to zoom in.
+- `onMapIdle` events are funneled through `useMapViewportSubscription`.
+- Off-grid viewports show **"Zoom in to load incidents for this area"**.
 - Focus changes clear viewport anchor and subscription viewport state.
 
 ## Developer overlays
 
 - In dev builds, overlay diagnostics show incident count, EOSE status, and
   location source metadata.
+- Additional debug overlays show:
+  - incident list size,
+  - `EOSE` state,
+  - location freshness and permission source.
 
 ## Empty state
 
 - After historical data is received, map shows "No incidents found" when none
   are available in scope.
+- This only appears after `hasReceivedHistory === true`; initial fetch windows
+  keep loading semantics.
 
 ## Scope note
 
