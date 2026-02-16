@@ -47,6 +47,26 @@ export const MAPBOX_CONFIG = {
   DEFAULT_BEARING: 0,
 } as const;
 
+/**
+ * Map-driven subscription tuning constants
+ */
+export const MAP_SUBSCRIPTION = {
+  /**
+   * Geohash precision used by relay-side `#g` filters.
+   */
+  GEOHASH_PRECISION: 6,
+
+  /**
+   * Wait this long after map idle before applying a viewport-driven subscription update.
+   */
+  VIEWPORT_UPDATE_DEBOUNCE_MS: 400,
+
+  /**
+   * Minimum interval between subscription-anchor updates to avoid churn.
+   */
+  VIEWPORT_MIN_UPDATE_INTERVAL_MS: 1200,
+} as const;
+
 // =============================================================================
 // INCIDENT FETCHING & CACHING
 // =============================================================================

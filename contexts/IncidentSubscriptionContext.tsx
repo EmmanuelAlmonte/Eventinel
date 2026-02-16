@@ -43,6 +43,8 @@ interface IncidentSubscriptionContextValue {
   severityCounts: Record<Severity, number>;
   /** Report Map screen focus for subscription gating */
   setMapFocused: (focused: boolean) => void;
+  /** Report debounced map anchor used for subscription filtering */
+  setMapSubscriptionAnchor: (anchor: [number, number] | null) => void;
   /** Report Feed screen focus for subscription gating */
   setFeedFocused: (focused: boolean) => void;
 }
@@ -62,6 +64,9 @@ export function IncidentSubscriptionProvider({ children }: { children: React.Rea
   const { upsertMany } = useIncidentCacheApi();
   const [isMapFocused, setIsMapFocused] = useState(false);
   const [isFeedFocused, setIsFeedFocused] = useState(false);
+  const [mapSubscriptionAnchor, setMapSubscriptionAnchor] = useState<[number, number] | null>(
+    null
+  );
   const [isAppActive, setIsAppActive] = useState(() => {
     const currentState = AppState.currentState;
     // AppState can be 'unknown' on startup in some environments; treat that as active
@@ -86,12 +91,17 @@ export function IncidentSubscriptionProvider({ children }: { children: React.Rea
     setIsFeedFocused(focused);
   }, []);
 
+  const handleSetMapSubscriptionAnchor = useCallback((anchor: [number, number] | null) => {
+    setMapSubscriptionAnchor(anchor);
+  }, []);
+
   const isScreenFocused = isMapFocused || isFeedFocused;
   const isSubscriptionEnabled = !!location && isScreenFocused && isAppActive;
+  const subscriptionLocation = isMapFocused ? mapSubscriptionAnchor ?? location : location;
 
   // Single subscription shared by all screens
-  // NOTE: useIncidentSubscription() now prefilters to a 3x3 (9-cell) geohash grid
-  // around the user's location via `#g` (p6) when `location` is available.
+  // NOTE: useIncidentSubscription() prefilters to a 3x3 (9-cell) geohash grid via `#g` (p6).
+  // On Map screen focus we use the debounced map anchor; otherwise we fall back to user location.
   const {
     incidents,
     isInitialLoading,
@@ -100,6 +110,7 @@ export function IncidentSubscriptionProvider({ children }: { children: React.Rea
     updatedIncidents,
   } = useIncidentSubscription({
     location,
+    subscriptionLocation,
     enabled: isSubscriptionEnabled, // Only subscribe when focused, active, and location is available
   });
 
@@ -117,6 +128,7 @@ export function IncidentSubscriptionProvider({ children }: { children: React.Rea
       hasReceivedHistory,
       severityCounts,
       setMapFocused: handleSetMapFocused,
+      setMapSubscriptionAnchor: handleSetMapSubscriptionAnchor,
       setFeedFocused: handleSetFeedFocused,
     }),
     [
@@ -125,6 +137,7 @@ export function IncidentSubscriptionProvider({ children }: { children: React.Rea
       hasReceivedHistory,
       severityCounts,
       handleSetMapFocused,
+      handleSetMapSubscriptionAnchor,
       handleSetFeedFocused,
     ]
   );

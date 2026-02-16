@@ -15,7 +15,8 @@ import { LocationRequiredEmpty, MapSkeleton, ScreenContainer } from '@components
 import { useRelayStatus, useSharedLocation, useSharedIncidents } from '@contexts';
 import { useAppTheme, type ProcessedIncident } from '@hooks';
 import { DEFAULT_CAMERA, MAP_STYLES, SEVERITY_COLORS, incidentsToFeatureCollection } from '@lib/map/types';
-import { MAPBOX_CONFIG, USER_LOCATION, INCIDENT_LIMITS, INCIDENT_MARKER } from '@lib/map/constants';
+import { MAPBOX_CONFIG, USER_LOCATION, INCIDENT_LIMITS, INCIDENT_MARKER, MAP_SUBSCRIPTION } from '@lib/map/constants';
+import { evaluateViewportCoverage, type LngLat, type ViewportBounds } from '@lib/map/geohashViewport';
 
 // Camera animation modes
 type CameraAnimationMode = 'flyTo' | 'easeTo' | 'linearTo' | 'moveTo' | 'none';
@@ -74,6 +75,25 @@ const Mapbox = getMapboxModule();
 
 type CameraRef = any;
 type ShapeSourceRef = any;
+type MapBoundsState = {
+  ne?: LngLat;
+  sw?: LngLat;
+};
+
+type MapIdleState = {
+  properties?: {
+    center?: LngLat;
+    bounds?: MapBoundsState;
+  };
+};
+
+function isLngLat(value: unknown): value is LngLat {
+  if (!Array.isArray(value) || value.length !== 2) {
+    return false;
+  }
+
+  return Number.isFinite(value[0]) && Number.isFinite(value[1]);
+}
 
 const clusterFilter = ['has', 'point_count'] as const;
 const pointFilter = ['!', ['has', 'point_count']] as const;
@@ -183,6 +203,10 @@ export default function MapScreen() {
   const isAnimatingRef = useRef(false);
   const shapeSourceRef = useRef<ShapeSourceRef | null>(null);
   const cameraRef = useRef<CameraRef | null>(null);
+  const viewportDebounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lastViewportAnchorHashRef = useRef<string | null>(null);
+  const lastViewportUpdateAtRef = useRef(0);
+  const [isViewportCoveredByGrid9, setIsViewportCoveredByGrid9] = useState(true);
 
   // Get shared user location (fetched once in LocationProvider)
   const {
@@ -209,6 +233,10 @@ export default function MapScreen() {
       if (autoResumeTimerRef.current) {
         clearTimeout(autoResumeTimerRef.current);
         autoResumeTimerRef.current = null;
+      }
+      if (viewportDebounceTimerRef.current) {
+        clearTimeout(viewportDebounceTimerRef.current);
+        viewportDebounceTimerRef.current = null;
       }
     };
   }, []);
@@ -296,17 +324,89 @@ export default function MapScreen() {
   // Get shared incidents (single subscription from IncidentSubscriptionProvider)
   const {
     incidents,
-    isInitialLoading,
     hasReceivedHistory,
     setMapFocused,
+    setMapSubscriptionAnchor,
   } = useSharedIncidents();
+
+  const handleMapIdle = useCallback((state: MapIdleState) => {
+    if (!isFocused) {
+      return;
+    }
+
+    const center = state?.properties?.center;
+    const ne = state?.properties?.bounds?.ne;
+    const sw = state?.properties?.bounds?.sw;
+
+    if (!isLngLat(center) || !isLngLat(ne) || !isLngLat(sw)) {
+      return;
+    }
+
+    const bounds: ViewportBounds = { ne, sw };
+    const coverage = evaluateViewportCoverage(
+      bounds,
+      center,
+      MAP_SUBSCRIPTION.GEOHASH_PRECISION
+    );
+
+    if (!coverage) {
+      return;
+    }
+
+    setIsViewportCoveredByGrid9(coverage.isCoveredByGrid9);
+    if (!coverage.isCoveredByGrid9) {
+      if (__DEV__) {
+        console.log(
+          `[MapScreen] viewport exceeds 3x3 p${MAP_SUBSCRIPTION.GEOHASH_PRECISION} grid (${coverage.viewportGeohashes.length} cells)`
+        );
+      }
+      return;
+    }
+
+    if (lastViewportAnchorHashRef.current === coverage.centerGeohash) {
+      return;
+    }
+
+    if (viewportDebounceTimerRef.current) {
+      clearTimeout(viewportDebounceTimerRef.current);
+    }
+
+    const nextAnchor: LngLat = [center[0], center[1]];
+    const nextAnchorHash = coverage.centerGeohash;
+
+    viewportDebounceTimerRef.current = setTimeout(() => {
+      const now = Date.now();
+      if (now - lastViewportUpdateAtRef.current < MAP_SUBSCRIPTION.VIEWPORT_MIN_UPDATE_INTERVAL_MS) {
+        return;
+      }
+
+      lastViewportUpdateAtRef.current = now;
+      lastViewportAnchorHashRef.current = nextAnchorHash;
+      setMapSubscriptionAnchor(nextAnchor);
+
+      if (__DEV__) {
+        console.log(`[MapScreen] subscription anchor -> ${nextAnchorHash}`);
+      }
+    }, MAP_SUBSCRIPTION.VIEWPORT_UPDATE_DEBOUNCE_MS);
+  }, [isFocused, setMapSubscriptionAnchor]);
 
   useEffect(() => {
     setMapFocused(isFocused);
+    if (!isFocused) {
+      setMapSubscriptionAnchor(null);
+      setIsViewportCoveredByGrid9(true);
+      lastViewportAnchorHashRef.current = null;
+      if (viewportDebounceTimerRef.current) {
+        clearTimeout(viewportDebounceTimerRef.current);
+        viewportDebounceTimerRef.current = null;
+      }
+    }
+
     return () => {
       setMapFocused(false);
+      setMapSubscriptionAnchor(null);
     };
-  }, [isFocused, setMapFocused]);
+  }, [isFocused, setMapFocused, setMapSubscriptionAnchor]);
 
   const visibleIncidents = isFocused ? incidents : EMPTY_INCIDENTS;
 
@@ -432,6 +532,7 @@ export default function MapScreen() {
             style={styles.map}
             styleURL={MAP_STYLES.DARK}
             onCameraChanged={handleCameraChanged}
+            onMapIdle={handleMapIdle}
           >
             {/* Camera with flyTo support */}
             <Mapbox.Camera
@@ -572,6 +673,13 @@ export default function MapScreen() {
         </View>
       )}
 
+      {/* Viewport coverage hint when current zoom/pan exceeds the active 3x3 grid */}
+      {!isLoadingLocation && isFocused && !isViewportCoveredByGrid9 && (
+        <View style={[styles.viewportHint, { bottom: 120 + insets.bottom }]}>
+          <Text style={styles.viewportHintText}>Zoom in to load incidents for this area</Text>
+        </View>
+      )}
+
       {/* No incidents message - only show after EOSE */}
       {!isLoadingLocation && hasReceivedHistory && visibleIncidents.length === 0 && (
         <View style={[styles.emptyState, { bottom: 40 + insets.bottom }]}>
@@ -655,6 +763,22 @@ const styles = StyleSheet.create({
   emptyStateSubtext: {
     color: '#ccc',
     fontSize: 13,
+    textAlign: 'center',
+  },
+  viewportHint: {
+    position: 'absolute',
+    left: 20,
+    right: 20,
+    backgroundColor: 'rgba(17, 24, 39, 0.88)',
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    borderRadius: 10,
+    alignItems: 'center',
+  },
+  viewportHintText: {
+    color: '#f9fafb',
+    fontSize: 13,
+    fontWeight: '600',
     textAlign: 'center',
   },
   relayBanner: {

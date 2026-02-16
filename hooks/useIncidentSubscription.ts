@@ -7,11 +7,15 @@
 
 import { useMemo, useRef, useEffect, useState } from 'react';
 import { useSubscribe, NDKSubscriptionCacheUsage } from '@nostr-dev-kit/mobile';
-import type { NDKEvent, NDKFilter } from '@nostr-dev-kit/mobile';
+import type { NDKEvent } from '@nostr-dev-kit/mobile';
 import { parseIncidentEvent } from '@lib/nostr/events/incident';
 import type { ParsedIncident } from '@lib/nostr/events/types';
 import { DEFAULT_GEOHASH_PRECISION, type Severity } from '@lib/nostr/config';
-import geohash from 'ngeohash';
+import { buildGeohashGrid9, encodeGeohashFromLngLat } from '@lib/map/geohashViewport';
+import {
+  buildIncidentFilterKey,
+  buildIncidentSubscriptionFilter,
+} from './incidents/buildIncidentSubscriptionFilter';
 
 // Debug flag - set to true to enable cache debugging logs
 const DEBUG_CACHE = __DEV__;
@@ -119,16 +123,11 @@ function sortIncidentsForRetention(incidents: ProcessedIncident[]): ProcessedInc
   });
 }
 
-function getGeohashGrid9(center: string): string[] {
-  const neighbors = geohash.neighbors(center);
-  const candidateCells = [center, ...neighbors].filter(Boolean);
-  // Keep order stable so filterKey stays stable and useSubscribe doesn't churn.
-  return Array.from(new Set(candidateCells)).sort();
-}
-
 export interface UseIncidentSubscriptionOptions {
   /** User location used for display ordering (nearest first). */
   location: [number, number] | null;
+  /** Optional location used only for geohash subscription filtering. */
+  subscriptionLocation?: [number, number] | null;
   /** Whether subscription is enabled */
   enabled?: boolean;
   /** Maximum incidents to return */
@@ -156,6 +155,7 @@ export interface UseIncidentSubscriptionResult {
 
 export function useIncidentSubscription({
   location,
+  subscriptionLocation,
   enabled = true,
   maxIncidents = SIMPLE_FETCH_LIMIT,
 }: UseIncidentSubscriptionOptions): UseIncidentSubscriptionResult {
@@ -180,57 +180,43 @@ export function useIncidentSubscription({
     totalEventsReceived: 0,
   });
 
+  const effectiveSubscriptionLocation = subscriptionLocation ?? location;
+
   const centerGeohash = useMemo(() => {
-    if (!enabled || !location) {
+    if (!enabled || !effectiveSubscriptionLocation) {
       return null;
     }
 
-    const [userLng, userLat] = location;
-    if (!Number.isFinite(userLat) || !Number.isFinite(userLng)) {
-      return null;
-    }
-
-    return geohash.encode(userLat, userLng, DEFAULT_GEOHASH_PRECISION);
-  }, [enabled, location?.[0], location?.[1]]);
+    return encodeGeohashFromLngLat(effectiveSubscriptionLocation, DEFAULT_GEOHASH_PRECISION);
+  }, [enabled, effectiveSubscriptionLocation?.[0], effectiveSubscriptionLocation?.[1]]);
 
   const geohashGrid9 = useMemo(() => {
     if (!centerGeohash) {
       return null;
     }
-    return getGeohashGrid9(centerGeohash);
+    return buildGeohashGrid9(centerGeohash);
   }, [centerGeohash]);
 
   // Build NDK filter (single subscription). If location is available, prefilter to 3x3 grid.
-  const subscriptionFilter = useMemo((): NDKFilter[] | false => {
-    if (!enabled) return false;
-
-    if (geohashGrid9 && geohashGrid9.length > 0) {
-      return [
-        {
-          kinds: [30911 as number],
-          '#g': geohashGrid9,
-          limit: SIMPLE_FETCH_LIMIT,
-        },
-      ];
-    }
-
-    return [
-      {
-        kinds: [30911 as number],
+  const subscriptionFilter = useMemo(
+    () =>
+      buildIncidentSubscriptionFilter({
+        enabled,
+        geohashGrid9,
         limit: SIMPLE_FETCH_LIMIT,
-      },
-    ];
-  }, [enabled, geohashGrid9]);
+      }),
+    [enabled, geohashGrid9]
+  );
 
-  const filterKey = useMemo(() => {
-    if (!enabled) {
-      return 'disabled';
-    }
-    if (geohashGrid9 && geohashGrid9.length > 0) {
-      return `g9:${geohashGrid9.join('|')}:limit:${SIMPLE_FETCH_LIMIT}`;
-    }
-    return `global:${SIMPLE_FETCH_LIMIT}`;
-  }, [enabled, geohashGrid9]);
+  const filterKey = useMemo(
+    () =>
+      buildIncidentFilterKey({
+        enabled,
+        geohashGrid9,
+        limit: SIMPLE_FETCH_LIMIT,
+      }),
+    [enabled, geohashGrid9]
+  );
 
   const locationKey = useMemo(() => {
     if (!location) {
