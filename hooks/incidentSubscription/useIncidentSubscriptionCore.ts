@@ -37,8 +37,9 @@ import {
   type UseIncidentSubscriptionResult,
 } from './types';
 
-// Debug flag - set to true to enable cache debugging logs
-const DEBUG_CACHE = __DEV__;
+// Keep subscription logs dev-only and opt-in to reduce noise during normal local runs.
+const DEBUG_CACHE =
+  __DEV__ && process.env.EXPO_PUBLIC_DEBUG_INCIDENT_SUBSCRIPTION === '1';
 
 // Re-exported types and helpers for external consumers.
 export type { ProcessedIncident, UseIncidentSubscriptionOptions, UseIncidentSubscriptionResult } from './types';

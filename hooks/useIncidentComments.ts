@@ -31,7 +31,8 @@ export type {
 
 function useCommentFilters(
   incident?: ParsedIncident | null,
-  incidentAddress?: string | null
+  incidentAddress?: string | null,
+  retryToken = 0
 ): {
   filters: NDKFilter[] | false;
   commentEventIds: string[];
@@ -47,7 +48,7 @@ function useCommentFilters(
       { kinds: [NOSTR_KINDS.ALERT], '#a': [incidentAddress] },
       { kinds: [NOSTR_KINDS.ALERT], '#e': [incident.eventId] },
     ];
-  }, [incident, incidentAddress]);
+  }, [incident, incidentAddress, retryToken]);
 
   const { events, eose } = useSubscribe(filters, {
     closeOnEose: false,
@@ -69,7 +70,7 @@ function useCommentFilters(
   const deletionFilters = useMemo((): NDKFilter[] | false => {
     if (!incident || commentEventIds.length === 0) return false;
     return [{ kinds: [NOSTR_KINDS.EVENT_DELETION], '#e': commentEventIds }];
-  }, [commentEventIds, incident]);
+  }, [commentEventIds, incident, retryToken]);
 
   const { events: deletionEvents } = useSubscribe(deletionFilters, {
     closeOnEose: false,
@@ -97,7 +98,7 @@ export function useIncidentComments(
     events,
     deletionEvents,
     eose,
-  } = useCommentFilters(incident, incidentAddress);
+  } = useCommentFilters(incident, incidentAddress, retryToken);
 
   const { deletedRelaysById, recentDeletions } = useCommentDeletions({
     incidentEventId: incident?.eventId,

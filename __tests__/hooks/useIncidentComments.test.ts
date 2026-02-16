@@ -428,6 +428,32 @@ describe('useIncidentComments', () => {
         result.current.retry();
       });
     });
+
+    it('retry triggers a fresh comment subscription filter reference', () => {
+      const incident = createMockIncident();
+      const { result } = renderHook(() => useIncidentComments(incident));
+
+      const getLatestCommentFilter = () => {
+        const commentCalls = (useSubscribe as jest.Mock).mock.calls.filter(
+          (call: any[]) =>
+            Array.isArray(call[0]) &&
+            call[0].some((filter: any) => filter.kinds?.includes?.(1) && (filter['#a'] || filter['#e']))
+        );
+        return commentCalls[commentCalls.length - 1]?.[0];
+      };
+
+      const beforeRetry = getLatestCommentFilter();
+
+      act(() => {
+        result.current.retry();
+      });
+
+      const afterRetry = getLatestCommentFilter();
+
+      expect(beforeRetry).toBeDefined();
+      expect(afterRetry).toBeDefined();
+      expect(afterRetry).not.toBe(beforeRetry);
+    });
   });
 
   // =============================================================================
