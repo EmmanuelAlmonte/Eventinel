@@ -2,24 +2,24 @@ import type { NDKFilter } from '@nostr-dev-kit/mobile';
 
 interface BuildIncidentSubscriptionFilterOptions {
   enabled: boolean;
-  geohashGrid9: string[] | null;
+  geohashGrid: string[] | null;
   limit: number;
 }
 
 export function buildIncidentSubscriptionFilter({
   enabled,
-  geohashGrid9,
+  geohashGrid,
   limit,
 }: BuildIncidentSubscriptionFilterOptions): NDKFilter[] | false {
   if (!enabled) {
     return false;
   }
 
-  if (geohashGrid9 && geohashGrid9.length > 0) {
+  if (geohashGrid && geohashGrid.length > 0) {
     return [
       {
         kinds: [30911 as number],
-        '#g': geohashGrid9,
+        '#g': geohashGrid,
         limit,
       },
     ];
@@ -35,15 +35,15 @@ export function buildIncidentSubscriptionFilter({
 
 export function buildIncidentFilterKey({
   enabled,
-  geohashGrid9,
+  geohashGrid,
   limit,
 }: BuildIncidentSubscriptionFilterOptions): string {
   if (!enabled) {
     return 'disabled';
   }
 
-  if (geohashGrid9 && geohashGrid9.length > 0) {
-    return `g9:${geohashGrid9.join('|')}:limit:${limit}`;
+  if (geohashGrid && geohashGrid.length > 0) {
+    return `g:${geohashGrid.join('|')}:limit:${limit}`;
   }
 
   return `global:${limit}`;

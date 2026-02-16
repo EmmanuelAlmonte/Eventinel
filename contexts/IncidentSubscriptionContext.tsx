@@ -100,7 +100,7 @@ export function IncidentSubscriptionProvider({ children }: { children: React.Rea
   const subscriptionLocation = isMapFocused ? mapSubscriptionAnchor ?? location : location;
 
   // Single subscription shared by all screens
-  // NOTE: useIncidentSubscription() prefilters to a 3x3 (9-cell) geohash grid via `#g` (p6).
+  // NOTE: useIncidentSubscription() prefilters to a center-based geohash grid via `#g` (p6).
   // On Map screen focus we use the debounced map anchor; otherwise we fall back to user location.
   const {
     incidents,

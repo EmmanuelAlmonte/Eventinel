@@ -57,6 +57,12 @@ export const MAP_SUBSCRIPTION = {
   GEOHASH_PRECISION: 6,
 
   /**
+   * Number of geohash-cell rings around the center anchor.
+   * 1 => 3x3 grid (9 cells), 2 => 5x5 grid (25 cells).
+   */
+  GEOHASH_GRID_RADIUS_CELLS: 2,
+
+  /**
    * Wait this long after map idle before applying a viewport-driven subscription update.
    */
   VIEWPORT_UPDATE_DEBOUNCE_MS: 400,

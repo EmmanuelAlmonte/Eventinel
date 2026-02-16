@@ -9,9 +9,9 @@ export interface ViewportBounds {
 
 export interface ViewportCoverageResult {
   centerGeohash: string;
-  grid9: string[];
+  subscriptionGrid: string[];
   viewportGeohashes: string[];
-  isCoveredByGrid9: boolean;
+  isCoveredBySubscriptionGrid: boolean;
 }
 
 function isFiniteLngLat(value: LngLat | null | undefined): value is LngLat {
@@ -31,9 +31,28 @@ export function encodeGeohashFromLngLat(value: LngLat, precision: number): strin
   return geohash.encode(lat, lng, precision);
 }
 
+export function buildGeohashGrid(centerGeohash: string, radiusCells = 1): string[] {
+  const normalizedRadius = Number.isFinite(radiusCells) ? Math.max(0, Math.floor(radiusCells)) : 0;
+  let cells = new Set([centerGeohash]);
+
+  for (let ring = 0; ring < normalizedRadius; ring++) {
+    const expanded = new Set(cells);
+    for (const cell of cells) {
+      const neighbors = geohash.neighbors(cell);
+      for (const neighbor of neighbors) {
+        if (neighbor && neighbor.length > 0) {
+          expanded.add(neighbor);
+        }
+      }
+    }
+    cells = expanded;
+  }
+
+  return uniqueSorted(Array.from(cells));
+}
+
 export function buildGeohashGrid9(centerGeohash: string): string[] {
-  const neighbors = geohash.neighbors(centerGeohash);
-  return uniqueSorted([centerGeohash, ...neighbors]);
+  return buildGeohashGrid(centerGeohash, 1);
 }
 
 export function getViewportGeohashes(bounds: ViewportBounds, precision: number): string[] {
@@ -61,26 +80,27 @@ export function getViewportGeohashes(bounds: ViewportBounds, precision: number):
 export function evaluateViewportCoverage(
   bounds: ViewportBounds,
   center: LngLat,
-  precision: number
+  precision: number,
+  gridRadiusCells = 1
 ): ViewportCoverageResult | null {
   const centerGeohash = encodeGeohashFromLngLat(center, precision);
   if (!centerGeohash) {
     return null;
   }
 
-  const grid9 = buildGeohashGrid9(centerGeohash);
+  const subscriptionGrid = buildGeohashGrid(centerGeohash, gridRadiusCells);
   const viewportGeohashes = getViewportGeohashes(bounds, precision);
   if (viewportGeohashes.length === 0) {
     return null;
   }
 
-  const gridSet = new Set(grid9);
-  const isCoveredByGrid9 = viewportGeohashes.every((cell) => gridSet.has(cell));
+  const gridSet = new Set(subscriptionGrid);
+  const isCoveredBySubscriptionGrid = viewportGeohashes.every((cell) => gridSet.has(cell));
 
   return {
     centerGeohash,
-    grid9,
+    subscriptionGrid,
     viewportGeohashes,
-    isCoveredByGrid9,
+    isCoveredBySubscriptionGrid,
   };
 }

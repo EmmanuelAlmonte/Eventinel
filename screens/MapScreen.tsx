@@ -206,7 +206,7 @@ export default function MapScreen() {
   const viewportDebounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastViewportAnchorHashRef = useRef<string | null>(null);
   const lastViewportUpdateAtRef = useRef(0);
-  const [isViewportCoveredByGrid9, setIsViewportCoveredByGrid9] = useState(true);
+  const [isViewportCoveredBySubscriptionGrid, setIsViewportCoveredBySubscriptionGrid] = useState(true);
 
   // Get shared user location (fetched once in LocationProvider)
   const {
@@ -346,18 +346,20 @@ export default function MapScreen() {
     const coverage = evaluateViewportCoverage(
       bounds,
       center,
-      MAP_SUBSCRIPTION.GEOHASH_PRECISION
+      MAP_SUBSCRIPTION.GEOHASH_PRECISION,
+      MAP_SUBSCRIPTION.GEOHASH_GRID_RADIUS_CELLS
     );
 
     if (!coverage) {
       return;
     }
 
-    setIsViewportCoveredByGrid9(coverage.isCoveredByGrid9);
-    if (!coverage.isCoveredByGrid9) {
+    setIsViewportCoveredBySubscriptionGrid(coverage.isCoveredBySubscriptionGrid);
+    if (!coverage.isCoveredBySubscriptionGrid) {
       if (__DEV__) {
+        const gridWidth = MAP_SUBSCRIPTION.GEOHASH_GRID_RADIUS_CELLS * 2 + 1;
         console.log(
-          `[MapScreen] viewport exceeds 3x3 p${MAP_SUBSCRIPTION.GEOHASH_PRECISION} grid (${coverage.viewportGeohashes.length} cells)`
+          `[MapScreen] viewport exceeds ${gridWidth}x${gridWidth} p${MAP_SUBSCRIPTION.GEOHASH_PRECISION} grid (${coverage.viewportGeohashes.length} cells)`
         );
       }
       return;
@@ -394,7 +396,7 @@ export default function MapScreen() {
     setMapFocused(isFocused);
     if (!isFocused) {
       setMapSubscriptionAnchor(null);
-      setIsViewportCoveredByGrid9(true);
+      setIsViewportCoveredBySubscriptionGrid(true);
       lastViewportAnchorHashRef.current = null;
       if (viewportDebounceTimerRef.current) {
         clearTimeout(viewportDebounceTimerRef.current);
@@ -673,8 +675,8 @@ export default function MapScreen() {
         </View>
       )}
 
-      {/* Viewport coverage hint when current zoom/pan exceeds the active 3x3 grid */}
-      {!isLoadingLocation && isFocused && !isViewportCoveredByGrid9 && (
+      {/* Viewport coverage hint when current zoom/pan exceeds the active subscription grid */}
+      {!isLoadingLocation && isFocused && !isViewportCoveredBySubscriptionGrid && (
         <View style={[styles.viewportHint, { bottom: 120 + insets.bottom }]}>
           <Text style={styles.viewportHintText}>Zoom in to load incidents for this area</Text>
         </View>

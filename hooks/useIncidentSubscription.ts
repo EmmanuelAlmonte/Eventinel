@@ -11,8 +11,9 @@ import type { NDKEvent, NDKFilter, NDKSubscription } from '@nostr-dev-kit/mobile
 import { ndk } from '@lib/ndk';
 import { parseIncidentEvent } from '@lib/nostr/events/incident';
 import type { ParsedIncident } from '@lib/nostr/events/types';
-import { DEFAULT_GEOHASH_PRECISION, type Severity } from '@lib/nostr/config';
-import { buildGeohashGrid9, encodeGeohashFromLngLat } from '@lib/map/geohashViewport';
+import { type Severity } from '@lib/nostr/config';
+import { MAP_SUBSCRIPTION } from '@lib/map/constants';
+import { buildGeohashGrid, encodeGeohashFromLngLat } from '@lib/map/geohashViewport';
 import { buildIncidentFilterKey } from './incidents/buildIncidentSubscriptionFilter';
 
 // Debug flag - set to true to enable cache debugging logs
@@ -197,24 +198,27 @@ export function useIncidentSubscription({
       return null;
     }
 
-    return encodeGeohashFromLngLat(effectiveSubscriptionLocation, DEFAULT_GEOHASH_PRECISION);
+    return encodeGeohashFromLngLat(
+      effectiveSubscriptionLocation,
+      MAP_SUBSCRIPTION.GEOHASH_PRECISION
+    );
   }, [enabled, effectiveSubscriptionLocation?.[0], effectiveSubscriptionLocation?.[1]]);
 
-  const geohashGrid9 = useMemo(() => {
+  const geohashGrid = useMemo(() => {
     if (!centerGeohash) {
       return null;
     }
-    return buildGeohashGrid9(centerGeohash);
+    return buildGeohashGrid(centerGeohash, MAP_SUBSCRIPTION.GEOHASH_GRID_RADIUS_CELLS);
   }, [centerGeohash]);
 
   const filterKey = useMemo(
     () =>
       buildIncidentFilterKey({
         enabled,
-        geohashGrid9,
+        geohashGrid,
         limit: SIMPLE_FETCH_LIMIT,
       }),
-    [enabled, geohashGrid9]
+    [enabled, geohashGrid]
   );
 
   const locationKey = useMemo(() => {
@@ -404,7 +408,7 @@ export function useIncidentSubscription({
         continue;
       }
 
-      const cell = geohash.slice(0, DEFAULT_GEOHASH_PRECISION);
+      const cell = geohash.slice(0, MAP_SUBSCRIPTION.GEOHASH_PRECISION);
       if (!desiredGeohashes.has(cell)) {
         incidentMapRef.current.delete(incidentId);
         removed = true;
@@ -486,8 +490,8 @@ export function useIncidentSubscription({
       return;
     }
 
-    const desiredKeys = geohashGrid9 && geohashGrid9.length > 0
-      ? new Set(geohashGrid9)
+    const desiredKeys = geohashGrid && geohashGrid.length > 0
+      ? new Set(geohashGrid)
       : new Set([GLOBAL_SUBSCRIPTION_KEY]);
 
     const activeKeys = new Set(cellSubscriptionsRef.current.keys());
@@ -509,7 +513,7 @@ export function useIncidentSubscription({
       startSubscription(key);
     }
 
-    if (geohashGrid9 && geohashGrid9.length > 0) {
+    if (geohashGrid && geohashGrid.length > 0) {
       const didPrune = pruneToDesiredGeohashes(desiredKeys);
       if (didPrune) {
         recomputeVisibleState([]);
@@ -524,7 +528,7 @@ export function useIncidentSubscription({
     computeHasReceivedHistory,
     enabled,
     filterKey,
-    geohashGrid9,
+    geohashGrid,
     pruneToDesiredGeohashes,
     recomputeVisibleState,
     startSubscription,
