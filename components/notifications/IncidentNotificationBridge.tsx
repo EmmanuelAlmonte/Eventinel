@@ -23,62 +23,58 @@ Notifications.setNotificationHandler({
   }),
 });
 
-export default function IncidentNotificationBridge() {
-  const { incidents, hasReceivedHistory } = useSharedIncidents();
-  const { upsertMany, getIncident } = useIncidentCacheApi();
+function navigateToIncidentDetail(params: RootStackParamList['IncidentDetail']) {
+  if (!navigationRef.isReady()) {
+    console.warn('[Notifications] Navigation is not ready; skipping navigate');
+    return;
+  }
+  navigationRef.navigate('IncidentDetail', params);
+}
+
+function useAppStateRef() {
   const appStateRef = useRef(AppState.currentState);
-  const hasSeededRef = useRef(false);
-  const seenIncidentIdsRef = useRef<Set<string>>(new Set());
-  const inFlightRef = useRef<Set<string>>(new Set());
-  const hasRegisteredRef = useRef(false);
-
-  const navigateToIncidentDetail = useCallback(
-    (params: RootStackParamList['IncidentDetail']) => {
-      if (!navigationRef.isReady()) {
-        console.warn('[Notifications] Navigation is not ready; skipping navigate');
-        return;
-      }
-
-      navigationRef.navigate('IncidentDetail', params);
-    },
-    []
-  );
 
   useEffect(() => {
     const subscription = AppState.addEventListener('change', (nextState) => {
       appStateRef.current = nextState;
     });
-
     return () => subscription.remove();
   }, []);
 
-  const handleIncidentNotification = useCallback(
+  return appStateRef;
+}
+
+function useHandleIncidentNotification() {
+  const { upsertMany, getIncident } = useIncidentCacheApi();
+  const inFlightRef = useRef<Set<string>>(new Set());
+
+  return useCallback(
     async (payload: IncidentNotificationPayload) => {
       const key = payload.eventId ?? payload.incidentId;
       if (!key || inFlightRef.current.has(key)) return;
 
       inFlightRef.current.add(key);
       try {
-          const parsed = await fetchIncidentFromRelay(payload);
-          if (parsed) {
-            const processed = toProcessedIncident(parsed);
-            upsertMany([processed]);
+        const parsed = await fetchIncidentFromRelay(payload);
+        if (parsed) {
+          const processed = toProcessedIncident(parsed);
+          upsertMany([processed]);
+          navigateToIncidentDetail({
+            incidentId: processed.incidentId,
+            eventId: processed.eventId,
+          });
+          return;
+        }
+
+        if (payload.incidentId) {
+          const cached = getIncident(payload.incidentId);
+          if (cached) {
             navigateToIncidentDetail({
-              incidentId: processed.incidentId,
-              eventId: processed.eventId,
+              incidentId: cached.incidentId,
+              eventId: cached.eventId,
             });
             return;
           }
-
-          if (payload.incidentId) {
-            const cached = getIncident(payload.incidentId);
-            if (cached) {
-              navigateToIncidentDetail({
-                incidentId: cached.incidentId,
-                eventId: cached.eventId,
-              });
-              return;
-            }
         }
 
         showToast.error('Incident not found', 'Try again in a moment');
@@ -86,8 +82,12 @@ export default function IncidentNotificationBridge() {
         inFlightRef.current.delete(key);
       }
     },
-    [getIncident, navigateToIncidentDetail, upsertMany]
+    [getIncident, upsertMany]
   );
+}
+
+function usePushRegistration() {
+  const hasRegisteredRef = useRef(false);
 
   useEffect(() => {
     if (hasRegisteredRef.current) return;
@@ -95,18 +95,22 @@ export default function IncidentNotificationBridge() {
 
     registerForPushNotificationsAsync()
       .then((token) => {
-        if (token) {
-          console.log('📨 [Notifications] Expo push token:', token);
-          saveExpoPushToken(token).catch((error) => {
-            console.warn('[Notifications] Failed to store expo push token:', error);
-          });
-        }
+        if (!token) return;
+
+        console.log('📨 [Notifications] Expo push token:', token);
+        saveExpoPushToken(token).catch((error) => {
+          console.warn('[Notifications] Failed to store expo push token:', error);
+        });
       })
       .catch((error) => {
         console.warn('[Notifications] Failed to register for push notifications:', error);
       });
   }, []);
+}
 
+function useNotificationTapHandlers(
+  handleIncidentNotification: (payload: IncidentNotificationPayload) => Promise<void>
+) {
   useEffect(() => {
     let isMounted = true;
 
@@ -135,14 +139,21 @@ export default function IncidentNotificationBridge() {
       subscription.remove();
     };
   }, [handleIncidentNotification]);
+}
+
+function useLiveIncidentToasts(
+  appStateRef: React.MutableRefObject<string>,
+  handleIncidentNotification: (payload: IncidentNotificationPayload) => Promise<void>
+) {
+  const { incidents, hasReceivedHistory } = useSharedIncidents();
+  const hasSeededRef = useRef(false);
+  const seenIncidentIdsRef = useRef<Set<string>>(new Set());
 
   useEffect(() => {
     if (!hasReceivedHistory) return;
 
     if (!hasSeededRef.current) {
-      incidents.forEach((incident) => {
-        seenIncidentIdsRef.current.add(incident.incidentId);
-      });
+      incidents.forEach((incident) => seenIncidentIdsRef.current.add(incident.incidentId));
       hasSeededRef.current = true;
       return;
     }
@@ -152,7 +163,6 @@ export default function IncidentNotificationBridge() {
     const newIncidents = incidents.filter(
       (incident) => !seenIncidentIdsRef.current.has(incident.incidentId)
     );
-
     if (newIncidents.length === 0) return;
 
     newIncidents.forEach((incident) => {
@@ -169,7 +179,16 @@ export default function IncidentNotificationBridge() {
           }),
       });
     });
-  }, [hasReceivedHistory, incidents, handleIncidentNotification]);
+  }, [appStateRef, handleIncidentNotification, hasReceivedHistory, incidents]);
+}
+
+export default function IncidentNotificationBridge() {
+  const appStateRef = useAppStateRef();
+  const handleIncidentNotification = useHandleIncidentNotification();
+
+  usePushRegistration();
+  useNotificationTapHandlers(handleIncidentNotification);
+  useLiveIncidentToasts(appStateRef, handleIncidentNotification);
 
   return null;
 }

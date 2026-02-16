@@ -14,6 +14,7 @@ import {
   EVENTINEL_TAGS,
   DEFAULT_GEOHASH_PRECISION,
 } from '../config';
+import type { Severity } from '../config';
 
 import type {
   CreateIncidentInput,
@@ -79,9 +80,9 @@ function parseIncidentContent(content: string): IncidentEventContent | null {
   }
 }
 
-function parseAndValidateSeverity(value: string): number | null {
+function parseAndValidateSeverity(value: string): Severity | null {
   const severity = parseInt(value, 10);
-  return isSeverity(severity) ? severity : null;
+  return isSeverity(severity) ? (severity as Severity) : null;
 }
 
 function resolveVerification(

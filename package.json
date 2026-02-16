@@ -8,6 +8,7 @@
     "android": "expo run:android",
     "ios": "expo run:ios",
     "web": "expo start --web",
+    "docs:impact": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/docs-impact.ps1",
     "postinstall": "patch-package",
     "test": "jest --maxWorkers=4",
     "test:watch": "jest --watch",

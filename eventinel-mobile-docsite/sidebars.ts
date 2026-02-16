@@ -5,6 +5,7 @@ const sidebars: SidebarsConfig = {
     'installation',
     'quickstart',
     'stability-scope',
+    'docs-maintenance-workflow',
     {
       type: 'category',
       label: 'Feature Guides',

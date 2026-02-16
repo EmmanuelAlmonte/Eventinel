@@ -1,179 +1,53 @@
 /**
  * IncidentFeedScreen
  *
- * Scrollable list view of incidents as alternative to map view.
- * Uses extracted hooks for location and subscription logic.
+ * List view of nearby incidents using the shared subscription context.
  */
 
-import { memo, useCallback, useEffect } from 'react';
-import {
-  View,
-  StyleSheet,
-  Pressable,
-} from 'react-native';
-import { FlashList } from '@shopify/flash-list';
-import { Badge, Button, Card, Icon, Text } from '@rneui/themed';
+import { useCallback, useEffect } from 'react';
+import { View } from 'react-native';
+import { Text } from '@rneui/themed';
 import { useIsFocused, useNavigation } from '@react-navigation/native';
 
 import { useAppTheme } from '@hooks';
 import type { ProcessedIncident } from '@hooks';
 import { useRelayStatus, useSharedLocation, useSharedIncidents } from '@contexts';
-import { EmptyState, LocationRequiredEmpty, NoRelaysEmpty, ScreenContainer, SkeletonList } from '@components/ui';
-import { SEVERITY_COLORS, TYPE_CONFIG } from '@lib/nostr/config';
-import { formatRelativeTimeMs } from '@lib/utils/time';
+import { LocationRequiredEmpty, ScreenContainer, SkeletonList } from '@components/ui';
 
-const MAX_RELAY_LABELS = 2;
-const ESTIMATED_ITEM_SIZE = 140;
+import { IncidentFeedContent } from './incidentFeed/IncidentFeedContent';
+import { IncidentRow } from './incidentFeed/IncidentRow';
+import { buildRelayBannerStatus, formatRelayList } from './incidentFeed/helpers';
+import { incidentFeedStyles as styles } from './incidentFeed/styles';
+
 const EMPTY_INCIDENTS: ProcessedIncident[] = [];
-
-type IncidentRowProps = {
-  incident: ProcessedIncident;
-  colors: ReturnType<typeof useAppTheme>['colors'];
-  onPress: (incidentId: string) => void;
-};
-
-function formatRelayList(relayUrls: string[]): string {
-  if (!relayUrls || relayUrls.length === 0) return 'relays';
-  const cleaned = relayUrls
-    .map((relay) => relay.replace(/^wss?:\/\//, ''))
-    .filter((relay) => relay.length > 0);
-  if (cleaned.length <= MAX_RELAY_LABELS) {
-    return cleaned.join(', ');
-  }
-  return `${cleaned.slice(0, MAX_RELAY_LABELS).join(', ')} +${cleaned.length - MAX_RELAY_LABELS} more`;
-}
-
-const IncidentRow = memo(({ incident, colors, onPress }: IncidentRowProps) => {
-  const severityColor = SEVERITY_COLORS[incident.severity] || SEVERITY_COLORS[1];
-  const typeConfig = TYPE_CONFIG[incident.type] || TYPE_CONFIG.other;
-
-  return (
-    <Pressable onPress={() => onPress(incident.incidentId)}>
-      <Card
-        containerStyle={[
-          styles.incidentCard,
-          {
-            backgroundColor: colors.surface,
-            borderColor: colors.border,
-            borderLeftColor: severityColor,
-            borderLeftWidth: 4,
-          },
-        ]}
-      >
-        <View style={styles.cardRow}>
-          {/* Icon */}
-          <View style={[styles.iconContainer, { backgroundColor: `${typeConfig.color}20` }]}>
-            <Icon
-              name={typeConfig.icon}
-              type="material"
-              size={24}
-              color={typeConfig.color}
-            />
-          </View>
-
-          {/* Content */}
-          <View style={styles.cardContent}>
-            <View style={styles.cardHeader}>
-              <Text style={[styles.incidentTitle, { color: colors.text }]} numberOfLines={1}>
-                {incident.title}
-              </Text>
-              <Badge
-                value={`Sev ${incident.severity}`}
-                badgeStyle={{ backgroundColor: severityColor }}
-                textStyle={styles.badgeText}
-              />
-            </View>
-
-            <Text style={[styles.incidentDescription, { color: colors.textMuted }]} numberOfLines={2}>
-              {incident.description}
-            </Text>
-
-            <View style={styles.metaRow}>
-              <View style={styles.metaItem}>
-                <Icon name="schedule" type="material" size={14} color={colors.textMuted} />
-                <Text style={[styles.metaText, { color: colors.textMuted }]}>
-                  {formatRelativeTimeMs(incident.occurredAtMs)}
-                </Text>
-              </View>
-              <View style={styles.metaItem}>
-                <Icon name="location-on" type="material" size={14} color={colors.textMuted} />
-                <Text style={[styles.metaText, { color: colors.textMuted }]} numberOfLines={1}>
-                  {incident.location.address}
-                </Text>
-              </View>
-            </View>
-          </View>
-
-          {/* Chevron */}
-          <Icon
-            name="chevron-right"
-            type="material"
-            size={24}
-            color={colors.textMuted}
-          />
-        </View>
-      </Card>
-    </Pressable>
-  );
-});
 
 export default function IncidentFeedScreen() {
   const navigation = useNavigation<any>();
   const isFocused = useIsFocused();
   const { colors } = useAppTheme();
   const { hasConnectedRelay, hasRelays, isConnecting, relays } = useRelayStatus();
-
-  // Get shared user location (fetched once in LocationProvider)
-  const {
-    location: userLocation,
-    isLoading: isLoadingLocation,
-    permission: locationPermission,
-    refresh: refreshLocation,
-  } = useSharedLocation();
-
-  // Get shared incidents (single subscription from IncidentSubscriptionProvider)
-  const {
-    incidents,
-    hasReceivedHistory,
-    setFeedFocused,
-  } = useSharedIncidents();
+  const { location: userLocation, isLoading: isLoadingLocation, permission, refresh } = useSharedLocation();
+  const { incidents, hasReceivedHistory, setFeedFocused } = useSharedIncidents();
 
   useEffect(() => {
     setFeedFocused(isFocused);
-    return () => {
-      setFeedFocused(false);
-    };
+    return () => setFeedFocused(false);
   }, [isFocused, setFeedFocused]);
 
   const visibleIncidents = isFocused ? incidents : EMPTY_INCIDENTS;
-
-  // Handle incident press - navigate with incidentId only (no serialization warning)
-  const handleIncidentPress = useCallback((incidentId: string) => {
-    navigation.navigate('IncidentDetail', { incidentId });
-  }, [navigation]);
-
-  const handleRelaySettings = useCallback(() => {
-    navigation.navigate('Relays');
-  }, [navigation]);
+  const handleIncidentPress = useCallback(
+    (incidentId: string) => navigation.navigate('IncidentDetail', { incidentId }),
+    [navigation]
+  );
+  const handleRelaySettings = useCallback(() => navigation.navigate('Relays'), [navigation]);
 
   const relayLabel = formatRelayList(relays.map((relay) => relay.url));
-
-  const relayStatus = !hasConnectedRelay
-    ? {
-        icon: !hasRelays ? 'cloud-off' : isConnecting ? 'wifi' : 'wifi-off',
-        title: !hasRelays
-          ? 'No Relays Connected'
-          : isConnecting
-            ? 'Connecting to relays'
-            : 'Relays disconnected',
-        description: !hasRelays
-          ? 'Add a Nostr relay to start receiving incident updates.'
-          : isConnecting
-            ? `Waiting for ${relayLabel} to connect.`
-            : `Unable to reach ${relayLabel}. Check your connection or relay settings.`,
-        actionLabel: !hasRelays ? 'Add Relay' : 'Relay Settings',
-      }
-    : null;
+  const relayStatus = buildRelayBannerStatus({
+    hasConnectedRelay,
+    hasRelays,
+    isConnecting,
+    relayLabel,
+  });
 
   const renderIncidentItem = useCallback(
     ({ item }: { item: ProcessedIncident }) => (
@@ -182,7 +56,6 @@ export default function IncidentFeedScreen() {
     [colors, handleIncidentPress]
   );
 
-  // Loading state - show animated skeleton cards
   if (isLoadingLocation) {
     return (
       <ScreenContainer>
@@ -200,211 +73,22 @@ export default function IncidentFeedScreen() {
   if (!userLocation) {
     return (
       <ScreenContainer>
-        <LocationRequiredEmpty
-          permission={locationPermission}
-          onRetry={() => void refreshLocation()}
-        />
+        <LocationRequiredEmpty permission={permission} onRetry={() => void refresh()} />
       </ScreenContainer>
     );
   }
 
-  const showRelayBanner = !!relayStatus && visibleIncidents.length > 0;
-
   return (
     <ScreenContainer>
-      {/* Header */}
-      <View style={styles.header}>
-        <Text h2 style={[styles.title, { color: colors.text }]}>Incidents</Text>
-        <Text style={[styles.subtitle, { color: colors.textMuted }]}>
-          {visibleIncidents.length} nearby {hasReceivedHistory ? '• Updated' : '• Loading...'}
-        </Text>
-      </View>
-
-      {showRelayBanner && relayStatus && (
-        <View style={[styles.relayBanner, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-          <View style={styles.relayBannerHeader}>
-            <Icon
-              name={relayStatus.icon}
-              type="material"
-              size={18}
-              color={colors.textMuted}
-            />
-            <Text style={[styles.relayBannerTitle, { color: colors.text }]}>{relayStatus.title}</Text>
-          </View>
-          <Text style={[styles.relayBannerDescription, { color: colors.textMuted }]}>
-            {relayStatus.description}
-          </Text>
-          <Button
-            title={relayStatus.actionLabel}
-            onPress={handleRelaySettings}
-            type="clear"
-            containerStyle={styles.relayBannerActionContainer}
-            titleStyle={[styles.relayBannerActionText, { color: colors.primary }]}
-          />
-        </View>
-      )}
-
-      {/* Incident List */}
-      <FlashList
-        data={visibleIncidents}
-        keyExtractor={(item) => item.incidentId}
-        renderItem={renderIncidentItem}
-        contentContainerStyle={styles.listContent}
-        showsVerticalScrollIndicator={false}
-        estimatedItemSize={ESTIMATED_ITEM_SIZE}
-        refreshing={false}
-        onRefresh={() => {}}
-        ListEmptyComponent={
-          relayStatus ? (
-            !hasRelays ? (
-              <NoRelaysEmpty onAddRelay={handleRelaySettings} />
-            ) : (
-              <EmptyState
-                icon={relayStatus.icon}
-                title={relayStatus.title}
-                description={relayStatus.description}
-                action={relayStatus.actionLabel}
-                onAction={handleRelaySettings}
-              />
-            )
-          ) : hasReceivedHistory ? (
-            <View style={styles.emptyState}>
-              <Icon name="check-circle" type="material" size={64} color={colors.success} />
-              <Text style={[styles.emptyTitle, { color: colors.text }]}>All Clear</Text>
-              <Text style={[styles.emptySubtitle, { color: colors.textMuted }]}>
-                No incidents reported in your area
-              </Text>
-            </View>
-          ) : (
-            <View style={styles.emptyState}>
-              <Icon name="hourglass-empty" type="material" size={64} color={colors.textMuted} />
-              <Text style={[styles.emptyTitle, { color: colors.text }]}>Loading...</Text>
-              <Text style={[styles.emptySubtitle, { color: colors.textMuted }]}>
-                Fetching incidents from relays
-              </Text>
-            </View>
-          )
-        }
+      <IncidentFeedContent
+        colors={colors}
+        visibleIncidents={visibleIncidents}
+        hasReceivedHistory={hasReceivedHistory}
+        relayStatus={relayStatus}
+        hasRelays={hasRelays}
+        onRelaySettings={handleRelaySettings}
+        renderIncidentItem={renderIncidentItem}
       />
     </ScreenContainer>
   );
 }
-
-const styles = StyleSheet.create({
-  header: {
-    paddingHorizontal: 16,
-    paddingTop: 8,
-    paddingBottom: 12,
-  },
-  title: {
-    marginBottom: 4,
-  },
-  subtitle: {
-    fontSize: 14,
-  },
-  listContent: {
-    paddingHorizontal: 16,
-    paddingBottom: 24,
-  },
-  relayBanner: {
-    borderWidth: 1,
-    borderRadius: 12,
-    padding: 12,
-    marginHorizontal: 16,
-    marginBottom: 12,
-  },
-  relayBannerHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  relayBannerTitle: {
-    fontSize: 15,
-    fontWeight: '600',
-  },
-  relayBannerDescription: {
-    fontSize: 13,
-    marginTop: 4,
-  },
-  relayBannerActionContainer: {
-    alignSelf: 'flex-start',
-    marginTop: 4,
-  },
-  relayBannerActionText: {
-    fontSize: 13,
-    fontWeight: '600',
-  },
-  incidentCard: {
-    borderRadius: 12,
-    borderWidth: 1,
-    padding: 12,
-    margin: 0,
-    marginBottom: 12,
-  },
-  cardRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  iconContainer: {
-    width: 48,
-    height: 48,
-    borderRadius: 12,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 12,
-  },
-  cardContent: {
-    flex: 1,
-    minWidth: 0,
-  },
-  cardHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 4,
-  },
-  incidentTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    flex: 1,
-    marginRight: 8,
-  },
-  badgeText: {
-    fontSize: 10,
-    fontWeight: '700',
-  },
-  incidentDescription: {
-    fontSize: 13,
-    lineHeight: 18,
-    marginBottom: 8,
-  },
-  metaRow: {
-    flexDirection: 'row',
-    gap: 16,
-  },
-  metaItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    flex: 1,
-    minWidth: 0,
-  },
-  metaText: {
-    fontSize: 12,
-    flex: 1,
-  },
-  emptyState: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 64,
-    gap: 12,
-  },
-  emptyTitle: {
-    fontSize: 20,
-    fontWeight: '600',
-  },
-  emptySubtitle: {
-    fontSize: 14,
-    textAlign: 'center',
-  },
-});
