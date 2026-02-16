@@ -15,7 +15,8 @@
     "test:coverage": "jest --coverage",
     "test:auth": "jest --testPathPattern='__tests__/(screens|auth|App)'",
     "probe:client:incident": "node scripts/client-side-request-probe.js",
-    "probe:geohash:single": "node scripts/single-geohash-precision-probe.js"
+    "probe:geohash:single": "node scripts/single-geohash-precision-probe.js",
+    "compact:file": "node scripts/compact-file.js"
   },
   "dependencies": {
     "@cashu/cashu-ts": "2.4.2",

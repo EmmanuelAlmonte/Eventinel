@@ -59,6 +59,11 @@ export function useIncidentSubscription({
   const pendingEventsRef = useRef<QueuedEvent[]>([]);
   const flushTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const subscriptionRegistry = useRef(createSubscriptionRegistry()).current;
+  const lastRefreshMetaRef = useRef({
+    filterKey: 'disabled',
+    desiredCount: 0,
+    truncated: false,
+  });
 
   const [state, setState] = useState<{
     incidents: ProcessedIncident[];
@@ -241,6 +246,13 @@ export function useIncidentSubscription({
 
   const startSubscription = useCallback(
     (key: string) => {
+      const beforeCount = subscriptionRegistry.subscriptions.size;
+      if (DEBUG_CACHE) {
+        console.log(
+          `🔔 [IncidentSub] Start requested for key ${key} (live before:${beforeCount})`
+        );
+      }
+
       const filter: NDKFilter = {
         kinds: [30911 as number],
         '#g': [key],
@@ -267,19 +279,55 @@ export function useIncidentSubscription({
       });
 
       subscriptionRegistry.start(key, subscription);
+      if (DEBUG_CACHE) {
+        const afterCount = subscriptionRegistry.subscriptions.size;
+        console.log(
+          `✅ [IncidentSub] Subscribed key ${key} (live after:${afterCount})`
+        );
+      }
     },
     [enqueueEvents, hasReceivedHistory, subscriptionRegistry]
   );
 
   const stopSubscription = useCallback(
     (key: string) => {
+      const beforeCount = subscriptionRegistry.subscriptions.size;
+      if (DEBUG_CACHE && subscriptionRegistry.subscriptions.has(key)) {
+        console.log(
+          `🛑 [IncidentSub] Stop requested for key ${key} (live before:${beforeCount})`
+        );
+      }
+
       subscriptionRegistry.stop(key);
+
+      if (DEBUG_CACHE) {
+        const afterCount = subscriptionRegistry.subscriptions.size;
+        if (beforeCount !== afterCount) {
+          console.log(
+            `🛑 [IncidentSub] Stopped key ${key} (live after:${afterCount})`
+          );
+        }
+      }
     },
     [subscriptionRegistry]
   );
 
   const stopAllSubscriptions = useCallback(() => {
+    if (DEBUG_CACHE) {
+      const beforeCount = subscriptionRegistry.subscriptions.size;
+      if (beforeCount > 0) {
+        console.log(
+          `🧹 [IncidentSub] stopAll requested (live before:${beforeCount})`
+        );
+      }
+    }
     subscriptionRegistry.stopAll();
+    if (DEBUG_CACHE) {
+      const afterCount = subscriptionRegistry.subscriptions.size;
+      if (afterCount === 0) {
+        console.log(`🧹 [IncidentSub] stopAll complete (live after:${afterCount})`);
+      }
+    }
   }, [subscriptionRegistry]);
 
   const pruneToDesiredGeohashes = useCallback(
@@ -330,18 +378,53 @@ export function useIncidentSubscription({
       return;
     }
 
+    const currentFilterKey = subscriptionFilterKey;
+    const currentTruncated = subscriptionPlan?.truncated ?? false;
+    const previousMeta = lastRefreshMetaRef.current;
+    const refreshTriggers: string[] = [];
+    if (previousMeta.filterKey !== currentFilterKey) {
+      refreshTriggers.push('filter-key');
+    }
+    if (previousMeta.desiredCount !== desiredCells.length) {
+      refreshTriggers.push('desired-cell-count');
+    }
+    if (previousMeta.truncated !== currentTruncated) {
+      refreshTriggers.push('truncation-state');
+    }
+
     const reconcilePlan = computeReconcilePlan({
       enabled,
       desiredCells,
       activeSubscriptionKeys: subscriptionRegistry.subscriptions.keys(),
     });
 
-    if (DEBUG_CACHE && lastFilterKeyRef.current !== subscriptionFilterKey) {
+    if (
+      DEBUG_CACHE &&
+      (reconcilePlan.toAdd.length > 0 ||
+        reconcilePlan.toRemove.length > 0 ||
+        lastFilterKeyRef.current !== currentFilterKey)
+    ) {
+      const beforeCount = subscriptionRegistry.subscriptions.size;
       console.log(
-        `🔁 [IncidentSub] Reconcile filter ${subscriptionFilterKey} (add:${reconcilePlan.toAdd.length}, remove:${reconcilePlan.toRemove.length}, truncated:${subscriptionPlan?.truncated ?? false})`
+        `🔁 [IncidentSub] Refresh trigger (${refreshTriggers.join(', ') || 'state-change'}) filter:${currentFilterKey} (desired:${desiredCells.length}, add:${reconcilePlan.toAdd.length}, remove:${reconcilePlan.toRemove.length}, truncated:${currentTruncated}, live before:${beforeCount})`
+      );
+      const expectedAfterCount = Math.max(
+        0,
+        Math.min(
+          MAP_SUBSCRIPTION.MAX_ACTIVE_CELLS,
+          beforeCount + reconcilePlan.toAdd.length - reconcilePlan.toRemove.length
+        )
+      );
+      console.log(
+        `🔁 [IncidentSub] Live subscriptions (before:${beforeCount}, expected-after:${expectedAfterCount})`
       );
     }
     lastFilterKeyRef.current = subscriptionFilterKey;
+    lastRefreshMetaRef.current = {
+      filterKey: currentFilterKey,
+      desiredCount: desiredCells.length,
+      truncated: currentTruncated,
+    };
 
     for (const key of reconcilePlan.toRemove) {
       stopSubscription(key);
@@ -359,6 +442,13 @@ export function useIncidentSubscription({
     }
 
     if (reconcilePlan.toAdd.length > 0 || reconcilePlan.toRemove.length > 0) {
+      const afterCount = subscriptionRegistry.subscriptions.size;
+      if (DEBUG_CACHE) {
+        console.log(
+          `🔁 [IncidentSub] Live subscriptions after refresh: ${afterCount}`
+        );
+      }
+
       setState((prev) => {
         const nextHasReceivedHistory = hasReceivedHistory();
         if (prev.hasReceivedHistory === nextHasReceivedHistory) {
