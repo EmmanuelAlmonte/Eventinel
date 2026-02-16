@@ -25,6 +25,12 @@
 - NDK rules: import only from `@nostr-dev-kit/mobile`; keep `react-native-get-random-values` as the first import; use the module-level `ndk` from `lib/ndk.ts`; timestamps in seconds and hex pubkeys; `login(signer, true)`; avoid web-only patterns (`NDKHeadless`, `NDKNip07Signer`, `localStorage`).
 - UI: pull RNE components from `@rneui/themed`, theme via `useAppTheme`, wrap screens in `ScreenContainer` for layout/padding.
 - Naming: components/screens in PascalCase `.tsx`; utilities/hooks in `camelCase.ts`; tests as `*.test.ts(x)` inside `__tests__`; mocks mirror module names in `__mocks__`.
+- Programming Standard B (size guardrails):
+  - Target file size: 300 lines max per file (soft), 400 lines hard stop.
+  - Target function size: 40 lines max (soft), 80 lines hard stop.
+  - Cyclomatic complexity: aim ≤10, hard stop at 15.
+  - If a file or function exceeds hard stops, split extraction before adding new behavior in that area.
+- Complexity-first refactors are preferred when a file grows too broad; avoid “one-file mega” patterns.
 
 ## Testing Guidelines
 - Framework: Jest with `jest-expo` + `@testing-library/react-native`; setup/mocks live in `jest.setup.js` and `__mocks__/`.
