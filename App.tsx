@@ -220,14 +220,27 @@ export default function App() {
     // Guardrail: never let a stalled AsyncStorage read block the UI indefinitely.
     const RELAY_LOAD_TIMEOUT_MS = __DEV__ ? 5000 : 2500;
 
-    const getPoolRelays = () => {
-      // Some tests provide partial NDK mocks without a full Map-like relays object.
-      const relaysMap: any = (ndk.pool as any)?.relays;
-      if (!relaysMap?.values) return [];
-      return Array.from(relaysMap.values());
+    type PoolRelayLike = {
+      url: string;
+      connect?: () => void;
     };
 
-    const getPoolRelayByUrl = (url: string) => {
+    const isPoolRelayLike = (relay: unknown): relay is PoolRelayLike => {
+      if (!relay || typeof relay !== 'object') {
+        return false;
+      }
+      const maybeUrl = (relay as { url?: unknown }).url;
+      return typeof maybeUrl === 'string';
+    };
+
+    const getPoolRelays = (): PoolRelayLike[] => {
+      // Some tests provide partial NDK mocks without a full Map-like relays object.
+      const relaysMap = (ndk.pool as { relays?: { values?: () => Iterable<unknown> } } | undefined)?.relays;
+      if (!relaysMap?.values) return [];
+      return Array.from(relaysMap.values()).filter(isPoolRelayLike);
+    };
+
+    const getPoolRelayByUrl = (url: string): PoolRelayLike | undefined => {
       const normalized = normalizeRelayUrl(url);
       for (const relay of getPoolRelays()) {
         if (normalizeRelayUrl(relay.url) === normalized) {
@@ -277,7 +290,7 @@ export default function App() {
         console.log(`➕ [App] Adding ${missing.length} relays (${source}):`, missing);
         addRelaysToPool(missing);
         for (const url of missing) {
-          getPoolRelayByUrl(url)?.connect();
+          getPoolRelayByUrl(url)?.connect?.();
         }
       }
     };

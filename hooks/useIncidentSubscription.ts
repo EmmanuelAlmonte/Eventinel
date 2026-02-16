@@ -5,17 +5,15 @@
  * sorting, and severity counting.
  */
 
-import { useMemo, useRef, useEffect, useState } from 'react';
-import { useSubscribe, NDKSubscriptionCacheUsage } from '@nostr-dev-kit/mobile';
-import type { NDKEvent } from '@nostr-dev-kit/mobile';
+import { useMemo, useRef, useEffect, useState, useCallback } from 'react';
+import { NDKSubscriptionCacheUsage } from '@nostr-dev-kit/mobile';
+import type { NDKEvent, NDKFilter, NDKSubscription } from '@nostr-dev-kit/mobile';
+import { ndk } from '@lib/ndk';
 import { parseIncidentEvent } from '@lib/nostr/events/incident';
 import type { ParsedIncident } from '@lib/nostr/events/types';
 import { DEFAULT_GEOHASH_PRECISION, type Severity } from '@lib/nostr/config';
 import { buildGeohashGrid9, encodeGeohashFromLngLat } from '@lib/map/geohashViewport';
-import {
-  buildIncidentFilterKey,
-  buildIncidentSubscriptionFilter,
-} from './incidents/buildIncidentSubscriptionFilter';
+import { buildIncidentFilterKey } from './incidents/buildIncidentSubscriptionFilter';
 
 // Debug flag - set to true to enable cache debugging logs
 const DEBUG_CACHE = __DEV__;
@@ -23,6 +21,15 @@ const EMPTY_SEVERITY_COUNTS: Record<Severity, number> = { 1: 0, 2: 0, 3: 0, 4: 0
 const SIMPLE_FETCH_LIMIT = 200;
 const CANDIDATE_RETENTION_LIMIT = 600;
 const EARTH_RADIUS_METERS = 6371000;
+const SUBSCRIPTION_BUFFER_MS = 100;
+const GLOBAL_SUBSCRIPTION_KEY = '__global__';
+
+type IncomingEventSource = 'cache' | 'relay';
+
+interface QueuedEvent {
+  event: NDKEvent;
+  source: IncomingEventSource;
+}
 
 /**
  * Extended incident with precomputed timestamps for safe sorting
@@ -162,22 +169,25 @@ export function useIncidentSubscription({
   const effectiveMaxIncidents = Math.min(maxIncidents, SIMPLE_FETCH_LIMIT);
   const lastUpdatedRef = useRef<number | null>(null);
   const incidentMapRef = useRef<Map<string, ProcessedIncident>>(new Map());
-  const lastEventCountRef = useRef(0);
-  const lastFilterKeyRef = useRef<string | null>(null);
-  const lastLocationKeyRef = useRef<string>('none');
-  const lastMaxIncidentsRef = useRef(effectiveMaxIncidents);
   const lastTotalEventsRef = useRef(0);
+  const lastFilterKeyRef = useRef<string | null>(null);
+  const cellSubscriptionsRef = useRef<Map<string, NDKSubscription>>(new Map());
+  const eoseBySubscriptionKeyRef = useRef<Map<string, boolean>>(new Map());
+  const pendingEventsRef = useRef<QueuedEvent[]>([]);
+  const flushTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const [state, setState] = useState<{
     incidents: ProcessedIncident[];
     severityCounts: SeverityCounts;
     updatedIncidents: ProcessedIncident[];
     totalEventsReceived: number;
+    hasReceivedHistory: boolean;
   }>({
     incidents: [],
     severityCounts: { ...EMPTY_SEVERITY_COUNTS },
     updatedIncidents: [],
     totalEventsReceived: 0,
+    hasReceivedHistory: false,
   });
 
   const effectiveSubscriptionLocation = subscriptionLocation ?? location;
@@ -197,17 +207,6 @@ export function useIncidentSubscription({
     return buildGeohashGrid9(centerGeohash);
   }, [centerGeohash]);
 
-  // Build NDK filter (single subscription). If location is available, prefilter to 3x3 grid.
-  const subscriptionFilter = useMemo(
-    () =>
-      buildIncidentSubscriptionFilter({
-        enabled,
-        geohashGrid9,
-        limit: SIMPLE_FETCH_LIMIT,
-      }),
-    [enabled, geohashGrid9]
-  );
-
   const filterKey = useMemo(
     () =>
       buildIncidentFilterKey({
@@ -225,156 +224,25 @@ export function useIncidentSubscription({
     return `${location[0]},${location[1]}`;
   }, [location]);
 
-  const subscriptionOptions = useMemo(
-    () => ({
-      closeOnEose: false,
-      bufferMs: 100,
-      cacheUsage: NDKSubscriptionCacheUsage.CACHE_FIRST,
-      groupable: false, // Execute immediately, avoid timer race on cleanup
-    }),
-    []
-  );
-
-  // Subscribe with explicit CACHE_FIRST to ensure cached events load immediately.
-  // groupable: false - Prevents NDK timer race condition that causes "No filters to merge"
-  // error when subscription is stopped before EOSE (see NDK removeItem bug).
-  const { events, eose } = useSubscribe(subscriptionFilter, subscriptionOptions, [filterKey]);
-
-  // Debug: Track event count changes to see cache vs relay timing
-  const prevEventCountForDebug = useRef(0);
-  const subscriptionStartTime = useRef(Date.now());
-  const loggedEoseForCycleRef = useRef(false);
-  const lastLoggedFilterKeyRef = useRef<string | null>(null);
-
-  useEffect(() => {
-    if (!DEBUG_CACHE || !enabled) return;
-
-    if (lastLoggedFilterKeyRef.current === filterKey) {
-      return;
-    }
-
-    lastLoggedFilterKeyRef.current = filterKey;
-    prevEventCountForDebug.current = 0;
-    loggedEoseForCycleRef.current = false;
-    subscriptionStartTime.current = Date.now();
-
-    console.log(`🔁 [IncidentSub] Filter cycle -> ${filterKey}`);
-  }, [enabled, filterKey]);
-
-  useEffect(() => {
-    if (!DEBUG_CACHE) return;
-
-    if (subscriptionFilter && prevEventCountForDebug.current === 0 && events.length === 0) {
-      subscriptionStartTime.current = Date.now();
-      console.log('🔍 [IncidentSub] Subscription started, waiting for events...');
-    }
-
-    if (events.length > prevEventCountForDebug.current) {
-      const elapsed = Date.now() - subscriptionStartTime.current;
-      const newEvents = events.length - prevEventCountForDebug.current;
-      const source = !eose ? 'CACHE (pre-EOSE)' : 'RELAY (post-EOSE)';
-
-      console.log(`📥 [IncidentSub] +${newEvents} events (total: ${events.length}) from ${source} @ ${elapsed}ms`);
-
-      if (!eose && events.length > 0) {
-        console.log('   ✅ Cache is working! Events loaded before relay EOSE');
-      }
-    }
-
-    prevEventCountForDebug.current = events.length;
-  }, [events.length, eose, subscriptionFilter]);
-
-  // Debug: Log when EOSE is received
-  useEffect(() => {
-    if (!DEBUG_CACHE) return;
-
-    if (!eose) {
-      loggedEoseForCycleRef.current = false;
-      return;
-    }
-
-    if (loggedEoseForCycleRef.current) {
-      return;
-    }
-
-    loggedEoseForCycleRef.current = true;
-    const elapsed = Date.now() - subscriptionStartTime.current;
-    console.log(`✅ [IncidentSub] EOSE received @ ${elapsed}ms (${events.length} total events)`);
-  }, [eose, events.length]);
-
-  useEffect(() => {
+  const computeHasReceivedHistory = useCallback(() => {
     if (!enabled) {
-      if (lastFilterKeyRef.current !== 'disabled' || lastTotalEventsRef.current !== 0) {
-        setState({
-          incidents: [],
-          severityCounts: { ...EMPTY_SEVERITY_COUNTS },
-          updatedIncidents: [],
-          totalEventsReceived: 0,
-        });
-      }
-      incidentMapRef.current.clear();
-      lastEventCountRef.current = 0;
-      lastTotalEventsRef.current = 0;
-      lastFilterKeyRef.current = 'disabled';
-      lastLocationKeyRef.current = locationKey;
-      lastUpdatedRef.current = null;
-      lastMaxIncidentsRef.current = effectiveMaxIncidents;
-      return;
+      return false;
     }
 
-    const filterChanged = lastFilterKeyRef.current !== filterKey;
-    const locationChanged = lastLocationKeyRef.current !== locationKey;
-    const eventsShrunk = events.length < lastEventCountRef.current;
-    let reset = filterChanged || eventsShrunk;
-    lastFilterKeyRef.current = filterKey;
-    lastLocationKeyRef.current = locationKey;
-
-    if (reset) {
-      incidentMapRef.current.clear();
-      lastEventCountRef.current = 0;
+    const keys = Array.from(cellSubscriptionsRef.current.keys());
+    if (keys.length === 0) {
+      return false;
     }
 
-    const startIndex = reset ? 0 : lastEventCountRef.current;
-    const newEvents = events.slice(startIndex);
-    const updatedIncidents: ProcessedIncident[] = [];
-    let didUpdate = false;
+    return keys.every((key) => eoseBySubscriptionKeyRef.current.get(key) === true);
+  }, [enabled]);
 
-    for (const event of newEvents) {
-      if ((event as NDKEvent).kind !== 30911) {
-        continue;
+  const recomputeVisibleState = useCallback(
+    (updatedIncidents: ProcessedIncident[] = []) => {
+      if (!enabled) {
+        return;
       }
 
-      const parsed = parseIncidentEvent(event);
-      if (!parsed) {
-        continue;
-      }
-
-      const processed = toProcessedIncident(parsed);
-
-      const existing = incidentMapRef.current.get(parsed.incidentId);
-      const shouldReplace =
-        !existing ||
-        parsed.createdAt > existing.createdAt ||
-        (parsed.createdAt === existing.createdAt &&
-          parsed.eventId.localeCompare(existing.eventId) > 0);
-
-      if (shouldReplace) {
-        incidentMapRef.current.set(parsed.incidentId, processed);
-        updatedIncidents.push(processed);
-        didUpdate = true;
-      }
-    }
-
-    lastEventCountRef.current = events.length;
-
-    const maxChanged = lastMaxIncidentsRef.current !== effectiveMaxIncidents;
-    if (maxChanged) {
-      lastMaxIncidentsRef.current = effectiveMaxIncidents;
-    }
-
-    const totalChanged = events.length !== lastTotalEventsRef.current;
-
-    if (didUpdate || reset || maxChanged || locationChanged) {
       if (incidentMapRef.current.size > CANDIDATE_RETENTION_LIMIT) {
         const retained = location
           ? sortIncidentsForDisplay(Array.from(incidentMapRef.current.values()), location).slice(
@@ -406,41 +274,290 @@ export function useIncidentSubscription({
         lastUpdatedRef.current = Date.now();
       }
 
-      lastTotalEventsRef.current = events.length;
-
       setState({
         incidents: sliced,
         severityCounts,
         updatedIncidents,
-        totalEventsReceived: events.length,
+        totalEventsReceived: lastTotalEventsRef.current,
+        hasReceivedHistory: computeHasReceivedHistory(),
       });
+    },
+    [computeHasReceivedHistory, effectiveMaxIncidents, enabled, location]
+  );
+
+  const flushQueuedEvents = useCallback(() => {
+    if (flushTimerRef.current) {
+      clearTimeout(flushTimerRef.current);
+      flushTimerRef.current = null;
+    }
+
+    const queued = pendingEventsRef.current;
+    if (queued.length === 0) {
       return;
     }
 
-    if (totalChanged) {
-      lastTotalEventsRef.current = events.length;
-      setState((prev) => ({
-        ...prev,
-        totalEventsReceived: events.length,
-        updatedIncidents: [],
-      }));
+    pendingEventsRef.current = [];
+
+    const updatedIncidents: ProcessedIncident[] = [];
+    let didUpdate = false;
+    let totalRelevantEvents = 0;
+    let cacheCount = 0;
+    let relayCount = 0;
+
+    for (const { event, source } of queued) {
+      if ((event as NDKEvent).kind !== 30911) {
+        continue;
+      }
+
+      totalRelevantEvents++;
+      if (source === 'cache') {
+        cacheCount++;
+      } else {
+        relayCount++;
+      }
+
+      const parsed = parseIncidentEvent(event);
+      if (!parsed) {
+        continue;
+      }
+
+      const processed = toProcessedIncident(parsed);
+      const existing = incidentMapRef.current.get(parsed.incidentId);
+      const shouldReplace =
+        !existing ||
+        parsed.createdAt > existing.createdAt ||
+        (parsed.createdAt === existing.createdAt &&
+          parsed.eventId.localeCompare(existing.eventId) > 0);
+
+      if (shouldReplace) {
+        incidentMapRef.current.set(parsed.incidentId, processed);
+        updatedIncidents.push(processed);
+        didUpdate = true;
+      }
     }
+
+    if (totalRelevantEvents === 0) {
+      return;
+    }
+
+    lastTotalEventsRef.current += totalRelevantEvents;
+
+    if (DEBUG_CACHE) {
+      console.log(
+        `📥 [IncidentSub] +${totalRelevantEvents} events (cache:${cacheCount}, relay:${relayCount})`
+      );
+    }
+
+    if (didUpdate) {
+      recomputeVisibleState(updatedIncidents);
+      return;
+    }
+
+    setState((prev) => ({
+      ...prev,
+      totalEventsReceived: lastTotalEventsRef.current,
+      updatedIncidents: [],
+      hasReceivedHistory: computeHasReceivedHistory(),
+    }));
+  }, [computeHasReceivedHistory, recomputeVisibleState]);
+
+  const enqueueEvents = useCallback(
+    (events: NDKEvent[], source: IncomingEventSource) => {
+      if (!events || events.length === 0) {
+        return;
+      }
+
+      for (const event of events) {
+        pendingEventsRef.current.push({ event, source });
+      }
+
+      if (!flushTimerRef.current) {
+        flushTimerRef.current = setTimeout(flushQueuedEvents, SUBSCRIPTION_BUFFER_MS);
+      }
+    },
+    [flushQueuedEvents]
+  );
+
+  const stopSubscription = useCallback((key: string) => {
+    const subscription = cellSubscriptionsRef.current.get(key);
+    if (subscription) {
+      subscription.stop();
+      cellSubscriptionsRef.current.delete(key);
+    }
+    eoseBySubscriptionKeyRef.current.delete(key);
+  }, []);
+
+  const stopAllSubscriptions = useCallback(() => {
+    for (const sub of cellSubscriptionsRef.current.values()) {
+      sub.stop();
+    }
+    cellSubscriptionsRef.current.clear();
+    eoseBySubscriptionKeyRef.current.clear();
+  }, []);
+
+  const pruneToDesiredGeohashes = useCallback((desiredGeohashes: Set<string>) => {
+    let removed = false;
+
+    for (const [incidentId, incident] of incidentMapRef.current.entries()) {
+      const geohash = incident.location.geohash?.toLowerCase();
+      if (!geohash) {
+        continue;
+      }
+
+      const cell = geohash.slice(0, DEFAULT_GEOHASH_PRECISION);
+      if (!desiredGeohashes.has(cell)) {
+        incidentMapRef.current.delete(incidentId);
+        removed = true;
+      }
+    }
+
+    return removed;
+  }, []);
+
+  const startSubscription = useCallback(
+    (key: string) => {
+      const filter: NDKFilter =
+        key === GLOBAL_SUBSCRIPTION_KEY
+          ? {
+              kinds: [30911 as number],
+              limit: SIMPLE_FETCH_LIMIT,
+            }
+          : {
+              kinds: [30911 as number],
+              '#g': [key],
+              limit: SIMPLE_FETCH_LIMIT,
+            };
+
+      const subscription = ndk.subscribe([filter], {
+        closeOnEose: false,
+        cacheUsage: NDKSubscriptionCacheUsage.CACHE_FIRST,
+        groupable: false,
+        onEvents: (events) => {
+          enqueueEvents(events, 'cache');
+        },
+        onEvent: (event) => {
+          enqueueEvents([event], 'relay');
+        },
+        onEose: () => {
+          eoseBySubscriptionKeyRef.current.set(key, true);
+          setState((prev) => ({
+            ...prev,
+            hasReceivedHistory: computeHasReceivedHistory(),
+          }));
+        },
+      });
+
+      cellSubscriptionsRef.current.set(key, subscription);
+      eoseBySubscriptionKeyRef.current.set(key, false);
+    },
+    [computeHasReceivedHistory, enqueueEvents]
+  );
+
+  // Handle enabled/disabled lifecycle.
+  useEffect(() => {
+    if (enabled) {
+      return;
+    }
+
+    if (flushTimerRef.current) {
+      clearTimeout(flushTimerRef.current);
+      flushTimerRef.current = null;
+    }
+
+    pendingEventsRef.current = [];
+    stopAllSubscriptions();
+    incidentMapRef.current.clear();
+    lastUpdatedRef.current = null;
+    lastTotalEventsRef.current = 0;
+    lastFilterKeyRef.current = 'disabled';
+
+    setState({
+      incidents: [],
+      severityCounts: { ...EMPTY_SEVERITY_COUNTS },
+      updatedIncidents: [],
+      totalEventsReceived: 0,
+      hasReceivedHistory: false,
+    });
+  }, [enabled, stopAllSubscriptions]);
+
+  // Reconcile desired cells against active subscriptions.
+  useEffect(() => {
+    if (!enabled) {
+      return;
+    }
+
+    const desiredKeys = geohashGrid9 && geohashGrid9.length > 0
+      ? new Set(geohashGrid9)
+      : new Set([GLOBAL_SUBSCRIPTION_KEY]);
+
+    const activeKeys = new Set(cellSubscriptionsRef.current.keys());
+    const toAdd = Array.from(desiredKeys).filter((key) => !activeKeys.has(key));
+    const toRemove = Array.from(activeKeys).filter((key) => !desiredKeys.has(key));
+
+    if (DEBUG_CACHE && lastFilterKeyRef.current !== filterKey) {
+      console.log(
+        `🔁 [IncidentSub] Reconcile filter ${filterKey} (add:${toAdd.length}, remove:${toRemove.length})`
+      );
+    }
+    lastFilterKeyRef.current = filterKey;
+
+    for (const key of toRemove) {
+      stopSubscription(key);
+    }
+
+    for (const key of toAdd) {
+      startSubscription(key);
+    }
+
+    if (geohashGrid9 && geohashGrid9.length > 0) {
+      const didPrune = pruneToDesiredGeohashes(desiredKeys);
+      if (didPrune) {
+        recomputeVisibleState([]);
+      }
+    }
+
+    setState((prev) => ({
+      ...prev,
+      hasReceivedHistory: computeHasReceivedHistory(),
+    }));
   }, [
+    computeHasReceivedHistory,
     enabled,
-    events,
-    effectiveMaxIncidents,
     filterKey,
-    location,
-    locationKey,
+    geohashGrid9,
+    pruneToDesiredGeohashes,
+    recomputeVisibleState,
+    startSubscription,
+    stopSubscription,
   ]);
+
+  // Resort existing incidents on location/max changes.
+  useEffect(() => {
+    if (!enabled) {
+      return;
+    }
+    recomputeVisibleState([]);
+  }, [enabled, locationKey, effectiveMaxIncidents, recomputeVisibleState]);
+
+  // Cleanup on unmount.
+  useEffect(() => {
+    return () => {
+      if (flushTimerRef.current) {
+        clearTimeout(flushTimerRef.current);
+        flushTimerRef.current = null;
+      }
+      pendingEventsRef.current = [];
+      stopAllSubscriptions();
+    };
+  }, [stopAllSubscriptions]);
 
   return {
     incidents: state.incidents,
     severityCounts: state.severityCounts,
     updatedIncidents: state.updatedIncidents,
     totalEventsReceived: state.totalEventsReceived,
-    isInitialLoading: !eose,
-    hasReceivedHistory: eose,
+    isInitialLoading: enabled ? !state.hasReceivedHistory : false,
+    hasReceivedHistory: state.hasReceivedHistory,
     lastUpdatedAt: lastUpdatedRef.current,
   };
 }
