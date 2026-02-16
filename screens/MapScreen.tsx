@@ -354,12 +354,17 @@ export default function MapScreen() {
       return;
     }
 
-    setIsViewportCoveredBySubscriptionGrid(coverage.isCoveredBySubscriptionGrid);
-    if (!coverage.isCoveredBySubscriptionGrid) {
+    const isSoftCovered =
+      coverage.missingViewportCellCount <= MAP_SUBSCRIPTION.VIEWPORT_SOFT_COVERAGE_MAX_MISSING_CELLS &&
+      coverage.coverageRatio >= MAP_SUBSCRIPTION.VIEWPORT_SOFT_COVERAGE_MIN_RATIO;
+    const isViewportCovered = coverage.isCoveredBySubscriptionGrid || isSoftCovered;
+
+    setIsViewportCoveredBySubscriptionGrid(isViewportCovered);
+    if (!isViewportCovered) {
       if (__DEV__) {
         const gridWidth = MAP_SUBSCRIPTION.GEOHASH_GRID_RADIUS_CELLS * 2 + 1;
         console.log(
-          `[MapScreen] viewport exceeds ${gridWidth}x${gridWidth} p${MAP_SUBSCRIPTION.GEOHASH_PRECISION} grid (${coverage.viewportGeohashes.length} cells)`
+          `[MapScreen] viewport exceeds ${gridWidth}x${gridWidth} p${MAP_SUBSCRIPTION.GEOHASH_PRECISION} grid (${coverage.viewportGeohashes.length} cells, missing:${coverage.missingViewportCellCount}, ratio:${coverage.coverageRatio.toFixed(2)})`
         );
       }
       return;

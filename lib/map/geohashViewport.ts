@@ -11,6 +11,9 @@ export interface ViewportCoverageResult {
   centerGeohash: string;
   subscriptionGrid: string[];
   viewportGeohashes: string[];
+  coveredViewportCellCount: number;
+  missingViewportCellCount: number;
+  coverageRatio: number;
   isCoveredBySubscriptionGrid: boolean;
 }
 
@@ -95,12 +98,24 @@ export function evaluateViewportCoverage(
   }
 
   const gridSet = new Set(subscriptionGrid);
+  let coveredViewportCellCount = 0;
+  for (const cell of viewportGeohashes) {
+    if (gridSet.has(cell)) {
+      coveredViewportCellCount += 1;
+    }
+  }
+
+  const missingViewportCellCount = viewportGeohashes.length - coveredViewportCellCount;
+  const coverageRatio = coveredViewportCellCount / viewportGeohashes.length;
   const isCoveredBySubscriptionGrid = viewportGeohashes.every((cell) => gridSet.has(cell));
 
   return {
     centerGeohash,
     subscriptionGrid,
     viewportGeohashes,
+    coveredViewportCellCount,
+    missingViewportCellCount,
+    coverageRatio,
     isCoveredBySubscriptionGrid,
   };
 }

@@ -63,6 +63,17 @@ export const MAP_SUBSCRIPTION = {
   GEOHASH_GRID_RADIUS_CELLS: 2,
 
   /**
+   * Allow small edge mismatch between viewport cells and active subscription grid
+   * before showing a "zoom in" warning. Helps avoid false positives at default zoom.
+   */
+  VIEWPORT_SOFT_COVERAGE_MAX_MISSING_CELLS: 4,
+
+  /**
+   * Minimum coverage ratio for soft coverage mode.
+   */
+  VIEWPORT_SOFT_COVERAGE_MIN_RATIO: 0.8,
+
+  /**
    * Wait this long after map idle before applying a viewport-driven subscription update.
    */
   VIEWPORT_UPDATE_DEBOUNCE_MS: 400,
