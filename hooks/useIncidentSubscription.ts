@@ -28,7 +28,6 @@ import {
   EMPTY_SEVERITY_COUNTS,
 } from './incidentSubscription/sorting';
 import {
-  GLOBAL_SUBSCRIPTION_KEY,
   SUBSCRIPTION_BUFFER_MS,
   type IncomingEventSource,
   type SeverityCounts,
@@ -133,7 +132,7 @@ export function useIncidentSubscription({
     if (!enabled) {
       return 'disabled';
     }
-    return subscriptionPlan?.key ?? 'global';
+    return subscriptionPlan?.key ?? 'none';
   }, [enabled, subscriptionPlan?.key]);
 
   const locationKey = useMemo(() => {
@@ -242,17 +241,11 @@ export function useIncidentSubscription({
 
   const startSubscription = useCallback(
     (key: string) => {
-      const filter: NDKFilter =
-        key === GLOBAL_SUBSCRIPTION_KEY
-          ? {
-              kinds: [30911 as number],
-              limit: INCIDENT_LIMITS.FETCH_LIMIT,
-            }
-          : {
-              kinds: [30911 as number],
-              '#g': [key],
-              limit: INCIDENT_LIMITS.FETCH_LIMIT,
-            };
+      const filter: NDKFilter = {
+        kinds: [30911 as number],
+        '#g': [key],
+        limit: INCIDENT_LIMITS.FETCH_LIMIT,
+      };
 
       const subscription = ndk.subscribe([filter], {
         closeOnEose: false,

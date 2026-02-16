@@ -1,4 +1,3 @@
-import { GLOBAL_SUBSCRIPTION_KEY } from './types';
 import type { ProcessedIncident } from './types';
 import type { ReconcileInput, ReconcileResult } from './types';
 
@@ -18,9 +17,10 @@ export function computeReconcilePlan({
   desiredCells,
   activeSubscriptionKeys,
 }: ReconcileInput): ReconcileResult {
-  const desiredKeys = new Set(
-    enabled && desiredCells.length > 0 ? desiredCells : enabled ? [GLOBAL_SUBSCRIPTION_KEY] : []
-  );
+  // Contract: no desired geohash cells means intentionally no subscriptions.
+  // This avoids implicit global fallback and keeps relay coverage strictly
+  // tied to the planner output.
+  const desiredKeys = new Set(enabled && desiredCells.length > 0 ? desiredCells : []);
   const activeKeys = new Set(activeSubscriptionKeys);
 
   const toAdd = Array.from(desiredKeys).filter((key) => !activeKeys.has(key));

@@ -4,7 +4,6 @@ import type { Severity } from '@lib/nostr/config';
 import type { MapSubscriptionViewport } from '@lib/map/subscriptionPlanner';
 
 export const INCIDENT_KIND = 30911 as const;
-export const GLOBAL_SUBSCRIPTION_KEY = '__global__';
 export const SUBSCRIPTION_BUFFER_MS = 100;
 export const EARTH_RADIUS_METERS = 6371000;
 
