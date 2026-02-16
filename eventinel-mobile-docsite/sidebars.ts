@@ -10,12 +10,19 @@ const sidebars: SidebarsConfig = {
       label: 'Feature Guides',
       items: [
         'features/profile-settings',
+        'features/push-notifications',
         'features/relay-management',
         'features/login-authentication',
+        'features/wallet-payments',
         'features/incident-detail',
         'features/incident-feed',
         'features/map-screen',
       ],
+    },
+    {
+      type: 'category',
+      label: 'Architecture',
+      items: ['architecture/location-provider'],
     },
     {
       type: 'category',
