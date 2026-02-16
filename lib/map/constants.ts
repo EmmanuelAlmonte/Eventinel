@@ -63,6 +63,23 @@ export const MAP_SUBSCRIPTION = {
   GEOHASH_GRID_RADIUS_CELLS: 2,
 
   /**
+   * Grid planner mode.
+   * - 'center-grid': builds a center radius grid from zoom tiers.
+   * - 'viewport-ring': builds a ring around current viewport cells.
+   */
+  SUBSCRIPTION_PLANNER_MODE: 'center-grid' as const,
+
+  /**
+   * Number of additional rings to include as prefetch after computing visible cells.
+   */
+  SUBSCRIPTION_PREFETCH_RING: 0,
+
+  /**
+   * Hard cap for number of active subscription geohash cells.
+   */
+  MAX_ACTIVE_CELLS: 200,
+
+  /**
    * Allow small edge mismatch between viewport cells and active subscription grid
    * before showing a "zoom in" warning. Helps avoid false positives at default zoom.
    */

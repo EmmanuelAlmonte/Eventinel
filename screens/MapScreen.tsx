@@ -17,6 +17,8 @@ import { useAppTheme, type ProcessedIncident } from '@hooks';
 import { DEFAULT_CAMERA, MAP_STYLES, SEVERITY_COLORS, incidentsToFeatureCollection } from '@lib/map/types';
 import { MAPBOX_CONFIG, USER_LOCATION, INCIDENT_LIMITS, INCIDENT_MARKER, MAP_SUBSCRIPTION } from '@lib/map/constants';
 import { evaluateViewportCoverage, type LngLat, type ViewportBounds } from '@lib/map/geohashViewport';
+import type { MapSubscriptionViewport } from '@lib/map/subscriptionPlanner';
+import { computeCenterGridRadiusForZoom } from '@lib/map/subscriptionPlanner';
 
 // Camera animation modes
 type CameraAnimationMode = 'flyTo' | 'easeTo' | 'linearTo' | 'moveTo' | 'none';
@@ -34,6 +36,14 @@ const EMPTY_INCIDENTS: ProcessedIncident[] = [];
 type MapState = {
   gestures?: {
     isGestureActive?: boolean;
+  };
+  properties?: {
+    zoom?: number;
+    zoomLevel?: number;
+    camera?: {
+      zoom?: number;
+      zoomLevel?: number;
+    };
   };
 };
 
@@ -84,8 +94,33 @@ type MapIdleState = {
   properties?: {
     center?: LngLat;
     bounds?: MapBoundsState;
+    zoom?: number;
+    zoomLevel?: number;
+    camera?: {
+      zoom?: number;
+      zoomLevel?: number;
+    };
   };
 };
+
+function extractZoomFromProperties(
+  properties?: MapIdleState['properties'] | MapState['properties']
+): number | null {
+  const zoomCandidates = [
+    properties?.zoom,
+    properties?.zoomLevel,
+    properties?.camera?.zoom,
+    properties?.camera?.zoomLevel,
+  ];
+
+  for (const candidate of zoomCandidates) {
+    if (typeof candidate === 'number' && Number.isFinite(candidate)) {
+      return candidate;
+    }
+  }
+
+  return null;
+}
 
 function isLngLat(value: unknown): value is LngLat {
   if (!Array.isArray(value) || value.length !== 2) {
@@ -205,6 +240,8 @@ export default function MapScreen() {
   const cameraRef = useRef<CameraRef | null>(null);
   const viewportDebounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastViewportAnchorHashRef = useRef<string | null>(null);
+  const lastViewportZoomRef = useRef<number | null>(null);
+  const lastCameraZoomRef = useRef<number>(MAPBOX_CONFIG.DEFAULT_ZOOM);
   const lastViewportUpdateAtRef = useRef(0);
   const [isViewportCoveredBySubscriptionGrid, setIsViewportCoveredBySubscriptionGrid] = useState(true);
 
@@ -298,6 +335,11 @@ export default function MapScreen() {
   }, [userLocation, clearAutoResumeTimer, startFlyTo]);
 
   const handleCameraChanged = useCallback((state: MapState) => {
+    const cameraZoom = extractZoomFromProperties(state.properties);
+    if (cameraZoom !== null) {
+      lastCameraZoomRef.current = cameraZoom;
+    }
+
     if (!state?.gestures?.isGestureActive) {
       return;
     }
@@ -327,6 +369,7 @@ export default function MapScreen() {
     hasReceivedHistory,
     setMapFocused,
     setMapSubscriptionAnchor,
+    setMapSubscriptionViewport,
   } = useSharedIncidents();
 
   const handleMapIdle = useCallback((state: MapIdleState) => {
@@ -337,17 +380,33 @@ export default function MapScreen() {
     const center = state?.properties?.center;
     const ne = state?.properties?.bounds?.ne;
     const sw = state?.properties?.bounds?.sw;
+    const zoomFromEvent = extractZoomFromProperties(state?.properties);
+    let zoom: number | null =
+      typeof zoomFromEvent === 'number' && Number.isFinite(zoomFromEvent)
+        ? zoomFromEvent
+        : lastCameraZoomRef.current;
+    if (typeof zoom !== 'number' || !Number.isFinite(zoom)) {
+      return;
+    }
 
-    if (!isLngLat(center) || !isLngLat(ne) || !isLngLat(sw)) {
+    const zoomBucket = parseFloat(zoom.toFixed(2));
+
+    if (
+      !isLngLat(center) ||
+      !isLngLat(ne) ||
+      !isLngLat(sw) ||
+      zoomBucket === null
+    ) {
       return;
     }
 
     const bounds: ViewportBounds = { ne, sw };
+    const coverageRadius = computeCenterGridRadiusForZoom(zoomBucket);
     const coverage = evaluateViewportCoverage(
       bounds,
       center,
       MAP_SUBSCRIPTION.GEOHASH_PRECISION,
-      MAP_SUBSCRIPTION.GEOHASH_GRID_RADIUS_CELLS
+      coverageRadius
     );
 
     if (!coverage) {
@@ -362,7 +421,7 @@ export default function MapScreen() {
     setIsViewportCoveredBySubscriptionGrid(isViewportCovered);
     if (!isViewportCovered) {
       if (__DEV__) {
-        const gridWidth = MAP_SUBSCRIPTION.GEOHASH_GRID_RADIUS_CELLS * 2 + 1;
+        const gridWidth = coverageRadius * 2 + 1;
         console.log(
           `[MapScreen] viewport exceeds ${gridWidth}x${gridWidth} p${MAP_SUBSCRIPTION.GEOHASH_PRECISION} grid (${coverage.viewportGeohashes.length} cells, missing:${coverage.missingViewportCellCount}, ratio:${coverage.coverageRatio.toFixed(2)})`
         );
@@ -370,7 +429,10 @@ export default function MapScreen() {
       return;
     }
 
-    if (lastViewportAnchorHashRef.current === coverage.centerGeohash) {
+    if (
+      lastViewportAnchorHashRef.current === coverage.centerGeohash &&
+      lastViewportZoomRef.current === zoomBucket
+    ) {
       return;
     }
 
@@ -380,6 +442,11 @@ export default function MapScreen() {
 
     const nextAnchor: LngLat = [center[0], center[1]];
     const nextAnchorHash = coverage.centerGeohash;
+    const nextViewport: MapSubscriptionViewport = {
+      center: [center[0], center[1]],
+      bounds,
+      zoom: zoomBucket,
+    };
 
     viewportDebounceTimerRef.current = setTimeout(() => {
       const now = Date.now();
@@ -389,20 +456,26 @@ export default function MapScreen() {
 
       lastViewportUpdateAtRef.current = now;
       lastViewportAnchorHashRef.current = nextAnchorHash;
+      lastViewportZoomRef.current = zoomBucket;
+      setMapSubscriptionViewport(nextViewport);
       setMapSubscriptionAnchor(nextAnchor);
 
       if (__DEV__) {
-        console.log(`[MapScreen] subscription anchor -> ${nextAnchorHash}`);
+        console.log(
+          `[MapScreen] subscription viewport -> ${nextAnchorHash} zoom:${nextViewport.zoom.toFixed(2)}`
+        );
       }
     }, MAP_SUBSCRIPTION.VIEWPORT_UPDATE_DEBOUNCE_MS);
-  }, [isFocused, setMapSubscriptionAnchor]);
+  }, [isFocused, setMapSubscriptionAnchor, setMapSubscriptionViewport]);
 
   useEffect(() => {
     setMapFocused(isFocused);
     if (!isFocused) {
       setMapSubscriptionAnchor(null);
+      setMapSubscriptionViewport(null);
       setIsViewportCoveredBySubscriptionGrid(true);
       lastViewportAnchorHashRef.current = null;
+      lastViewportZoomRef.current = null;
       if (viewportDebounceTimerRef.current) {
         clearTimeout(viewportDebounceTimerRef.current);
         viewportDebounceTimerRef.current = null;
@@ -412,8 +485,9 @@ export default function MapScreen() {
     return () => {
       setMapFocused(false);
       setMapSubscriptionAnchor(null);
+      setMapSubscriptionViewport(null);
     };
-  }, [isFocused, setMapFocused, setMapSubscriptionAnchor]);
+  }, [isFocused, setMapFocused, setMapSubscriptionAnchor, setMapSubscriptionViewport]);
 
   const visibleIncidents = isFocused ? incidents : EMPTY_INCIDENTS;
 

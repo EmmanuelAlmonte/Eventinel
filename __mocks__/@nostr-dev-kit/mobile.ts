@@ -33,6 +33,9 @@ const createMockNDK = () => ({
   connect: jest.fn().mockResolvedValue(undefined),
   addExplicitRelay: jest.fn(),
   fetchEvents: jest.fn().mockResolvedValue(new Set()),
+  subscribe: jest.fn((_filters: any, _options: any) => ({
+    stop: jest.fn(),
+  })),
   pool: {
     on: jest.fn(),
     off: jest.fn(),
@@ -441,6 +444,12 @@ class NDK {
 
   async fetchEvents() {
     return new Set();
+  }
+
+  subscribe(_filters: any, _options: any) {
+    return {
+      stop: jest.fn(),
+    };
   }
 }
 

@@ -12,9 +12,8 @@ import { ndk } from '@lib/ndk';
 import { parseIncidentEvent } from '@lib/nostr/events/incident';
 import type { ParsedIncident } from '@lib/nostr/events/types';
 import { type Severity } from '@lib/nostr/config';
-import { MAP_SUBSCRIPTION } from '@lib/map/constants';
-import { buildGeohashGrid, encodeGeohashFromLngLat } from '@lib/map/geohashViewport';
-import { buildIncidentFilterKey } from './incidents/buildIncidentSubscriptionFilter';
+import { MAPBOX_CONFIG, MAP_SUBSCRIPTION } from '@lib/map/constants';
+import { planIncidentCells, type MapSubscriptionViewport } from '@lib/map/subscriptionPlanner';
 
 // Debug flag - set to true to enable cache debugging logs
 const DEBUG_CACHE = __DEV__;
@@ -136,6 +135,8 @@ export interface UseIncidentSubscriptionOptions {
   location: [number, number] | null;
   /** Optional location used only for geohash subscription filtering. */
   subscriptionLocation?: [number, number] | null;
+  /** Optional viewport used for subscription planning. */
+  subscriptionViewport?: MapSubscriptionViewport | null;
   /** Whether subscription is enabled */
   enabled?: boolean;
   /** Maximum incidents to return */
@@ -164,6 +165,7 @@ export interface UseIncidentSubscriptionResult {
 export function useIncidentSubscription({
   location,
   subscriptionLocation,
+  subscriptionViewport,
   enabled = true,
   maxIncidents = SIMPLE_FETCH_LIMIT,
 }: UseIncidentSubscriptionOptions): UseIncidentSubscriptionResult {
@@ -192,34 +194,67 @@ export function useIncidentSubscription({
   });
 
   const effectiveSubscriptionLocation = subscriptionLocation ?? location;
-
-  const centerGeohash = useMemo(() => {
-    if (!enabled || !effectiveSubscriptionLocation) {
+  const stableLocation = useMemo<[number, number] | null>(() => {
+    if (!location) {
       return null;
     }
 
-    return encodeGeohashFromLngLat(
-      effectiveSubscriptionLocation,
-      MAP_SUBSCRIPTION.GEOHASH_PRECISION
-    );
-  }, [enabled, effectiveSubscriptionLocation?.[0], effectiveSubscriptionLocation?.[1]]);
+    return [location[0], location[1]];
+  }, [location?.[0], location?.[1]]);
 
-  const geohashGrid = useMemo(() => {
-    if (!centerGeohash) {
+  const stableSubscriptionLocation = useMemo<[number, number] | null>(() => {
+    if (!effectiveSubscriptionLocation) {
       return null;
     }
-    return buildGeohashGrid(centerGeohash, MAP_SUBSCRIPTION.GEOHASH_GRID_RADIUS_CELLS);
-  }, [centerGeohash]);
 
-  const filterKey = useMemo(
-    () =>
-      buildIncidentFilterKey({
-        enabled,
-        geohashGrid,
-        limit: SIMPLE_FETCH_LIMIT,
-      }),
-    [enabled, geohashGrid]
-  );
+    return [effectiveSubscriptionLocation[0], effectiveSubscriptionLocation[1]];
+  }, [effectiveSubscriptionLocation?.[0], effectiveSubscriptionLocation?.[1]]);
+
+  const fallbackSubscriptionViewport: MapSubscriptionViewport | null =
+    subscriptionViewport ??
+    (stableSubscriptionLocation
+      ? {
+          center: stableSubscriptionLocation,
+          bounds: {
+            ne: stableSubscriptionLocation,
+            sw: stableSubscriptionLocation,
+          },
+          zoom: MAPBOX_CONFIG.DEFAULT_ZOOM,
+        }
+      : null);
+
+  const subscriptionPlan = useMemo(() => {
+    if (!enabled || !fallbackSubscriptionViewport) {
+      return null;
+    }
+
+    return planIncidentCells({
+      mode: MAP_SUBSCRIPTION.SUBSCRIPTION_PLANNER_MODE,
+      precision: MAP_SUBSCRIPTION.GEOHASH_PRECISION,
+      center: fallbackSubscriptionViewport.center,
+      bounds: fallbackSubscriptionViewport.bounds,
+      zoom: fallbackSubscriptionViewport.zoom,
+      maxCells: MAP_SUBSCRIPTION.MAX_ACTIVE_CELLS,
+      prefetchRing: MAP_SUBSCRIPTION.SUBSCRIPTION_PREFETCH_RING,
+    });
+  }, [
+    enabled,
+    fallbackSubscriptionViewport?.center[0],
+    fallbackSubscriptionViewport?.center[1],
+    fallbackSubscriptionViewport?.bounds?.ne?.[0],
+    fallbackSubscriptionViewport?.bounds?.ne?.[1],
+    fallbackSubscriptionViewport?.bounds?.sw?.[0],
+    fallbackSubscriptionViewport?.bounds?.sw?.[1],
+    fallbackSubscriptionViewport?.zoom,
+  ]);
+
+  const desiredCells = subscriptionPlan?.desiredCells ?? [];
+  const subscriptionFilterKey = useMemo(() => {
+    if (!enabled) {
+      return 'disabled';
+    }
+    return subscriptionPlan?.key ?? 'global';
+  }, [enabled, subscriptionPlan?.key]);
 
   const locationKey = useMemo(() => {
     if (!location) {
@@ -248,8 +283,8 @@ export function useIncidentSubscription({
       }
 
       if (incidentMapRef.current.size > CANDIDATE_RETENTION_LIMIT) {
-        const retained = location
-          ? sortIncidentsForDisplay(Array.from(incidentMapRef.current.values()), location).slice(
+        const retained = stableLocation
+          ? sortIncidentsForDisplay(Array.from(incidentMapRef.current.values()), stableLocation).slice(
               0,
               CANDIDATE_RETENTION_LIMIT
             )
@@ -265,7 +300,7 @@ export function useIncidentSubscription({
 
       const sorted = sortIncidentsForDisplay(
         Array.from(incidentMapRef.current.values()),
-        location
+        stableLocation
       );
       const sliced = sorted.slice(0, effectiveMaxIncidents);
 
@@ -286,7 +321,7 @@ export function useIncidentSubscription({
         hasReceivedHistory: computeHasReceivedHistory(),
       });
     },
-    [computeHasReceivedHistory, effectiveMaxIncidents, enabled, location]
+    [computeHasReceivedHistory, effectiveMaxIncidents, enabled, stableLocation]
   );
 
   const flushQueuedEvents = useCallback(() => {
@@ -490,20 +525,18 @@ export function useIncidentSubscription({
       return;
     }
 
-    const desiredKeys = geohashGrid && geohashGrid.length > 0
-      ? new Set(geohashGrid)
-      : new Set([GLOBAL_SUBSCRIPTION_KEY]);
+    const desiredKeys = desiredCells.length > 0 ? new Set(desiredCells) : new Set([GLOBAL_SUBSCRIPTION_KEY]);
 
     const activeKeys = new Set(cellSubscriptionsRef.current.keys());
     const toAdd = Array.from(desiredKeys).filter((key) => !activeKeys.has(key));
     const toRemove = Array.from(activeKeys).filter((key) => !desiredKeys.has(key));
 
-    if (DEBUG_CACHE && lastFilterKeyRef.current !== filterKey) {
+    if (DEBUG_CACHE && lastFilterKeyRef.current !== subscriptionFilterKey) {
       console.log(
-        `🔁 [IncidentSub] Reconcile filter ${filterKey} (add:${toAdd.length}, remove:${toRemove.length})`
+        `🔁 [IncidentSub] Reconcile filter ${subscriptionFilterKey} (add:${toAdd.length}, remove:${toRemove.length}, truncated:${subscriptionPlan?.truncated ?? false})`
       );
     }
-    lastFilterKeyRef.current = filterKey;
+    lastFilterKeyRef.current = subscriptionFilterKey;
 
     for (const key of toRemove) {
       stopSubscription(key);
@@ -513,24 +546,31 @@ export function useIncidentSubscription({
       startSubscription(key);
     }
 
-    if (geohashGrid && geohashGrid.length > 0) {
+    if (desiredCells.length > 0) {
       const didPrune = pruneToDesiredGeohashes(desiredKeys);
       if (didPrune) {
         recomputeVisibleState([]);
       }
     }
 
-    setState((prev) => ({
-      ...prev,
-      hasReceivedHistory: computeHasReceivedHistory(),
-    }));
+    if (toAdd.length > 0 || toRemove.length > 0) {
+      setState((prev) => {
+        const hasReceivedHistory = computeHasReceivedHistory();
+        if (prev.hasReceivedHistory === hasReceivedHistory) {
+          return prev;
+        }
+
+        return {
+          ...prev,
+          hasReceivedHistory,
+        };
+      });
+    }
   }, [
     computeHasReceivedHistory,
     enabled,
-    filterKey,
-    geohashGrid,
+    subscriptionFilterKey,
     pruneToDesiredGeohashes,
-    recomputeVisibleState,
     startSubscription,
     stopSubscription,
   ]);

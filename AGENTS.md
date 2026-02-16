@@ -31,6 +31,7 @@
 - Coverage targets: global 50% minimum; `screens/LoginScreen.tsx` enforces 70% (branches/functions/lines/statements).
 - Prefer render + assert patterns from Testing Library; rely on existing mocks for RN/NDK heavy modules instead of ad-hoc stubs.
 - Run `npm run test:auth` when touching auth code, and `npm run test:coverage` before PRs that modify screens/lib/App.
+- Agent reporting rule: run `npx tsc --noEmit` as the default type check and report executed commands/results directly (for example, `npx tsc --noEmit: pass`), instead of generic "Verification" summaries.
 
 ## Commit & Pull Request Guidelines
 - Follow Conventional Commit style seen in history (`feat:`, `fix:`, `chore:`, `refactor:`, `test:`). Example: `feat: add relay reconnect banner`.

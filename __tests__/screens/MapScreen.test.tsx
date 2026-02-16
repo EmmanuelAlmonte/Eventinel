@@ -90,11 +90,18 @@ const mockIncidents = [
   },
 ];
 
-const mockUseSharedIncidents = jest.fn(() => ({
+const createMockSharedIncidents = (overrides: Record<string, unknown> = {}) => ({
   incidents: mockIncidents,
   isInitialLoading: false,
   hasReceivedHistory: true,
   setMapFocused: jest.fn(),
+  setMapSubscriptionAnchor: jest.fn(),
+  setMapSubscriptionViewport: jest.fn(),
+  ...overrides,
+});
+
+const mockUseSharedIncidents = jest.fn(() => ({
+  ...createMockSharedIncidents(),
 }));
 
 const mockUseRelayStatus = jest.fn(() => ({
@@ -259,12 +266,7 @@ describe('MapScreen', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockUseSharedLocation.mockReturnValue(createLocationState());
-    mockUseSharedIncidents.mockReturnValue({
-      incidents: mockIncidents,
-      isInitialLoading: false,
-      hasReceivedHistory: true,
-      setMapFocused: jest.fn(),
-    });
+    mockUseSharedIncidents.mockReturnValue(createMockSharedIncidents());
   });
 
   // =============================================================================
@@ -332,10 +334,9 @@ describe('MapScreen', () => {
 
     it('handles empty incidents array', () => {
       mockUseSharedIncidents.mockReturnValue({
-        incidents: [],
-        isInitialLoading: false,
-        hasReceivedHistory: true,
-        setMapFocused: jest.fn(),
+        ...createMockSharedIncidents({
+          incidents: [],
+        }),
       });
 
       const { getByText } = render(<MapScreen />);
@@ -376,10 +377,9 @@ describe('MapScreen', () => {
   describe('Empty State', () => {
     it('shows empty state message when no incidents and history received', () => {
       mockUseSharedIncidents.mockReturnValue({
-        incidents: [],
-        isInitialLoading: false,
-        hasReceivedHistory: true,
-        setMapFocused: jest.fn(),
+        ...createMockSharedIncidents({
+          incidents: [],
+        }),
       });
 
       const { getByText } = render(<MapScreen />);
@@ -388,10 +388,9 @@ describe('MapScreen', () => {
 
     it('shows hint text about incident timeframe', () => {
       mockUseSharedIncidents.mockReturnValue({
-        incidents: [],
-        isInitialLoading: false,
-        hasReceivedHistory: true,
-        setMapFocused: jest.fn(),
+        ...createMockSharedIncidents({
+          incidents: [],
+        }),
       });
 
       const { getByText } = render(<MapScreen />);
@@ -400,10 +399,11 @@ describe('MapScreen', () => {
 
     it('does not show empty state before history is received', () => {
       mockUseSharedIncidents.mockReturnValue({
-        incidents: [],
-        isInitialLoading: true,
-        hasReceivedHistory: false,
-        setMapFocused: jest.fn(),
+        ...createMockSharedIncidents({
+          incidents: [],
+          isInitialLoading: true,
+          hasReceivedHistory: false,
+        }),
       });
 
       const { queryByText } = render(<MapScreen />);

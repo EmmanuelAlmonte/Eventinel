@@ -17,6 +17,18 @@ export interface ViewportCoverageResult {
   isCoveredBySubscriptionGrid: boolean;
 }
 
+const GEOHASH_NEIGHBOR_KEYS = ['n', 'ne', 'e', 'se', 's', 'sw', 'w', 'nw'] as const;
+
+function toNeighborValues(neighbors: string[] | Record<string, string | undefined>): string[] {
+  if (Array.isArray(neighbors)) {
+    return neighbors.filter((neighbor): neighbor is string => typeof neighbor === 'string');
+  }
+
+  return GEOHASH_NEIGHBOR_KEYS.map((key) => neighbors[key]).filter(
+    (neighbor): neighbor is string => typeof neighbor === 'string'
+  );
+}
+
 function isFiniteLngLat(value: LngLat | null | undefined): value is LngLat {
   return !!value && Number.isFinite(value[0]) && Number.isFinite(value[1]);
 }
@@ -42,7 +54,7 @@ export function buildGeohashGrid(centerGeohash: string, radiusCells = 1): string
     const expanded = new Set(cells);
     for (const cell of cells) {
       const neighbors = geohash.neighbors(cell);
-      for (const neighbor of neighbors) {
+      for (const neighbor of toNeighborValues(neighbors)) {
         if (neighbor && neighbor.length > 0) {
           expanded.add(neighbor);
         }
