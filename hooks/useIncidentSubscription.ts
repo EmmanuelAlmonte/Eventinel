@@ -238,12 +238,28 @@ export function useIncidentSubscription({
   // Subscribe with explicit CACHE_FIRST to ensure cached events load immediately.
   // groupable: false - Prevents NDK timer race condition that causes "No filters to merge"
   // error when subscription is stopped before EOSE (see NDK removeItem bug).
-  const { events, eose } = useSubscribe(subscriptionFilter, subscriptionOptions);
+  const { events, eose } = useSubscribe(subscriptionFilter, subscriptionOptions, [filterKey]);
 
   // Debug: Track event count changes to see cache vs relay timing
   const prevEventCountForDebug = useRef(0);
   const subscriptionStartTime = useRef(Date.now());
   const loggedEoseForCycleRef = useRef(false);
+  const lastLoggedFilterKeyRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (!DEBUG_CACHE || !enabled) return;
+
+    if (lastLoggedFilterKeyRef.current === filterKey) {
+      return;
+    }
+
+    lastLoggedFilterKeyRef.current = filterKey;
+    prevEventCountForDebug.current = 0;
+    loggedEoseForCycleRef.current = false;
+    subscriptionStartTime.current = Date.now();
+
+    console.log(`🔁 [IncidentSub] Filter cycle -> ${filterKey}`);
+  }, [enabled, filterKey]);
 
   useEffect(() => {
     if (!DEBUG_CACHE) return;
