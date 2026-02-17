@@ -27,7 +27,7 @@ function LoginWrapper() {
   );
 }
 
-export default function App() {
+function AppContent() {
   const isReady = useAppRelayBootstrap();
   const initializeNDK = useNDKInit(); // Initialize all 4 stores (NDK, sessions, profiles, mutes)
   const currentUser = useNDKCurrentUser();
@@ -53,7 +53,7 @@ export default function App() {
 
   const { isDark, colors } = useAppTheme();
 
-  const content = !isReady ? (
+  return !isReady ? (
     <AppStartupScreen colors={colors} isDark={isDark} />
   ) : !currentUser ? (
     <LoginWrapper />
@@ -68,12 +68,14 @@ export default function App() {
       </RelayStatusProvider>
     </LocationProvider>
   );
+}
 
+export default function App() {
   return (
     <SafeAreaProvider>
       <ThemeProvider theme={theme}>
         <ErrorBoundary>
-          {content}
+          <AppContent />
         </ErrorBoundary>
         <ToastProvider />
       </ThemeProvider>
