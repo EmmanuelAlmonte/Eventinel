@@ -23,6 +23,16 @@ Notifications.setNotificationHandler({
   }),
 });
 
+type IncidentNotificationBridgeResponse = {
+  notification: {
+    request: {
+      content: {
+        data?: unknown;
+      };
+    };
+  };
+};
+
 function navigateToIncidentDetail(params: RootStackParamList['IncidentDetail']) {
   if (!navigationRef.isReady()) {
     console.warn('[Notifications] Navigation is not ready; skipping navigate');
@@ -108,27 +118,41 @@ function usePushRegistration() {
   }, []);
 }
 
+function parseNotificationTapPayload(
+  response: unknown
+): IncidentNotificationPayload | null {
+  if (!response || typeof response !== 'object') return null;
+
+  const candidate = response as IncidentNotificationBridgeResponse | null;
+  const notification = candidate?.notification;
+  if (!notification || typeof notification !== 'object') return null;
+
+  const request = notification.request;
+  if (!request || typeof request !== 'object') return null;
+
+  const content = request.content;
+  if (!content || typeof content !== 'object') return null;
+
+  return coerceIncidentNotificationPayload(content.data);
+}
+
 function useNotificationTapHandlers(
   handleIncidentNotification: (payload: IncidentNotificationPayload) => Promise<void>
 ) {
   useEffect(() => {
     let isMounted = true;
 
-    Notifications.getLastNotificationResponseAsync().then((response: any) => {
+    Notifications.getLastNotificationResponseAsync().then((response) => {
       if (!isMounted || !response) return;
-      const payload = coerceIncidentNotificationPayload(
-        response.notification.request.content.data
-      );
+      const payload = parseNotificationTapPayload(response);
       if (payload) {
         handleIncidentNotification(payload);
       }
     });
 
     const subscription =
-      Notifications.addNotificationResponseReceivedListener((response: any) => {
-        const payload = coerceIncidentNotificationPayload(
-          response.notification.request.content.data
-        );
+      Notifications.addNotificationResponseReceivedListener((response) => {
+        const payload = parseNotificationTapPayload(response);
         if (payload) {
           handleIncidentNotification(payload);
         }

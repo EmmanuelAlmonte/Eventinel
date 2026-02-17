@@ -8,6 +8,7 @@ import { KeyboardAvoidingView, Platform, View } from 'react-native';
 import { Text } from '@rneui/themed';
 import { useNavigation } from '@react-navigation/native';
 
+import { type AppNavigation } from '@lib/navigation';
 import { ScreenContainer } from '@components/ui';
 import { useAppTheme } from '@hooks';
 
@@ -17,7 +18,7 @@ import { menuScreenStyles as styles } from './menu/styles';
 import { useQuickCompose } from './menu/useQuickCompose';
 
 export default function MenuScreen() {
-  const navigation = useNavigation<any>();
+  const navigation = useNavigation<AppNavigation>();
   const { colors } = useAppTheme();
   const {
     noteContent,
@@ -53,7 +54,7 @@ export default function MenuScreen() {
 
         <MenuGrid
           colors={colors}
-          onNavigate={(screen) => navigation.navigate(screen)}
+          onNavigate={(screen) => navigation.navigate(screen as 'Map' | 'Profile' | 'Relays')}
         />
 
         <View style={styles.footer}>

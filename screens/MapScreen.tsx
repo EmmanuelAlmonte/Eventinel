@@ -10,6 +10,7 @@ import { Text } from '@rneui/themed';
 import { useIsFocused, useNavigation } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { type AppNavigation } from '@lib/navigation';
 import { LocationRequiredEmpty, MapSkeleton, ScreenContainer } from '@components/ui';
 import { useRelayStatus, useSharedIncidents, useSharedLocation } from '@contexts';
 import { useAppTheme, type ProcessedIncident } from '@hooks';
@@ -28,6 +29,7 @@ import {
   incidentCircleStyle,
   incidentLabelStyle,
   pointFilter,
+  type ShapeSourceFeatureProperties,
   type ShapeSourcePressEvent,
 } from './map/config';
 import { buildRelayBannerStatus, formatRelayList } from './map/helpers';
@@ -38,8 +40,23 @@ import { useMapViewportSubscription } from './map/useMapViewportSubscription';
 
 const EMPTY_INCIDENTS: ProcessedIncident[] = [];
 
+function getPointCoordinates(value: unknown): [number, number] | null {
+  if (!Array.isArray(value) || value.length < 2) return null;
+  if (typeof value[0] !== 'number' || !Number.isFinite(value[0])) return null;
+  if (typeof value[1] !== 'number' || !Number.isFinite(value[1])) return null;
+
+  return [value[0], value[1]];
+}
+
+function extractIncidentIdFromShapeSourceProperties(
+  properties: ShapeSourceFeatureProperties | undefined
+): string | null {
+  if (!properties || typeof properties.incidentId !== 'string') return null;
+  return properties.incidentId.trim().length > 0 ? properties.incidentId.trim() : null;
+}
+
 export default function MapScreen() {
-  const navigation = useNavigation<any>();
+  const navigation = useNavigation<AppNavigation>();
   const isFocused = useIsFocused();
   const insets = useSafeAreaInsets();
   const { colors } = useAppTheme();
@@ -96,15 +113,17 @@ export default function MapScreen() {
   const handleShapeSourcePress = useCallback(
     (event: ShapeSourcePressEvent) => {
       const feature = event?.features?.[0];
-      if (!feature || !feature.properties) {
+      if (!feature) {
         return;
       }
 
-      const properties = feature.properties as Record<string, unknown>;
-      if (properties.cluster) {
-        if (!feature.geometry || feature.geometry.type !== 'Point') return;
+      const properties = feature.properties as ShapeSourceFeatureProperties | undefined;
+      if (properties?.cluster) {
+        const geometry = feature.geometry;
+        if (!geometry || geometry.type !== 'Point') return;
+        const centerCoordinate = getPointCoordinates(geometry.coordinates);
+        if (!centerCoordinate) return;
 
-        const coordinates = feature.geometry.coordinates as [number, number];
         camera.clearAutoResumeTimer();
         camera.setFollowUser(false);
 
@@ -113,7 +132,7 @@ export default function MapScreen() {
           if (zoom == null) return;
 
           camera.cameraRef.current?.setCamera({
-            centerCoordinate: coordinates,
+            centerCoordinate,
             zoomLevel: zoom,
             animationDuration: 400,
             animationMode: 'easeTo',
@@ -123,8 +142,8 @@ export default function MapScreen() {
         return;
       }
 
-      const incidentId = properties.incidentId;
-      if (typeof incidentId === 'string' && incidentId.length > 0) {
+      const incidentId = extractIncidentIdFromShapeSourceProperties(properties);
+      if (incidentId) {
         handleIncidentPress(incidentId);
       }
     },

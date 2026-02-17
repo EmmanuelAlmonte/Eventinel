@@ -1,3 +1,5 @@
+import type { ComponentType } from 'react';
+
 import { SEVERITY_COLORS } from '@lib/map/types';
 import { INCIDENT_MARKER } from '@lib/map/constants';
 
@@ -17,21 +19,36 @@ export type MapState = {
   };
 };
 
+export type ShapeSourceFeatureProperties = {
+  incidentId?: string;
+  cluster?: boolean;
+};
+
 export type ShapeSourcePressEvent = {
-  features: Array<GeoJSON.Feature>;
+  features: Array<GeoJSON.Feature<GeoJSON.Geometry, ShapeSourceFeatureProperties>>;
 };
 
 export type MapboxModule = {
-  MapView: any;
-  Camera: any;
-  PointAnnotation: any;
-  ShapeSource: any;
-  CircleLayer: any;
-  SymbolLayer: any;
+  MapView: ComponentType<Record<string, unknown>>;
+  Camera: ComponentType<Record<string, unknown>>;
+  PointAnnotation: ComponentType<Record<string, unknown>>;
+  ShapeSource: ComponentType<Record<string, unknown>>;
+  CircleLayer: ComponentType<Record<string, unknown>>;
+  SymbolLayer: ComponentType<Record<string, unknown>>;
 };
 
-export type CameraRef = any;
-export type ShapeSourceRef = any;
+export type CameraRef = {
+  setCamera: (params: {
+    centerCoordinate?: [number, number];
+    zoomLevel?: number;
+    animationMode?: CameraAnimationMode;
+    animationDuration?: number;
+  }) => void;
+};
+
+export type ShapeSourceRef = {
+  getClusterExpansionZoom: (feature: ShapeSourcePressEvent['features'][number]) => Promise<number> | number;
+};
 
 function getMapboxModule(): MapboxModule | null {
   try {

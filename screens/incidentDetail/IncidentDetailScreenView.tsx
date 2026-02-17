@@ -2,6 +2,7 @@ import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet } from 'react-na
 import { Divider } from '@rneui/themed';
 import type { EdgeInsets } from 'react-native-safe-area-context';
 
+import { type CommentDeletionNotice, type IncidentComment } from '@hooks';
 import { TYPE_CONFIG, SEVERITY_COLORS } from '@lib/nostr/config';
 import type { ProcessedIncident } from '@hooks/useIncidentSubscription';
 
@@ -27,17 +28,17 @@ type IncidentDetailCommentsController = {
   setCommentText: (value: string) => void;
   isSubmitting: boolean;
   isUploadingMedia: boolean;
-  comments: any[];
+  comments: IncidentComment[];
   isLoadingComments: boolean;
   commentsAreStale: boolean;
   retryComments: () => void;
-  recentDeletions: any[];
+  recentDeletions: CommentDeletionNotice[];
   showAllComments: boolean;
   setShowAllComments: (value: boolean) => void;
   deletingCommentId: string | null;
   handleCommentSubmit: () => Promise<void>;
   handleAddMedia: () => Promise<void>;
-  confirmDeleteComment: (comment: any) => void;
+  confirmDeleteComment: (comment: IncidentComment) => void;
 };
 
 type IncidentDetailScreenViewProps = {

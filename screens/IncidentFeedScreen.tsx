@@ -9,6 +9,7 @@ import { View } from 'react-native';
 import { Text } from '@rneui/themed';
 import { useIsFocused, useNavigation } from '@react-navigation/native';
 
+import { type AppNavigation } from '@lib/navigation';
 import { useAppTheme } from '@hooks';
 import type { ProcessedIncident } from '@hooks';
 import { useRelayStatus, useSharedLocation, useSharedIncidents } from '@contexts';
@@ -22,7 +23,7 @@ import { incidentFeedStyles as styles } from './incidentFeed/styles';
 const EMPTY_INCIDENTS: ProcessedIncident[] = [];
 
 export default function IncidentFeedScreen() {
-  const navigation = useNavigation<any>();
+  const navigation = useNavigation<AppNavigation>();
   const isFocused = useIsFocused();
   const { colors } = useAppTheme();
   const { hasConnectedRelay, hasRelays, isConnecting, relays } = useRelayStatus();

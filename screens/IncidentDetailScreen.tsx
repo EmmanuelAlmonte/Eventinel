@@ -10,6 +10,7 @@ import { useNavigation, useRoute, type RouteProp } from '@react-navigation/nativ
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNDKCurrentUser } from '@nostr-dev-kit/mobile';
 
+import { type AppNavigation, type RootStackParamList } from '@lib/navigation';
 import { useAppTheme } from '@hooks';
 
 import { IncidentDetailLoadingState } from './incidentDetail/IncidentDetailLoadingState';
@@ -17,16 +18,9 @@ import { IncidentDetailScreenView } from './incidentDetail/IncidentDetailScreenV
 import { useIncidentCommentsController } from './incidentDetail/useIncidentCommentsController';
 import { useIncidentRecord } from './incidentDetail/useIncidentRecord';
 
-type DetailRouteParams = {
-  IncidentDetail: {
-    incidentId: string;
-    eventId?: string;
-  };
-};
-
 export default function IncidentDetailScreen() {
-  const navigation = useNavigation<any>();
-  const route = useRoute<RouteProp<DetailRouteParams, 'IncidentDetail'>>();
+  const navigation = useNavigation<AppNavigation>();
+  const route = useRoute<RouteProp<RootStackParamList, 'IncidentDetail'>>();
   const insets = useSafeAreaInsets();
   const { colors } = useAppTheme();
   const currentUser = useNDKCurrentUser();
@@ -80,7 +74,7 @@ export default function IncidentDetailScreen() {
       insets={insets}
       incident={incident}
       currentUser={currentUserIdentity}
-      comments={comments as any}
+      comments={comments}
       onBack={() => navigation.goBack()}
       onShare={handleShare}
       onDirections={handleDirections}

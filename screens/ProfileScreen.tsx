@@ -10,6 +10,7 @@ import * as Notifications from 'expo-notifications';
 import { useNavigation } from '@react-navigation/native';
 import { useNDKCurrentPubkey, useNDKCurrentUser, useNDKSessionLogout } from '@nostr-dev-kit/mobile';
 
+import { type AppNavigation } from '@lib/navigation';
 import { ScreenContainer } from '@components/ui';
 import { useAppTheme } from '@hooks';
 
@@ -27,7 +28,7 @@ import {
 import { usePushSettings } from './profile/usePushSettings';
 
 export default function ProfileScreen() {
-  const navigation = useNavigation<any>();
+  const navigation = useNavigation<AppNavigation>();
   const logout = useNDKSessionLogout();
   const currentPubkey = useNDKCurrentPubkey();
   const currentUser = useNDKCurrentUser();
