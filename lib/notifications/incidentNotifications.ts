@@ -262,6 +262,33 @@ function findIncidentInCache(payload: IncidentNotificationPayload): ParsedIncide
   return null;
 }
 
+async function fetchIncidentAttemptFromRelay(
+  filter: NDKFilter<number>[],
+  source: IncNotificationLookupSource
+): Promise<ParsedIncident | null> {
+  INC_NOTIFICATION_METRICS.relayRequests += 1;
+  const relayStart = Date.now();
+
+  const event = await ndk.fetchEvent(filter, INCIDENT_NOTIFICATION_RELAY_OPTIONS);
+  const relayLookupMs = Date.now() - relayStart;
+
+  // Count a "relay response" when an event is returned (parse success tracked separately).
+  trackLookupTiming('relay', relayLookupMs, Boolean(event));
+
+  const parsed = event ? parseIncidentEvent(event) : null;
+  if (parsed) {
+    INC_NOTIFICATION_METRICS.relayParses += 1;
+  }
+
+  if (DEBUG_NOTIFICATION_PERF) {
+    logNotificationPerf(
+      `${parsed ? 'relay-hit' : 'relay-miss'} source=${getLookupSourceLabel(source)} ms=${relayLookupMs}`
+    );
+  }
+
+  return parsed;
+}
+
 export async function fetchIncidentFromRelay(
   payload: IncidentNotificationPayload
 ): Promise<ParsedIncident | null> {
@@ -269,33 +296,20 @@ export async function fetchIncidentFromRelay(
 
   const lookupStart = Date.now();
   INC_NOTIFICATION_METRICS.totalRequests += 1;
-  const cached = findIncidentInCache(payload);
-  if (cached) {
-    INC_NOTIFICATION_METRICS.lastLookupMs = Date.now() - lookupStart;
-    logNotificationPerf(`cache-hit source=${getLookupSourceLabel(payload.eventId ? 'eventId' : 'incidentId')}`);
-    return cached;
-  }
-
-  const relayStart = Date.now();
-  INC_NOTIFICATION_METRICS.relayRequests += 1;
-
   try {
+    const cached = findIncidentInCache(payload);
+    if (cached) {
+      logNotificationPerf(
+        `cache-hit source=${getLookupSourceLabel(payload.eventId ? 'eventId' : 'incidentId')}`
+      );
+      return cached;
+    }
+
     if (payload.eventId) {
-      const filter: NDKFilter[] = [{ ids: [payload.eventId] }];
-      const event = await ndk.fetchEvent(filter, INCIDENT_NOTIFICATION_RELAY_OPTIONS);
-      const relayLookupMs = Date.now() - relayStart;
-      const parsed = event ? parseIncidentEvent(event) : null;
-      if (parsed) {
-        INC_NOTIFICATION_METRICS.relayParses += 1;
-      }
-      trackLookupTiming('relay', relayLookupMs, Boolean(parsed));
-      if (parsed) {
-        return parsed;
-      }
-      if (!payload.incidentId) {
-        INC_NOTIFICATION_METRICS.lastLookupMs = Date.now() - lookupStart;
-        return null;
-      }
+      const filter: NDKFilter<number>[] = [{ ids: [payload.eventId] }];
+      const parsed = await fetchIncidentAttemptFromRelay(filter, 'eventId');
+      if (parsed) return parsed;
+      if (!payload.incidentId) return null;
     }
 
     if (payload.incidentId) {
@@ -305,23 +319,17 @@ export async function fetchIncidentFromRelay(
           '#d': [payload.incidentId],
         },
       ];
-      const event = await ndk.fetchEvent(filter, INCIDENT_NOTIFICATION_RELAY_OPTIONS);
-      const parsed = event ? parseIncidentEvent(event) : null;
-      const relayLookupMs = Date.now() - relayStart;
-      if (parsed) {
-        INC_NOTIFICATION_METRICS.relayParses += 1;
-      }
-      trackLookupTiming('relay', relayLookupMs, Boolean(parsed));
-      return parsed;
+      return fetchIncidentAttemptFromRelay(filter, 'incidentId');
     }
   } catch (error) {
     console.warn('[Notifications] Failed to fetch incident event:', error);
+    return null;
+  } finally {
+    INC_NOTIFICATION_METRICS.lastLookupMs = Date.now() - lookupStart;
   }
 
   logNotificationPerf(
     `cache-miss source=${getLookupSourceLabel(payload.eventId ? 'eventId' : 'incidentId')}`
   );
-  INC_NOTIFICATION_METRICS.lastLookupMs = Date.now() - lookupStart;
-
   return null;
 }

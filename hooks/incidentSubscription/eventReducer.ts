@@ -153,114 +153,116 @@ export function applyIncidentEventBatch(input: EventBatchInput): EventBatchResul
   let parseFailures = 0;
   let retentionTrimEvents = 0;
 
-  for (const queued of input.queuedEvents) {
-    const { event, source } = queued as QueuedEventCandidate;
-    const incidentTag = getIncidentIdFromEventTags(event);
-    const incomingCreatedAt = getIncomingCreatedAt(event);
+  try {
+    for (const queued of input.queuedEvents) {
+      const { event, source } = queued as QueuedEventCandidate;
 
-    if (event.kind !== INCIDENT_KIND) {
-      continue;
-    }
-
-    totalRelevantEvents += 1;
-    if (source === 'cache') {
-      cacheCount += 1;
-    } else {
-      relayCount += 1;
-    }
-    recordEventSource(queued, REDUCTION_METRICS);
-
-    const incomingEventId = typeof event.id === 'string' ? event.id : '';
-
-    if (incidentTag && incomingCreatedAt != null && incomingEventId) {
-      const existing = nextIncidentMap.get(incidentTag);
-      if (!shouldReplaceExistingEventByMetadata(existing, incomingCreatedAt, incomingEventId)) {
-        parseSkips += 1;
-        REDUCTION_METRICS.parseSkips += 1;
+      if (event.kind !== INCIDENT_KIND) {
         continue;
+      }
+
+      totalRelevantEvents += 1;
+      if (source === 'cache') {
+        cacheCount += 1;
+      } else {
+        relayCount += 1;
+      }
+      recordEventSource(queued, REDUCTION_METRICS);
+
+      const incidentTag = getIncidentIdFromEventTags(event);
+      const incomingCreatedAt = getIncomingCreatedAt(event);
+      const incomingEventId = typeof event.id === 'string' ? event.id : '';
+
+      if (incidentTag && incomingCreatedAt != null && incomingEventId) {
+        const existing = nextIncidentMap.get(incidentTag);
+        if (!shouldReplaceExistingEventByMetadata(existing, incomingCreatedAt, incomingEventId)) {
+          parseSkips += 1;
+          REDUCTION_METRICS.parseSkips += 1;
+          continue;
+        }
+      }
+
+      const parseStart = Date.now();
+      const parsed = parseIncidentEvent(event);
+      const parseMs = Date.now() - parseStart;
+      REDUCTION_METRICS.totalParseMs += parseMs;
+      parsedEvents += 1;
+      REDUCTION_METRICS.totalParsedEvents += 1;
+
+      if (!parsed) {
+        parseFailures += 1;
+        REDUCTION_METRICS.parseFailures += 1;
+        continue;
+      }
+
+      const processed = toProcessedIncident(parsed);
+      const existing = nextIncidentMap.get(parsed.incidentId);
+      const shouldReplace = shouldReplaceExistingIncident(existing, {
+        createdAt: parsed.createdAt,
+        eventId: parsed.eventId,
+      });
+
+      if (shouldReplace) {
+        REDUCTION_METRICS.replacements += 1;
+        nextIncidentMap = new Map(nextIncidentMap);
+        nextIncidentMap.set(parsed.incidentId, processed);
+        updatedIncidents.push(processed);
+        didUpdate = true;
+        REDUCTION_METRICS.updatesApplied += 1;
       }
     }
 
-    const parseStart = Date.now();
-    const parsed = parseIncidentEvent(event);
-    const parseMs = Date.now() - parseStart;
-    REDUCTION_METRICS.totalParseMs += parseMs;
-    parsedEvents += 1;
-    REDUCTION_METRICS.totalParsedEvents += 1;
-
-    if (!parsed) {
-      parseFailures += 1;
-      REDUCTION_METRICS.parseFailures += 1;
-      continue;
+    if (totalRelevantEvents === 0) {
+      return {
+        incidentMap: input.incidentMap,
+        totalRelevantEvents,
+        cacheCount,
+        relayCount,
+        updatedIncidents,
+        didUpdate: false,
+      };
     }
 
-    const processed = toProcessedIncident(parsed);
-    const existing = nextIncidentMap.get(parsed.incidentId);
-    const shouldReplace = shouldReplaceExistingIncident(existing, {
-      createdAt: parsed.createdAt,
-      eventId: parsed.eventId,
-    });
+    if (nextIncidentMap.size > input.maxCandidateRetention) {
+      const retained = input.location
+        ? sortIncidentsForDisplay(Array.from(nextIncidentMap.values()), input.location).slice(
+            0,
+            input.maxCandidateRetention
+          )
+        : sortIncidentsForRetention(Array.from(nextIncidentMap.values())).slice(
+            0,
+            input.maxCandidateRetention
+          );
 
-    if (shouldReplace) {
-      REDUCTION_METRICS.replacements += 1;
-      nextIncidentMap = new Map(nextIncidentMap);
-      nextIncidentMap.set(parsed.incidentId, processed);
-      updatedIncidents.push(processed);
-      didUpdate = true;
-      REDUCTION_METRICS.updatesApplied += 1;
+      if (retained.length !== nextIncidentMap.size) {
+        retentionTrimEvents = nextIncidentMap.size - retained.length;
+        REDUCTION_METRICS.retentionTrimEvents += retentionTrimEvents;
+        nextIncidentMap = new Map(retained.map((incident) => [incident.incidentId, incident]));
+      }
     }
-  }
 
-  if (totalRelevantEvents === 0) {
     return {
-      incidentMap: input.incidentMap,
+      incidentMap: nextIncidentMap,
       totalRelevantEvents,
       cacheCount,
       relayCount,
       updatedIncidents,
-      didUpdate: false,
+      didUpdate,
     };
-  }
+  } finally {
+    const batchDurationMs = Date.now() - batchStart;
+    REDUCTION_METRICS.totalBatchMs += batchDurationMs;
+    if (batchDurationMs > REDUCTION_METRICS.peakBatchMs) {
+      REDUCTION_METRICS.peakBatchMs = batchDurationMs;
+    }
+    REDUCTION_METRICS.totalRelevantEvents += totalRelevantEvents;
 
-  if (nextIncidentMap.size > input.maxCandidateRetention) {
-    const retained = input.location
-      ? sortIncidentsForDisplay(Array.from(nextIncidentMap.values()), input.location).slice(
-          0,
-          input.maxCandidateRetention
-        )
-      : sortIncidentsForRetention(Array.from(nextIncidentMap.values())).slice(
-          0,
-          input.maxCandidateRetention
-        );
-
-    if (retained.length !== nextIncidentMap.size) {
-      retentionTrimEvents = nextIncidentMap.size - retained.length;
-      REDUCTION_METRICS.retentionTrimEvents += retentionTrimEvents;
-      nextIncidentMap = new Map(retained.map((incident) => [incident.incidentId, incident]));
+    if (DEBUG_INCIDENT_REDUCTION_PERF && totalRelevantEvents > 0) {
+      console.debug(
+        `[IncidentReducerPerf] batch=+${input.queuedEvents.length} relevant=${totalRelevantEvents} parsed=${parsedEvents} parseSkips=${parseSkips} parseFailures=${parseFailures} updates=${updatedIncidents.length} retentionTrim=${retentionTrimEvents} durationMs=${batchDurationMs}`
+      );
     }
   }
-
-  const batchDurationMs = Date.now() - batchStart;
-  REDUCTION_METRICS.totalBatchMs += batchDurationMs;
-  if (batchDurationMs > REDUCTION_METRICS.peakBatchMs) {
-    REDUCTION_METRICS.peakBatchMs = batchDurationMs;
-  }
-  REDUCTION_METRICS.totalRelevantEvents += totalRelevantEvents;
-
-  if (DEBUG_INCIDENT_REDUCTION_PERF && totalRelevantEvents > 0) {
-    console.debug(
-      `[IncidentReducerPerf] batch=+${input.queuedEvents.length} relevant=${totalRelevantEvents} parsed=${parsedEvents} parseSkips=${parseSkips} parseFailures=${parseFailures} updates=${updatedIncidents.length} retentionTrim=${retentionTrimEvents} durationMs=${batchDurationMs}`
-    );
-  }
-
-  return {
-    incidentMap: nextIncidentMap,
-    totalRelevantEvents,
-    cacheCount,
-    relayCount,
-    updatedIncidents,
-    didUpdate,
-  };
 }
 
 export type { EventBatchInput, EventBatchResult };
