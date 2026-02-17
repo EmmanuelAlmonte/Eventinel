@@ -5,6 +5,7 @@
  */
 
 import { useCallback, useMemo } from 'react';
+import type { LayoutChangeEvent } from 'react-native';
 import { useIsFocused, useNavigation } from '@react-navigation/native';
 import { useSafeAreaInsets, type EdgeInsets } from 'react-native-safe-area-context';
 
@@ -48,13 +49,7 @@ export type MapScreenState = {
   viewport: MapScreenViewport;
   locationSource: string | null;
   handleShapeSourcePress: (event: ShapeSourcePressEvent) => Promise<void>;
-  handleMapLayout: (event: {
-    nativeEvent: {
-      layout: {
-        width: number;
-      };
-    };
-  }) => void;
+  handleMapLayout: (event: LayoutChangeEvent) => void;
   handleRelaySettings: () => void;
   refreshLocation: () => void;
 };
@@ -190,7 +185,7 @@ export function useMapScreenState(): MapScreenState {
   );
 
   const handleMapLayout = useCallback(
-    (event: { nativeEvent: { layout: { width: number } } }) => {
+    (event: LayoutChangeEvent) => {
       if (event.nativeEvent.layout.width > ZERO_MAP_LAYOUT_WIDTH && !camera.mapReady) {
         camera.setMapReady(true);
       }
@@ -236,4 +231,3 @@ export function useMapScreenState(): MapScreenState {
     refreshLocation,
   };
 }
-

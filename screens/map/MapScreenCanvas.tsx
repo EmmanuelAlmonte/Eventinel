@@ -4,6 +4,7 @@
  * Renders the map viewport, layers, and overlay composition container.
  */
 
+import type { LayoutChangeEvent } from 'react-native';
 import { ActivityIndicator, View } from 'react-native';
 import { DEFAULT_CAMERA, incidentsToFeatureCollection, MAP_STYLES } from '@lib/map/types';
 import { MAPBOX_CONFIG } from '@lib/map/constants';
@@ -53,15 +54,9 @@ type MapScreenLayoutProps = {
   isViewportCoveredBySubscriptionGrid: boolean;
   locationSource: string | null;
   permission: LocationPermissionStatus;
-  handleMapLayout: (event: {
-    nativeEvent: {
-      layout: {
-        width: number;
-      };
-    };
-  }) => void;
+  handleMapLayout: (event: LayoutChangeEvent) => void;
   handleRelaySettings: () => void;
-  onShapeSourcePress: (event: ShapeSourcePressEvent) => void;
+  onShapeSourcePress: (event: ShapeSourcePressEvent) => void | Promise<void>;
   onFlyToUser: () => void;
 };
 
