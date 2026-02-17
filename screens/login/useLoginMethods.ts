@@ -13,14 +13,115 @@ import type { SignerAppInfo } from 'expo-nip55';
 
 import { showToast } from '@components/ui';
 
+type Nip46Ndk = Parameters<typeof NDKNip46Signer.bunker>[0];
+
+type ValidationResult = {
+  level: 'error' | 'warning';
+  title: string;
+  message: string;
+};
+
 function isNip05Identifier(value: string): boolean {
   return value.includes('@') && !value.includes('://');
+}
+
+function normalizeInput(value: string): string {
+  return value.trim();
 }
 
 function openAuthUrl(url: string) {
   Linking.openURL(url).catch(() => {
     showToast.warning('Action required', 'Open the authorization URL in a browser');
   });
+}
+
+function validateRemoteSignerInput(rawInput: string): ValidationResult | null {
+  const input = normalizeInput(rawInput);
+
+  if (!input) {
+    return {
+      level: 'warning',
+      title: 'Missing Identifier',
+      message: 'Please enter a bunker URL or NIP-05 identifier',
+    };
+  }
+  if (input.startsWith('nostrconnect://')) {
+    return {
+      level: 'warning',
+      title: 'Use Nostr Connect',
+      message: 'Generate a nostrconnect:// URI below',
+    };
+  }
+  if (!input.startsWith('bunker://') && !isNip05Identifier(input)) {
+    return {
+      level: 'error',
+      title: 'Invalid Identifier',
+      message: 'Enter a bunker:// URL or name@domain',
+    };
+  }
+  return null;
+}
+
+function validateNostrConnectRelay(rawRelay: string): ValidationResult | null {
+  const relay = normalizeInput(rawRelay);
+
+  if (!relay) {
+    return {
+      level: 'warning',
+      title: 'Missing Relay',
+      message: 'Please enter a relay URL',
+    };
+  }
+
+  if (!relay.startsWith('wss://') && !relay.startsWith('ws://')) {
+    return {
+      level: 'warning',
+      title: 'Invalid Relay',
+      message: 'Relay URL must start with wss:// or ws://',
+    };
+  }
+
+  return null;
+}
+
+function makeRemoteSigner(ndk: Nip46Ndk, input: string, forceLegacyNip04: boolean): NDKNip46Signer {
+  const signer = NDKNip46Signer.bunker(ndk, input);
+  signer.on?.('authUrl', openAuthUrl);
+  if (forceLegacyNip04 && (signer as any).rpc) {
+    (signer as any).rpc.encryptionType = 'nip04';
+  }
+  return signer;
+}
+
+function makeNostrConnectSigner(ndk: Nip46Ndk, relay: string): NDKNip46Signer {
+  const signer = NDKNip46Signer.nostrconnect(ndk, relay);
+  signer.on?.('authUrl', openAuthUrl);
+  return signer;
+}
+
+async function withLoadingState(
+  setLoading: (isLoading: boolean) => void,
+  action: () => Promise<void>,
+  onError: (error: unknown) => void
+): Promise<void> {
+  setLoading(true);
+  try {
+    await action();
+  } catch (error) {
+    onError(error);
+  } finally {
+    setLoading(false);
+  }
+}
+
+function clearGeneratedKeyState(
+  setGeneratedKey: (value: string | null) => void,
+  setGeneratedPubkey: (value: string | null) => void,
+  setGeneratedSigner: (value: NDKPrivateKeySigner | null) => void
+) {
+  setGeneratedKey(null);
+  setGeneratedPubkey(null);
+  setGeneratedSigner(null);
 }
 
 export function useLoginMethods() {
@@ -38,90 +139,90 @@ export function useLoginMethods() {
   const [generatedPubkey, setGeneratedPubkey] = useState<string | null>(null);
   const [generatedSigner, setGeneratedSigner] = useState<NDKPrivateKeySigner | null>(null);
 
+  const runLoginWithLoading = useCallback(
+    async (
+      action: () => Promise<void>,
+      title: string,
+      fallback: string,
+      preserveError = false
+    ) => {
+      await withLoadingState(
+        setIsLoading,
+        action,
+        (error) =>
+          showToast.error(
+            title,
+            preserveError ? (error instanceof Error ? error.message : fallback) : fallback
+          )
+      );
+    },
+    []
+  );
+
   const handleNip55Login = useCallback(
     async (app: SignerAppInfo) => {
-      setIsLoading(true);
-      try {
+      await runLoginWithLoading(async () => {
         const signer = new NDKNip55Signer(app.packageName);
         await signer.blockUntilReady();
         await login(signer, true);
-      } catch (error) {
-        showToast.error('Login Failed', error instanceof Error ? error.message : 'NIP-55 login failed');
-      } finally {
-        setIsLoading(false);
-      }
+      }, 'Login Failed', 'NIP-55 login failed', true);
     },
-    [login]
+    [login, runLoginWithLoading]
   );
 
   const handleRemoteSignerLogin = useCallback(async () => {
-    const trimmed = remoteSignerInput.trim();
-    if (!trimmed) {
-      showToast.warning('Missing Identifier', 'Please enter a bunker URL or NIP-05 identifier');
-      return;
-    }
-    if (trimmed.startsWith('nostrconnect://')) {
-      showToast.warning('Use Nostr Connect', 'Generate a nostrconnect:// URI below');
-      return;
-    }
-    if (!trimmed.startsWith('bunker://') && !isNip05Identifier(trimmed)) {
-      showToast.error('Invalid Identifier', 'Enter a bunker:// URL or name@domain');
-      return;
-    }
-    if (!ndk) {
-      showToast.error('Error', 'NDK not initialized');
-      return;
-    }
-
-    setIsLoading(true);
-    try {
-      const signer = NDKNip46Signer.bunker(ndk, trimmed);
-      signer.on?.('authUrl', openAuthUrl);
-      if (forceLegacyNip04 && (signer as any).rpc) {
-        (signer as any).rpc.encryptionType = 'nip04';
-      }
-      await signer.blockUntilReady();
-      await login(signer, true);
-    } catch (error) {
-      showToast.error(
-        'Connection Failed',
-        error instanceof Error ? error.message : 'Remote signer connection failed'
-      );
-    } finally {
-      setIsLoading(false);
-    }
-  }, [forceLegacyNip04, login, ndk, remoteSignerInput]);
-
-  const handleStartNostrConnect = useCallback(async () => {
-    const relay = nostrConnectRelay.trim();
-    if (!relay) {
-      showToast.warning('Missing Relay', 'Please enter a relay URL');
-      return;
-    }
-    if (!relay.startsWith('wss://') && !relay.startsWith('ws://')) {
-      showToast.warning('Invalid Relay', 'Relay URL must start with wss:// or ws://');
-      return;
-    }
-    if (!ndk) {
-      showToast.error('Error', 'NDK not initialized');
-      return;
-    }
-
-    try {
-      const signer = NDKNip46Signer.nostrconnect(ndk, relay);
-      signer.on?.('authUrl', openAuthUrl);
-      if (!signer.nostrConnectUri) {
-        showToast.error('Failed to generate', 'Unable to build Nostr Connect URI');
+    const validation = validateRemoteSignerInput(remoteSignerInput);
+    if (!validation) {
+      if (!ndk) {
+        showToast.error('Error', 'NDK not initialized');
         return;
       }
-      setNostrConnectSigner(signer);
-      setNostrConnectUri(signer.nostrConnectUri);
-    } catch (error) {
-      showToast.error(
-        'Failed to generate',
-        error instanceof Error ? error.message : 'Unable to start Nostr Connect flow'
-      );
+      const trimmed = normalizeInput(remoteSignerInput);
+
+      await runLoginWithLoading(async () => {
+        const signer = makeRemoteSigner(ndk, trimmed, forceLegacyNip04);
+        await signer.blockUntilReady();
+        await login(signer, true);
+      }, 'Connection Failed', 'Remote signer connection failed', true);
+      return;
     }
+
+    if (validation.level === 'warning') {
+      showToast.warning(validation.title, validation.message);
+      return;
+    }
+    showToast.error(validation.title, validation.message);
+  }, [forceLegacyNip04, login, ndk, remoteSignerInput, runLoginWithLoading]);
+
+  const handleStartNostrConnect = useCallback(async () => {
+    const validation = validateNostrConnectRelay(nostrConnectRelay);
+    if (!validation) {
+      const relay = normalizeInput(nostrConnectRelay);
+      if (!ndk) {
+        showToast.error('Error', 'NDK not initialized');
+        return;
+      }
+      try {
+        const signer = makeNostrConnectSigner(ndk, relay);
+        if (!signer.nostrConnectUri) {
+          showToast.error('Failed to generate', 'Unable to build Nostr Connect URI');
+          return;
+        }
+        setNostrConnectSigner(signer);
+        setNostrConnectUri(signer.nostrConnectUri);
+      } catch (error) {
+        showToast.error(
+          'Failed to generate',
+          error instanceof Error ? error.message : 'Unable to start Nostr Connect flow'
+        );
+      }
+      return;
+    }
+    if (validation.level === 'warning') {
+      showToast.warning(validation.title, validation.message);
+      return;
+    }
+    showToast.error(validation.title, validation.message);
   }, [ndk, nostrConnectRelay]);
 
   const handleCopyNostrConnect = useCallback(async () => {
@@ -145,36 +246,26 @@ export function useLoginMethods() {
 
   const handleCompleteNostrConnect = useCallback(async () => {
     if (!nostrConnectSigner) return;
-    setIsLoading(true);
-    try {
+    await runLoginWithLoading(async () => {
       await nostrConnectSigner.blockUntilReady();
       await login(nostrConnectSigner, true);
       setNostrConnectSigner(null);
       setNostrConnectUri(null);
-    } catch (error) {
-      showToast.error('Connection Failed', error instanceof Error ? error.message : 'Nostr Connect failed');
-    } finally {
-      setIsLoading(false);
-    }
-  }, [login, nostrConnectSigner]);
+    }, 'Connection Failed', 'Nostr Connect failed', true);
+  }, [login, nostrConnectSigner, runLoginWithLoading]);
 
   const handleManualLogin = useCallback(async () => {
-    if (!manualKey.trim()) {
+    const key = normalizeInput(manualKey);
+    if (!key) {
       showToast.warning('Missing Key', 'Please enter a private key');
       return;
     }
-
-    setIsLoading(true);
-    try {
-      const signer = new NDKPrivateKeySigner(manualKey.trim());
+    await runLoginWithLoading(async () => {
+      const signer = new NDKPrivateKeySigner(key);
       await signer.user();
       await login(signer, true);
-    } catch {
-      showToast.error('Login Failed', 'Please check your key and try again');
-    } finally {
-      setIsLoading(false);
-    }
-  }, [login, manualKey]);
+    }, 'Login Failed', 'Please check your key and try again');
+  }, [login, manualKey, runLoginWithLoading]);
 
   const handleGenerateKey = useCallback(async () => {
     try {
@@ -197,18 +288,11 @@ export function useLoginMethods() {
 
   const handleGeneratedLogin = useCallback(async () => {
     if (!generatedSigner) return;
-    setIsLoading(true);
-    try {
+    await runLoginWithLoading(async () => {
       await login(generatedSigner, true);
-      setGeneratedKey(null);
-      setGeneratedPubkey(null);
-      setGeneratedSigner(null);
-    } catch {
-      showToast.error('Login Failed', 'Unable to use generated key');
-    } finally {
-      setIsLoading(false);
-    }
-  }, [generatedSigner, login]);
+      clearGeneratedKeyState(setGeneratedKey, setGeneratedPubkey, setGeneratedSigner);
+    }, 'Login Failed', 'Unable to use generated key', false);
+  }, [generatedSigner, login, runLoginWithLoading]);
 
   return {
     isAvailable,
@@ -235,9 +319,7 @@ export function useLoginMethods() {
     handleGenerateKey,
     handleGeneratedLogin,
     dismissGeneratedKey: () => {
-      setGeneratedKey(null);
-      setGeneratedPubkey(null);
-      setGeneratedSigner(null);
+      clearGeneratedKeyState(setGeneratedKey, setGeneratedPubkey, setGeneratedSigner);
     },
     dismissNostrConnect: () => {
       setNostrConnectSigner(null);

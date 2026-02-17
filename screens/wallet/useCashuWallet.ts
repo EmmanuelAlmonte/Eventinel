@@ -11,6 +11,94 @@ import { ndk } from '@lib/ndk';
 
 import { balanceAmount, splitUrls } from './helpers';
 
+type NdkInstance = typeof ndk;
+
+type AsyncError = (error: unknown) => void;
+
+function formatError(error: unknown, fallback: string): string {
+  return error instanceof Error ? error.message : fallback;
+}
+
+function resetCashuWalletState(
+  setCashuWallet: (wallet: NDKCashuWallet | null) => void,
+  setCashuStatus: (status: NDKWalletStatus | undefined) => void,
+  setCashuBalance: (balance: number) => void
+) {
+  setCashuWallet(null);
+  setCashuStatus(undefined);
+  setCashuBalance(0);
+}
+
+function syncCashuWalletState(
+  wallet: NDKCashuWallet,
+  setCashuWallet: (wallet: NDKCashuWallet | null) => void,
+  setCashuStatus: (status: NDKWalletStatus | undefined) => void,
+  setCashuBalance: (balance: number) => void
+) {
+  setCashuWallet(wallet);
+  setCashuStatus(wallet.status);
+  setCashuBalance(balanceAmount(wallet.balance));
+}
+
+function bindCashuWalletEvents(
+  wallet: NDKCashuWallet,
+  setCashuStatus: (status: NDKWalletStatus | undefined) => void,
+  setCashuBalance: (balance: number) => void
+) {
+  const handleReady = () => {
+    setCashuStatus(wallet.status);
+    setCashuBalance(balanceAmount(wallet.balance));
+  };
+  const handleBalanceUpdated = (balance?: NDKWalletBalance) => {
+    setCashuBalance(balanceAmount(balance));
+  };
+  const handleStatusChanged = (status: NDKWalletStatus) => {
+    setCashuStatus(status);
+  };
+
+  wallet.on('ready', handleReady);
+  wallet.on('balance_updated', handleBalanceUpdated);
+  wallet.on('status_changed', handleStatusChanged);
+
+  return () => {
+    wallet.off('ready', handleReady);
+    wallet.off('balance_updated', handleBalanceUpdated);
+    wallet.off('status_changed', handleStatusChanged);
+  };
+}
+
+async function runWithCashuBusy(
+  setBusy: (busy: boolean) => void,
+  action: () => Promise<void>,
+  onError: AsyncError
+): Promise<void> {
+  setBusy(true);
+  try {
+    await action();
+  } catch (error) {
+    onError(error);
+  } finally {
+    setBusy(false);
+  }
+}
+
+async function fetchCashuWallet(ndk: NdkInstance, currentPubkey: string): Promise<NDKCashuWallet | null> {
+  const event = await ndk.fetchEvent({
+    kinds: [NDKKind.CashuWallet],
+    authors: [currentPubkey],
+  });
+
+  if (!event) return null;
+
+  const wallet = await NDKCashuWallet.from(event);
+  return wallet ?? null;
+}
+
+function parseSatsAmount(rawAmount: string): number | null {
+  const amount = Number.parseInt(rawAmount.trim(), 10);
+  return Number.isFinite(amount) && amount > 0 ? amount : null;
+}
+
 export function useCashuWallet(currentPubkey?: string) {
   const [cashuWallet, setCashuWallet] = useState<NDKCashuWallet | null>(null);
   const [cashuStatus, setCashuStatus] = useState<NDKWalletStatus | undefined>(undefined);
@@ -24,43 +112,26 @@ export function useCashuWallet(currentPubkey?: string) {
 
   const refreshCashuWallet = useCallback(async () => {
     if (!currentPubkey) return;
+    await runWithCashuBusy(
+      setCashuBusy,
+      async () => {
+        const wallet = await fetchCashuWallet(ndk, currentPubkey);
+        if (!wallet) {
+          resetCashuWalletState(setCashuWallet, setCashuStatus, setCashuBalance);
+          return;
+        }
 
-    setCashuBusy(true);
-    try {
-      const event = await ndk.fetchEvent({
-        kinds: [NDKKind.CashuWallet],
-        authors: [currentPubkey],
-      });
-
-      if (!event) {
-        setCashuWallet(null);
-        setCashuStatus(undefined);
-        setCashuBalance(0);
-        return;
+        syncCashuWalletState(wallet, setCashuWallet, setCashuStatus, setCashuBalance);
+        await wallet.start();
+        await wallet.updateBalance?.();
+        setCashuStatus(wallet.status);
+        setCashuBalance(balanceAmount(wallet.balance));
+      },
+      (error) => {
+        console.warn('[Wallet] Failed to refresh Cashu wallet:', error);
+        showToast.error('Failed to load Cashu wallet', formatError(error, 'Unknown error'));
       }
-
-      const wallet = await NDKCashuWallet.from(event);
-      if (!wallet) {
-        setCashuWallet(null);
-        setCashuStatus(undefined);
-        setCashuBalance(0);
-        return;
-      }
-
-      setCashuWallet(wallet);
-      setCashuStatus(wallet.status);
-      setCashuBalance(balanceAmount(wallet.balance));
-
-      await wallet.start();
-      await wallet.updateBalance?.();
-      setCashuStatus(wallet.status);
-      setCashuBalance(balanceAmount(wallet.balance));
-    } catch (error) {
-      console.warn('[Wallet] Failed to refresh Cashu wallet:', error);
-      showToast.error('Failed to load Cashu wallet', error instanceof Error ? error.message : 'Unknown error');
-    } finally {
-      setCashuBusy(false);
-    }
+    );
   }, [currentPubkey]);
 
   useEffect(() => {
@@ -69,56 +140,36 @@ export function useCashuWallet(currentPubkey?: string) {
 
   useEffect(() => {
     if (!cashuWallet) return;
-
-    const handleReady = () => {
-      setCashuStatus(cashuWallet.status);
-      setCashuBalance(balanceAmount(cashuWallet.balance));
-    };
-    const handleBalanceUpdated = (balance?: NDKWalletBalance) => {
-      setCashuBalance(balanceAmount(balance));
-    };
-    const handleStatusChanged = (status: NDKWalletStatus) => {
-      setCashuStatus(status);
-    };
-
-    cashuWallet.on('ready', handleReady);
-    cashuWallet.on('balance_updated', handleBalanceUpdated);
-    cashuWallet.on('status_changed', handleStatusChanged);
-
-    return () => {
-      cashuWallet.off('ready', handleReady);
-      cashuWallet.off('balance_updated', handleBalanceUpdated);
-      cashuWallet.off('status_changed', handleStatusChanged);
-    };
+    return bindCashuWalletEvents(cashuWallet, setCashuStatus, setCashuBalance);
   }, [cashuWallet]);
 
   const handleCreateCashuWallet = useCallback(async () => {
     const mints = splitUrls(cashuCreateMints);
-    if (mints.length === 0) {
+    if (!mints.length) {
       showToast.error('Add at least one mint URL');
       return;
     }
     const relays = splitUrls(cashuCreateRelays);
 
-    setCashuBusy(true);
-    try {
-      const wallet = await NDKCashuWallet.create(ndk, mints, relays.length > 0 ? relays : undefined);
-      setCashuWallet(wallet);
-      setCashuStatus(wallet.status);
-      setCashuBalance(balanceAmount(wallet.balance));
-
-      await wallet.start();
-      await wallet.updateBalance?.();
-      setCashuStatus(wallet.status);
-      setCashuBalance(balanceAmount(wallet.balance));
-
-      showToast.success('Cashu wallet created');
-    } catch (error) {
-      console.warn('[Wallet] Failed to create Cashu wallet:', error);
-      showToast.error('Failed to create Cashu wallet', error instanceof Error ? error.message : 'Unknown error');
-    } finally {
-      setCashuBusy(false);
-    }
+    await runWithCashuBusy(
+      setCashuBusy,
+      async () => {
+        const wallet = await NDKCashuWallet.create(ndk, mints, relays.length > 0 ? relays : undefined);
+        if (!wallet) {
+          throw new Error('Wallet creation returned empty response');
+        }
+        syncCashuWalletState(wallet, setCashuWallet, setCashuStatus, setCashuBalance);
+        await wallet.start();
+        await wallet.updateBalance?.();
+        setCashuStatus(wallet.status);
+        setCashuBalance(balanceAmount(wallet.balance));
+        showToast.success('Cashu wallet created');
+      },
+      (error) => {
+        console.warn('[Wallet] Failed to create Cashu wallet:', error);
+        showToast.error('Failed to create Cashu wallet', formatError(error, 'Unknown error'));
+      }
+    );
   }, [cashuCreateMints, cashuCreateRelays]);
 
   const handleCashuDeposit = useCallback(async () => {
@@ -126,32 +177,33 @@ export function useCashuWallet(currentPubkey?: string) {
       showToast.error('Create or load a Cashu wallet first');
       return;
     }
-    const amount = Number.parseInt(cashuDepositAmount.trim(), 10);
-    if (!Number.isFinite(amount) || amount <= 0) {
+    const amount = parseSatsAmount(cashuDepositAmount);
+    if (amount == null) {
       showToast.error('Enter a valid amount (sats)');
       return;
     }
 
-    setCashuBusy(true);
-    try {
-      const deposit = cashuWallet.deposit(amount);
-      deposit.on('success', () => {
-        showToast.success('Deposit confirmed');
-        setCashuDepositInvoice(null);
-      });
-      deposit.on('error', (message) => {
-        showToast.error('Deposit failed', message);
-      });
+    await runWithCashuBusy(
+      setCashuBusy,
+      async () => {
+        const deposit = cashuWallet.deposit(amount);
+        deposit.on('success', () => {
+          showToast.success('Deposit confirmed');
+          setCashuDepositInvoice(null);
+        });
+        deposit.on('error', (message) => {
+          showToast.error('Deposit failed', message);
+        });
 
-      const invoice = await deposit.start();
-      setCashuDepositInvoice(invoice);
-      showToast.success('Deposit invoice created');
-    } catch (error) {
-      console.warn('[Wallet] Cashu deposit failed:', error);
-      showToast.error('Failed to create deposit', error instanceof Error ? error.message : 'Unknown error');
-    } finally {
-      setCashuBusy(false);
-    }
+        const invoice = await deposit.start();
+        setCashuDepositInvoice(invoice);
+        showToast.success('Deposit invoice created');
+      },
+      (error) => {
+        console.warn('[Wallet] Cashu deposit failed:', error);
+        showToast.error('Failed to create deposit', formatError(error, 'Unknown error'));
+      }
+    );
   }, [cashuDepositAmount, cashuWallet]);
 
   const handleCashuReceiveToken = useCallback(async () => {
@@ -166,19 +218,20 @@ export function useCashuWallet(currentPubkey?: string) {
       return;
     }
 
-    setCashuBusy(true);
-    try {
-      await cashuWallet.receiveToken(token, 'Manual import');
-      await cashuWallet.updateBalance?.();
-      setCashuBalance(balanceAmount(cashuWallet.balance));
-      setCashuReceiveToken('');
-      showToast.success('Token received');
-    } catch (error) {
-      console.warn('[Wallet] Cashu receive failed:', error);
-      showToast.error('Failed to receive token', error instanceof Error ? error.message : 'Unknown error');
-    } finally {
-      setCashuBusy(false);
-    }
+    await runWithCashuBusy(
+      setCashuBusy,
+      async () => {
+        await cashuWallet.receiveToken(token, 'Manual import');
+        await cashuWallet.updateBalance?.();
+        setCashuBalance(balanceAmount(cashuWallet.balance));
+        setCashuReceiveToken('');
+        showToast.success('Token received');
+      },
+      (error) => {
+        console.warn('[Wallet] Cashu receive failed:', error);
+        showToast.error('Failed to receive token', formatError(error, 'Unknown error'));
+      }
+    );
   }, [cashuReceiveToken, cashuWallet]);
 
   return {

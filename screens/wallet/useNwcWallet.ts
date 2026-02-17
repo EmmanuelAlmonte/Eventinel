@@ -18,6 +18,84 @@ import { tryParseNwcUri } from '@lib/payments/nwcUri';
 
 import { balanceAmount } from './helpers';
 
+type AsyncError = (error: unknown) => void;
+
+function formatError(error: unknown, fallback: string): string {
+  return error instanceof Error ? error.message : fallback;
+}
+
+function clearNwcWalletState(
+  setNwcWallet: (wallet: NDKNWCWallet | null) => void,
+  setNwcInfo: (info: NDKNWCGetInfoResult | null) => void,
+  setNwcStatus: (status: NDKWalletStatus | undefined) => void,
+  setNwcBalance: (balance: number) => void,
+  setNwcCreatedInvoice: (invoice: string | null) => void
+) {
+  setNwcWallet(null);
+  setNwcInfo(null);
+  setNwcStatus(undefined);
+  setNwcBalance(0);
+  setNwcCreatedInvoice(null);
+}
+
+function syncNwcWalletSnapshot(
+  wallet: NDKNWCWallet,
+  setNwcWallet: (wallet: NDKNWCWallet | null) => void,
+  setNwcStatus: (status: NDKWalletStatus | undefined) => void,
+  setNwcBalance: (balance: number) => void
+) {
+  setNwcWallet(wallet);
+  setNwcStatus(wallet.status);
+  setNwcBalance(balanceAmount(wallet.balance));
+}
+
+function bindNwcWalletEvents(
+  wallet: NDKNWCWallet,
+  setNwcStatus: (status: NDKWalletStatus | undefined) => void,
+  setNwcBalance: (balance: number) => void
+) {
+  const handleReady = () => {
+    setNwcStatus(wallet.status);
+    setNwcBalance(balanceAmount(wallet.balance));
+  };
+  const handleBalanceUpdated = (balance?: NDKWalletBalance) => {
+    setNwcBalance(balanceAmount(balance));
+  };
+  const handleStatusChanged = (status: NDKWalletStatus) => {
+    setNwcStatus(status);
+  };
+
+  wallet.on('ready', handleReady);
+  wallet.on('balance_updated', handleBalanceUpdated);
+  wallet.on('status_changed', handleStatusChanged);
+
+  return () => {
+    wallet.off('ready', handleReady);
+    wallet.off('balance_updated', handleBalanceUpdated);
+    wallet.off('status_changed', handleStatusChanged);
+  };
+}
+
+async function runWithNwcBusy(
+  setBusy: (busy: boolean) => void,
+  action: () => Promise<void>,
+  onError: AsyncError
+): Promise<void> {
+  setBusy(true);
+  try {
+    await action();
+  } catch (error) {
+    onError(error);
+  } finally {
+    setBusy(false);
+  }
+}
+
+function parsePositiveAmount(amountText: string): number | null {
+  const amount = Number.parseInt(amountText.trim(), 10);
+  return Number.isFinite(amount) && amount > 0 ? amount : null;
+}
+
 export function useNwcWallet() {
   const [nwcPairingCodeInput, setNwcPairingCodeInput] = useState('');
   const [nwcWallet, setNwcWallet] = useState<NDKNWCWallet | null>(null);
@@ -38,32 +116,35 @@ export function useNwcWallet() {
   }, [nwcWallet?.pairingCode]);
 
   const disconnectNwc = useCallback(async () => {
-    setNwcBusy(true);
-    try {
-      await clearNwcPairingCode();
-      const pool = nwcWallet?.pool;
-      if (pool) {
-        for (const relay of pool.relays.values()) {
-          try {
-            relay.disconnect();
-          } catch {
-            // ignore
+    await runWithNwcBusy(
+      setNwcBusy,
+      async () => {
+        await clearNwcPairingCode();
+        const pool = nwcWallet?.pool;
+        if (pool) {
+          for (const relay of pool.relays.values()) {
+            try {
+              relay.disconnect();
+            } catch {
+              // ignore
+            }
           }
         }
-      }
 
-      setNwcWallet(null);
-      setNwcInfo(null);
-      setNwcStatus(undefined);
-      setNwcBalance(0);
-      setNwcCreatedInvoice(null);
-      showToast.success('Lightning wallet disconnected');
-    } catch (error) {
-      console.warn('[Wallet] Failed to disconnect NWC:', error);
-      showToast.error('Failed to disconnect', error instanceof Error ? error.message : 'Unknown error');
-    } finally {
-      setNwcBusy(false);
-    }
+        clearNwcWalletState(
+          setNwcWallet,
+          setNwcInfo,
+          setNwcStatus,
+          setNwcBalance,
+          setNwcCreatedInvoice
+        );
+        showToast.success('Lightning wallet disconnected');
+      },
+      (error) => {
+        console.warn('[Wallet] Failed to disconnect NWC:', error);
+        showToast.error('Failed to disconnect', error instanceof Error ? error.message : 'Unknown error');
+      }
+    );
   }, [nwcWallet]);
 
   const connectNwc = useCallback(
@@ -75,42 +156,41 @@ export function useNwcWallet() {
         return;
       }
 
-      setNwcBusy(true);
-      try {
-        if (nwcWallet) {
-          await disconnectNwc();
+      await runWithNwcBusy(
+        setNwcBusy,
+        async () => {
+          if (nwcWallet) {
+            await disconnectNwc();
+          }
+
+          if (persist) {
+            await saveNwcPairingCode(parsed.uri);
+          }
+
+          const wallet = new NDKNWCWallet(ndk, {
+            pairingCode: parsed.uri,
+            timeout: 15000,
+          });
+
+          syncNwcWalletSnapshot(wallet, setNwcWallet, setNwcStatus, setNwcBalance);
+
+          wallet.getInfo(true).then(setNwcInfo).catch((error) => {
+            console.warn('[Wallet] NWC getInfo failed:', error);
+          });
+
+          wallet
+            .updateBalance()
+            .then(() => setNwcBalance(balanceAmount(wallet.balance)))
+            .catch((error) => console.warn('[Wallet] NWC updateBalance failed:', error));
+
+          showToast.success('Lightning wallet connected');
+        },
+        (error) => {
+          console.warn('[Wallet] Failed to connect NWC:', error);
+          showToast.error('Failed to connect NWC', formatError(error, 'Unknown error'));
+          void clearNwcPairingCode();
         }
-
-        if (persist) {
-          await saveNwcPairingCode(parsed.uri);
-        }
-
-        const wallet = new NDKNWCWallet(ndk, {
-          pairingCode: parsed.uri,
-          timeout: 15000,
-        });
-
-        setNwcWallet(wallet);
-        setNwcStatus(wallet.status);
-        setNwcBalance(balanceAmount(wallet.balance));
-
-        wallet.getInfo(true).then(setNwcInfo).catch((error) => {
-          console.warn('[Wallet] NWC getInfo failed:', error);
-        });
-
-        wallet
-          .updateBalance()
-          .then(() => setNwcBalance(balanceAmount(wallet.balance)))
-          .catch((error) => console.warn('[Wallet] NWC updateBalance failed:', error));
-
-        showToast.success('Lightning wallet connected');
-      } catch (error) {
-        console.warn('[Wallet] Failed to connect NWC:', error);
-        showToast.error('Failed to connect NWC', error instanceof Error ? error.message : 'Unknown error');
-        await clearNwcPairingCode();
-      } finally {
-        setNwcBusy(false);
-      }
+      );
     },
     [disconnectNwc, nwcWallet]
   );
@@ -134,26 +214,7 @@ export function useNwcWallet() {
   useEffect(() => {
     if (!nwcWallet) return;
 
-    const handleReady = () => {
-      setNwcStatus(nwcWallet.status);
-      setNwcBalance(balanceAmount(nwcWallet.balance));
-    };
-    const handleBalanceUpdated = (balance?: NDKWalletBalance) => {
-      setNwcBalance(balanceAmount(balance));
-    };
-    const handleStatusChanged = (status: NDKWalletStatus) => {
-      setNwcStatus(status);
-    };
-
-    nwcWallet.on('ready', handleReady);
-    nwcWallet.on('balance_updated', handleBalanceUpdated);
-    nwcWallet.on('status_changed', handleStatusChanged);
-
-    return () => {
-      nwcWallet.off('ready', handleReady);
-      nwcWallet.off('balance_updated', handleBalanceUpdated);
-      nwcWallet.off('status_changed', handleStatusChanged);
-    };
+    return bindNwcWalletEvents(nwcWallet, setNwcStatus, setNwcBalance);
   }, [nwcWallet]);
 
   const handleNwcPay = useCallback(async () => {
@@ -167,19 +228,20 @@ export function useNwcWallet() {
       return;
     }
 
-    setNwcBusy(true);
-    try {
-      await nwcWallet.lnPay({ pr: invoice });
-      await nwcWallet.updateBalance();
-      setNwcBalance(balanceAmount(nwcWallet.balance));
-      setNwcPayInvoice('');
-      showToast.success('Invoice paid');
-    } catch (error) {
-      console.warn('[Wallet] NWC pay failed:', error);
-      showToast.error('Payment failed', error instanceof Error ? error.message : 'Unknown error');
-    } finally {
-      setNwcBusy(false);
-    }
+    await runWithNwcBusy(
+      setNwcBusy,
+      async () => {
+        await nwcWallet.lnPay({ pr: invoice });
+        await nwcWallet.updateBalance();
+        setNwcBalance(balanceAmount(nwcWallet.balance));
+        setNwcPayInvoice('');
+        showToast.success('Invoice paid');
+      },
+      (error) => {
+        console.warn('[Wallet] NWC pay failed:', error);
+        showToast.error('Payment failed', formatError(error, 'Unknown error'));
+      }
+    );
   }, [nwcPayInvoice, nwcWallet]);
 
   const handleNwcMakeInvoice = useCallback(async () => {
@@ -187,23 +249,24 @@ export function useNwcWallet() {
       showToast.error('Connect a Lightning wallet first');
       return;
     }
-    const amount = Number.parseInt(nwcMakeAmount.trim(), 10);
-    if (!Number.isFinite(amount) || amount <= 0) {
+    const amount = parsePositiveAmount(nwcMakeAmount);
+    if (amount == null) {
       showToast.error('Enter a valid amount (sats)');
       return;
     }
 
-    setNwcBusy(true);
-    try {
-      const result = await nwcWallet.makeInvoice(amount, nwcMakeDesc.trim() || 'Eventinel');
-      setNwcCreatedInvoice(result.invoice);
-      showToast.success('Invoice created');
-    } catch (error) {
-      console.warn('[Wallet] NWC makeInvoice failed:', error);
-      showToast.error('Failed to create invoice', error instanceof Error ? error.message : 'Unknown error');
-    } finally {
-      setNwcBusy(false);
-    }
+    await runWithNwcBusy(
+      setNwcBusy,
+      async () => {
+        const result = await nwcWallet.makeInvoice(amount, nwcMakeDesc.trim() || 'Eventinel');
+        setNwcCreatedInvoice(result.invoice);
+        showToast.success('Invoice created');
+      },
+      (error) => {
+        console.warn('[Wallet] NWC makeInvoice failed:', error);
+        showToast.error('Failed to create invoice', formatError(error, 'Unknown error'));
+      }
+    );
   }, [nwcMakeAmount, nwcMakeDesc, nwcWallet]);
 
   const copyToClipboard = useCallback(async (value: string, label: string) => {
