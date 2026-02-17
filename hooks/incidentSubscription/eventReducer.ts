@@ -23,6 +23,22 @@ type IncidentEventReducerMetrics = {
   cachePruned: number;
 };
 
+type IncidentBatchPartition = {
+  candidates: QueuedEventCandidate[];
+  totalRelevantEvents: number;
+  cacheCount: number;
+  relayCount: number;
+  parseSkips: number;
+};
+
+type IncidentEventParseResult = {
+  incidentMap: Map<string, ProcessedIncident>;
+  updatedIncidents: ProcessedIncident[];
+  didUpdate: boolean;
+  parsedEvents: number;
+  parseFailures: number;
+};
+
 type QueuedEventCandidate = {
   event: NDKEvent;
   source: 'cache' | 'relay';
@@ -137,12 +153,146 @@ function shouldReplaceExistingIncident(
   return false;
 }
 
+function partitionIncidentCandidates(
+  queuedEvents: EventBatchInput['queuedEvents'],
+  incidentMap: EventBatchInput['incidentMap'],
+  metricsInput: IncidentEventReducerMetrics
+): IncidentBatchPartition {
+  const candidates: QueuedEventCandidate[] = [];
+  let totalRelevantEvents = 0;
+  let cacheCount = 0;
+  let relayCount = 0;
+  let parseSkips = 0;
+
+  for (const queued of queuedEvents) {
+    const candidate = queued as QueuedEventCandidate;
+    const { event, source } = candidate;
+
+    if (event.kind !== INCIDENT_KIND) {
+      continue;
+    }
+
+    totalRelevantEvents += 1;
+    if (source === 'cache') {
+      cacheCount += 1;
+    } else {
+      relayCount += 1;
+    }
+    recordEventSource(candidate, metricsInput);
+
+    const incidentTag = getIncidentIdFromEventTags(event);
+    const incomingCreatedAt = getIncomingCreatedAt(event);
+    const incomingEventId = typeof event.id === 'string' ? event.id : '';
+
+    if (incidentTag && incomingCreatedAt != null && incomingEventId) {
+      const existing = incidentMap.get(incidentTag);
+      if (!shouldReplaceExistingEventByMetadata(existing, incomingCreatedAt, incomingEventId)) {
+        parseSkips += 1;
+        metricsInput.parseSkips += 1;
+        continue;
+      }
+    }
+
+    candidates.push(candidate);
+  }
+
+  return { candidates, totalRelevantEvents, cacheCount, relayCount, parseSkips };
+}
+
+function applyIncidentEventUpdates(
+  candidates: readonly QueuedEventCandidate[],
+  incidentMap: EventBatchInput['incidentMap'],
+  metricsInput: IncidentEventReducerMetrics
+): IncidentEventParseResult {
+  let nextIncidentMap = incidentMap;
+  const updatedIncidents: ProcessedIncident[] = [];
+  let didUpdate = false;
+  let parsedEvents = 0;
+  let parseFailures = 0;
+  let hasMapClone = false;
+
+  for (const queued of candidates) {
+    const parseStart = Date.now();
+    const parsed = parseIncidentEvent(queued.event);
+    const parseMs = Date.now() - parseStart;
+    metricsInput.totalParseMs += parseMs;
+    parsedEvents += 1;
+    metricsInput.totalParsedEvents += 1;
+
+    if (!parsed) {
+      parseFailures += 1;
+      metricsInput.parseFailures += 1;
+      continue;
+    }
+
+    const processed = toProcessedIncident(parsed);
+    const existing = nextIncidentMap.get(parsed.incidentId);
+    const shouldReplace = shouldReplaceExistingIncident(existing, {
+      createdAt: parsed.createdAt,
+      eventId: parsed.eventId,
+    });
+
+    if (!shouldReplace) {
+      continue;
+    }
+
+    if (!hasMapClone) {
+      nextIncidentMap = new Map(nextIncidentMap);
+      hasMapClone = true;
+    }
+
+    metricsInput.replacements += 1;
+    nextIncidentMap.set(parsed.incidentId, processed);
+    updatedIncidents.push(processed);
+    didUpdate = true;
+    metricsInput.updatesApplied += 1;
+  }
+
+  return {
+    incidentMap: nextIncidentMap,
+    updatedIncidents,
+    didUpdate,
+    parsedEvents,
+    parseFailures,
+  };
+}
+
+function applyRetentionLimit(
+  incidentMap: EventBatchInput['incidentMap'],
+  maxCandidateRetention: number,
+  location: EventBatchInput['location'],
+  metricsInput: IncidentEventReducerMetrics
+): { incidentMap: EventBatchInput['incidentMap']; retentionTrimEvents: number } {
+  if (incidentMap.size <= maxCandidateRetention) {
+    return { incidentMap, retentionTrimEvents: 0 };
+  }
+
+  const retained = location
+    ? sortIncidentsForDisplay(Array.from(incidentMap.values()), location).slice(
+        0,
+        maxCandidateRetention
+      )
+    : sortIncidentsForRetention(Array.from(incidentMap.values())).slice(
+        0,
+        maxCandidateRetention
+      );
+
+  if (retained.length === incidentMap.size) {
+    return { incidentMap, retentionTrimEvents: 0 };
+  }
+
+  const trimmedMap = new Map(retained.map((incident) => [incident.incidentId, incident]));
+  const retentionTrimEvents = incidentMap.size - retained.length;
+  metricsInput.retentionTrimEvents += retentionTrimEvents;
+  return { incidentMap: trimmedMap, retentionTrimEvents };
+}
+
 export function applyIncidentEventBatch(input: EventBatchInput): EventBatchResult {
   const batchStart = Date.now();
   REDUCTION_METRICS.totalBatches += 1;
   REDUCTION_METRICS.totalQueuedEvents += input.queuedEvents.length;
 
-  let nextIncidentMap = new Map(input.incidentMap);
+  let nextIncidentMap = input.incidentMap;
   const updatedIncidents: ProcessedIncident[] = [];
   let didUpdate = false;
   let totalRelevantEvents = 0;
@@ -154,63 +304,26 @@ export function applyIncidentEventBatch(input: EventBatchInput): EventBatchResul
   let retentionTrimEvents = 0;
 
   try {
-    for (const queued of input.queuedEvents) {
-      const { event, source } = queued as QueuedEventCandidate;
+    const partitioned = partitionIncidentCandidates(
+      input.queuedEvents,
+      input.incidentMap,
+      REDUCTION_METRICS
+    );
+    totalRelevantEvents = partitioned.totalRelevantEvents;
+    cacheCount = partitioned.cacheCount;
+    relayCount = partitioned.relayCount;
+    parseSkips = partitioned.parseSkips;
 
-      if (event.kind !== INCIDENT_KIND) {
-        continue;
-      }
-
-      totalRelevantEvents += 1;
-      if (source === 'cache') {
-        cacheCount += 1;
-      } else {
-        relayCount += 1;
-      }
-      recordEventSource(queued, REDUCTION_METRICS);
-
-      const incidentTag = getIncidentIdFromEventTags(event);
-      const incomingCreatedAt = getIncomingCreatedAt(event);
-      const incomingEventId = typeof event.id === 'string' ? event.id : '';
-
-      if (incidentTag && incomingCreatedAt != null && incomingEventId) {
-        const existing = nextIncidentMap.get(incidentTag);
-        if (!shouldReplaceExistingEventByMetadata(existing, incomingCreatedAt, incomingEventId)) {
-          parseSkips += 1;
-          REDUCTION_METRICS.parseSkips += 1;
-          continue;
-        }
-      }
-
-      const parseStart = Date.now();
-      const parsed = parseIncidentEvent(event);
-      const parseMs = Date.now() - parseStart;
-      REDUCTION_METRICS.totalParseMs += parseMs;
-      parsedEvents += 1;
-      REDUCTION_METRICS.totalParsedEvents += 1;
-
-      if (!parsed) {
-        parseFailures += 1;
-        REDUCTION_METRICS.parseFailures += 1;
-        continue;
-      }
-
-      const processed = toProcessedIncident(parsed);
-      const existing = nextIncidentMap.get(parsed.incidentId);
-      const shouldReplace = shouldReplaceExistingIncident(existing, {
-        createdAt: parsed.createdAt,
-        eventId: parsed.eventId,
-      });
-
-      if (shouldReplace) {
-        REDUCTION_METRICS.replacements += 1;
-        nextIncidentMap = new Map(nextIncidentMap);
-        nextIncidentMap.set(parsed.incidentId, processed);
-        updatedIncidents.push(processed);
-        didUpdate = true;
-        REDUCTION_METRICS.updatesApplied += 1;
-      }
-    }
+    const parsed = applyIncidentEventUpdates(
+      partitioned.candidates,
+      input.incidentMap,
+      REDUCTION_METRICS
+    );
+    nextIncidentMap = parsed.incidentMap;
+    updatedIncidents.push(...parsed.updatedIncidents);
+    didUpdate = parsed.didUpdate;
+    parsedEvents = parsed.parsedEvents;
+    parseFailures = parsed.parseFailures;
 
     if (totalRelevantEvents === 0) {
       return {
@@ -223,23 +336,14 @@ export function applyIncidentEventBatch(input: EventBatchInput): EventBatchResul
       };
     }
 
-    if (nextIncidentMap.size > input.maxCandidateRetention) {
-      const retained = input.location
-        ? sortIncidentsForDisplay(Array.from(nextIncidentMap.values()), input.location).slice(
-            0,
-            input.maxCandidateRetention
-          )
-        : sortIncidentsForRetention(Array.from(nextIncidentMap.values())).slice(
-            0,
-            input.maxCandidateRetention
-          );
-
-      if (retained.length !== nextIncidentMap.size) {
-        retentionTrimEvents = nextIncidentMap.size - retained.length;
-        REDUCTION_METRICS.retentionTrimEvents += retentionTrimEvents;
-        nextIncidentMap = new Map(retained.map((incident) => [incident.incidentId, incident]));
-      }
-    }
+    const retained = applyRetentionLimit(
+      nextIncidentMap,
+      input.maxCandidateRetention,
+      input.location,
+      REDUCTION_METRICS
+    );
+    nextIncidentMap = retained.incidentMap;
+    retentionTrimEvents = retained.retentionTrimEvents;
 
     return {
       incidentMap: nextIncidentMap,
