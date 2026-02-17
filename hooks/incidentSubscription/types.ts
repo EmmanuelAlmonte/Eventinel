@@ -69,6 +69,14 @@ export interface UseIncidentSubscriptionResult {
   lastUpdatedAt: number | null;
 }
 
+export interface IncidentSubscriptionDisplayState {
+  incidents: ProcessedIncident[];
+  severityCounts: SeverityCounts;
+  updatedIncidents: ProcessedIncident[];
+  totalEventsReceived: number;
+  hasReceivedHistory: boolean;
+}
+
 export interface EventBatchInput {
   queuedEvents: readonly QueuedEvent[];
   incidentMap: Map<string, ProcessedIncident>;
