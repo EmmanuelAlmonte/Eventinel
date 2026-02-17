@@ -1,5 +1,52 @@
 # Repository Guidelines
 
+## Agent Task Protocol (MCP-First)
+This repository follows a strict, repeatable task execution flow for agents.
+
+### Execution Mode
+- Work sequentially: one MCP task at a time.
+- Do not start the next task until the current task is implemented, validated, committed (when requested), and marked complete in MCP.
+- Use MCP as the source of truth for task status, dependencies, and completion notes.
+- Respect dependency order from MCP tasks before starting implementation.
+
+### Required MCP Workflow
+1. Select next task
+   - Check active goal (`planning.current`).
+   - List pending tasks (`todo.list`).
+   - Read task details/dependencies (`todo.get`).
+2. Start task
+   - Set MCP status to `in_progress` (`todo.status`).
+   - Confirm acceptance criteria and validation commands from the task description.
+3. Implement
+   - Make focused, scoped changes for the selected task only.
+   - Avoid unrelated file changes unless required for correctness.
+4. Validate
+   - Run required task-specific checks.
+   - Minimum default: `npx tsc --noEmit`.
+5. Complete task
+   - If blocked: set MCP status to `blocked` with concrete reason and evidence.
+   - If complete: set MCP status to `completed` with short completion notes.
+
+### Mobile Verification Standard (No Web/Playwright Assumption)
+- Do not require Playwright/web-localhost checks for this repo.
+- Use React Native/Expo-appropriate validation:
+  - `npx tsc --noEmit` (default type check)
+  - Task-relevant Jest suites (`npm test -- <path>` or scoped scripts)
+  - Manual verification notes for UI/lifecycle-sensitive flows (map, auth, notifications, navigation) when touched.
+
+### Commit Convention for MCP Tasks
+- Follow Conventional Commits (`feat:`, `fix:`, `refactor:`, `chore:`, `test:`).
+- When a task ID exists, prefer:
+  - `<type>(task:<first-8-task-id>): <summary>`
+- Keep commits scoped to the active task only.
+
+### Definition of Done (Per Task)
+- Scoped implementation is complete.
+- Required validation commands pass.
+- Any required manual mobile checks are recorded in task notes.
+- MCP task status is updated accurately (`completed` or `blocked`).
+- No unrelated work is bundled into the task.
+
 ## Project Structure & Module Organization
 - `App.tsx` boots the app, handles NDK init, and wires navigation; `index.ts` is the Expo entrypoint.
 - UI lives in `screens/` (Home, Map, IncidentFeed, IncidentDetail, Profile, RelayConnect, Login, Menu) with shared primitives in `components/ui` (ScreenContainer, ErrorBoundary, Toast) plus `components/map`, `components/incident`, and `components/notifications` widgets.
