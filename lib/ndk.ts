@@ -10,6 +10,22 @@
 import NDK from '@nostr-dev-kit/mobile';
 import { NDKCacheAdapterSqlite } from '@nostr-dev-kit/mobile';
 
+const IS_PRODUCTION_BUILD = !__DEV__ && process.env.NODE_ENV === 'production';
+const NON_PRODUCTION_RELAY_POLICY = Object.freeze({
+  enableOutboxModel: false,
+  autoConnectUserRelays: false,
+});
+
+if (
+  !IS_PRODUCTION_BUILD &&
+  (NON_PRODUCTION_RELAY_POLICY.enableOutboxModel ||
+    NON_PRODUCTION_RELAY_POLICY.autoConnectUserRelays)
+) {
+  throw new Error(
+    '[NDK] Non-production policy violation: outbox model and auto-connect user relays must stay disabled.'
+  );
+}
+
 // Initialize SQLite cache adapter
 const cacheAdapter = new NDKCacheAdapterSqlite('eventinel.db');
 cacheAdapter.initialize(); // Create database tables
@@ -64,12 +80,11 @@ export const ndk = new NDK({
   explicitRelayUrls: [],
   cacheAdapter,
 
-  // DISABLE outbox model - prevents auto-connecting to purplepag.es, nos.lol
-  enableOutboxModel: false,
+  // Keep disabled by policy outside production to prevent unexpected relay expansion.
+  enableOutboxModel: NON_PRODUCTION_RELAY_POLICY.enableOutboxModel,
 
-  // DISABLE auto-connect to user's relay list - prevents connecting to
-  // relays stored in user's kind:10002 event (relay.damus.io, relay.primal.net, etc.)
-  autoConnectUserRelays: false,
+  // Keep disabled by policy outside production; only explicit relays are allowed.
+  autoConnectUserRelays: NON_PRODUCTION_RELAY_POLICY.autoConnectUserRelays,
 
   // Enable AI guardrails in dev to catch common Nostr/NDK mistakes early.
   aiGuardrails: __DEV__,
