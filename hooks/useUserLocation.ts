@@ -7,6 +7,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import * as Location from 'expo-location';
+import { logStartupFlow } from '@lib/debug/startupFlowTrace';
 
 type PermissionStatus = 'undetermined' | 'granted' | 'denied';
 type LocationSource = 'fresh' | 'cached' | 'default' | 'none';
@@ -214,6 +215,11 @@ async function resolveLocationFlow(context: LocationContext, setters: LocationSe
     setters.setLocation(cachedCoords);
     setters.setSource('cached');
     setters.setIsLoading(false);
+    logLocation('🟢 Released loading from cached location; fresh lookup continues');
+    logStartupFlow('location.loading.release', { reason: 'cached' });
+  } else {
+    logLocation('🟡 No cached location; waiting on fresh location for initial release');
+    logStartupFlow('location.loading.waiting', { reason: 'no-cached' });
   }
 
   await updateFromFreshLocation(context, setters);
@@ -236,6 +242,7 @@ export function useUserLocation(options: UseUserLocationOptions = {}): UseUserLo
 
   const getLocation = useCallback(async () => {
     logLocation('▶️ START getLocation()');
+    logStartupFlow('location.getLocation.start');
     setIsLoading(true);
     setError(null);
 
@@ -263,6 +270,7 @@ export function useUserLocation(options: UseUserLocationOptions = {}): UseUserLo
       applyDefaultLocation(context, setters);
     } finally {
       logLocation('🏁 END getLocation()');
+      logStartupFlow('location.getLocation.end');
       setters.setIsLoading(false);
     }
   }, [accuracy, defaultLocation, fallback, lastKnownMaxAgeMs, location, timeout]);

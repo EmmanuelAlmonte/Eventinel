@@ -9,6 +9,7 @@ import { AppStartupScreen } from './components/AppStartupScreen';
 import { MainNavigation } from './AppNavigation';
 import { useAppRelayBootstrap } from './hooks/useAppRelayBootstrap';
 import { ndk } from './lib/ndk';
+import { logStartupFlow } from './lib/debug/startupFlowTrace';
 import { theme } from './lib/theme';
 import { useAppTheme } from '@hooks';
 import { useNDKInit, useSessionMonitor, useNDKCurrentUser } from '@nostr-dev-kit/mobile';
@@ -31,6 +32,7 @@ function AppContent() {
   const isReady = useAppRelayBootstrap();
   const initializeNDK = useNDKInit(); // Initialize all 4 stores (NDK, sessions, profiles, mutes)
   const currentUser = useNDKCurrentUser();
+  const appPhase = !isReady ? 'bootstrap' : !currentUser ? 'auth' : 'main';
 
   // Initialize NDK and all dependent stores (sessions, profiles, mutes)
   // This MUST run before useSessionMonitor can work properly
@@ -39,6 +41,14 @@ function AppContent() {
     initializeNDK(ndk);
     console.log('✅ [App] NDK and stores initialized');
   }, [initializeNDK]);
+
+  useEffect(() => {
+    logStartupFlow('app.phase', {
+      phase: appPhase,
+      isReady,
+      hasCurrentUser: !!currentUser,
+    });
+  }, [appPhase, currentUser, isReady]);
 
   // Enable automatic session persistence to SecureStore
   // This hook:
