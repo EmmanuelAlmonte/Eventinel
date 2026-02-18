@@ -14,6 +14,10 @@ import { useAppTheme } from '@hooks';
 import type { ProcessedIncident } from '@hooks';
 import { useRelayStatus, useSharedLocation, useSharedIncidents } from '@contexts';
 import { LocationRequiredEmpty, ScreenContainer, SkeletonList } from '@components/ui';
+import {
+  markIncidentNavTrace,
+  startIncidentNavTrace,
+} from '@lib/debug/incidentNavigationTrace';
 
 import { IncidentFeedContent } from './incidentFeed/IncidentFeedContent';
 import { IncidentRow } from './incidentFeed/IncidentRow';
@@ -37,7 +41,24 @@ export default function IncidentFeedScreen() {
 
   const visibleIncidents = isFocused ? incidents : EMPTY_INCIDENTS;
   const handleIncidentPress = useCallback(
-    (incidentId: string) => navigation.navigate('IncidentDetail', { incidentId }),
+    (incidentId: string) => {
+      startIncidentNavTrace({
+        incidentId,
+        source: 'incident-feed',
+        stage: 'feed.incident.press.start',
+      });
+      markIncidentNavTrace({
+        incidentId,
+        source: 'incident-feed',
+        stage: 'feed.navigate.before',
+      });
+      navigation.navigate('IncidentDetail', { incidentId });
+      markIncidentNavTrace({
+        incidentId,
+        source: 'incident-feed',
+        stage: 'feed.navigate.after',
+      });
+    },
     [navigation]
   );
   const handleRelaySettings = useCallback(() => navigation.navigate('Relays'), [navigation]);

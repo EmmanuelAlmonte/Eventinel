@@ -13,6 +13,11 @@ import { type AppNavigation } from '@lib/navigation';
 import { useRelayStatus, useSharedIncidents, useSharedLocation } from '@contexts';
 import { useAppTheme, type ProcessedIncident } from '@hooks';
 import { incidentsToFeatureCollection } from '@lib/map/types';
+import {
+  logIncidentNavFlow,
+  markIncidentNavTrace,
+  startIncidentNavTrace,
+} from '@lib/debug/incidentNavigationTrace';
 
 import { buildRelayBannerStatus, formatRelayList } from './helpers';
 import type { ShapeSourceFeatureProperties, ShapeSourcePressEvent } from './config';
@@ -21,7 +26,6 @@ import { useMapViewportSubscription } from './useMapViewportSubscription';
 
 export type LocationPermissionStatus = 'undetermined' | 'granted' | 'denied' | undefined;
 
-const EMPTY_INCIDENTS: ProcessedIncident[] = [];
 const ZERO_MAP_LAYOUT_WIDTH = 0;
 
 export type MapScreenCamera = ReturnType<typeof useMapCamera>;
@@ -131,7 +135,7 @@ export function useMapScreenState(): MapScreenState {
     setMapSubscriptionViewport,
   });
 
-  const visibleIncidents = isFocused ? incidents : EMPTY_INCIDENTS;
+  const visibleIncidents = incidents;
   const incidentFeatureCollection = useMemo(
     () => incidentsToFeatureCollection(visibleIncidents),
     [visibleIncidents]
@@ -139,22 +143,40 @@ export function useMapScreenState(): MapScreenState {
 
   const handleIncidentPress = useCallback(
     (incidentId: string) => {
+      markIncidentNavTrace({
+        incidentId,
+        source: 'map-marker',
+        stage: 'map.navigate.before',
+      });
       navigation.navigate('IncidentDetail', { incidentId });
+      markIncidentNavTrace({
+        incidentId,
+        source: 'map-marker',
+        stage: 'map.navigate.after',
+      });
     },
     [navigation]
   );
 
   const handleShapeSourcePress = useCallback(
     async (event: ShapeSourcePressEvent) => {
+      logIncidentNavFlow('map.shape-source.press.received', {
+        featureCount: event?.features?.length ?? 0,
+      });
       const feature = event?.features?.[0];
       if (!feature) {
+        logIncidentNavFlow('map.shape-source.press.ignored.no-feature');
         return;
       }
 
       const properties = feature.properties as ShapeSourceFeatureProperties | undefined;
       if (properties?.cluster) {
+        logIncidentNavFlow('map.shape-source.press.cluster', {
+          isCluster: true,
+        });
         const centerCoordinate = getClusterCenterFromFeature(feature);
         if (!centerCoordinate) {
+          logIncidentNavFlow('map.shape-source.press.cluster.ignored.invalid-center');
           return;
         }
 
@@ -178,7 +200,19 @@ export function useMapScreenState(): MapScreenState {
 
       const incidentId = extractIncidentIdFromShapeSourceProperties(properties);
       if (incidentId) {
+        startIncidentNavTrace({
+          incidentId,
+          source: 'map-marker',
+          stage: 'map.marker.press.start',
+        });
+        markIncidentNavTrace({
+          incidentId,
+          source: 'map-marker',
+          stage: 'map.marker.press.extracted-incident-id',
+        });
         handleIncidentPress(incidentId);
+      } else {
+        logIncidentNavFlow('map.shape-source.press.ignored.no-incident-id');
       }
     },
     [camera, handleIncidentPress]

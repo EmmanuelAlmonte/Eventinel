@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState, type MutableRefObject } from 'react';
+import { InteractionManager } from 'react-native';
 
 import { MAP_SUBSCRIPTION } from '@lib/map/constants';
 import { evaluateViewportCoverage, type LngLat, type ViewportBounds } from '@lib/map/geohashViewport';
@@ -38,6 +39,7 @@ export function useMapViewportSubscription({
   setMapSubscriptionViewport,
 }: UseMapViewportSubscriptionOptions) {
   const viewportDebounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const deferredBlurTeardownRef = useRef<{ cancel?: () => void } | null>(null);
   const lastViewportAnchorHashRef = useRef<string | null>(null);
   const lastViewportZoomRef = useRef<number | null>(null);
   const lastViewportUpdateAtRef = useRef(0);
@@ -130,36 +132,69 @@ export function useMapViewportSubscription({
     [isFocused, lastCameraZoomRef, setMapSubscriptionAnchor, setMapSubscriptionViewport]
   );
 
-  useEffect(() => {
-    setMapFocused(isFocused);
-    if (isFocused) {
-      return () => {
-        setMapFocused(false);
-        setMapSubscriptionAnchor(null);
-        setMapSubscriptionViewport(null);
-      };
+  const clearViewportDebounce = useCallback(() => {
+    if (viewportDebounceTimerRef.current) {
+      clearTimeout(viewportDebounceTimerRef.current);
+      viewportDebounceTimerRef.current = null;
     }
+  }, []);
 
+  const teardownMapFocusState = useCallback(() => {
+    setMapFocused(false);
     setMapSubscriptionAnchor(null);
     setMapSubscriptionViewport(null);
     setIsViewportCoveredBySubscriptionGrid(true);
     lastViewportAnchorHashRef.current = null;
     lastViewportZoomRef.current = null;
-    if (viewportDebounceTimerRef.current) {
-      clearTimeout(viewportDebounceTimerRef.current);
-      viewportDebounceTimerRef.current = null;
+    clearViewportDebounce();
+  }, [
+    clearViewportDebounce,
+    setMapFocused,
+    setMapSubscriptionAnchor,
+    setMapSubscriptionViewport,
+  ]);
+
+  useEffect(() => {
+    if (deferredBlurTeardownRef.current) {
+      deferredBlurTeardownRef.current.cancel?.();
+      deferredBlurTeardownRef.current = null;
     }
-    return undefined;
-  }, [isFocused, setMapFocused, setMapSubscriptionAnchor, setMapSubscriptionViewport]);
+
+    if (isFocused) {
+      setMapFocused(true);
+      return;
+    }
+
+    // Defer blur teardown until after transition interactions to avoid delaying
+    // stack animation start on marker press navigation.
+    deferredBlurTeardownRef.current = InteractionManager.runAfterInteractions(() => {
+      deferredBlurTeardownRef.current = null;
+      teardownMapFocusState();
+    });
+
+    return () => {
+      if (deferredBlurTeardownRef.current) {
+        deferredBlurTeardownRef.current.cancel?.();
+        deferredBlurTeardownRef.current = null;
+      }
+    };
+  }, [isFocused, setMapFocused, teardownMapFocusState]);
 
   useEffect(() => {
     return () => {
-      if (viewportDebounceTimerRef.current) {
-        clearTimeout(viewportDebounceTimerRef.current);
-        viewportDebounceTimerRef.current = null;
+      if (deferredBlurTeardownRef.current) {
+        deferredBlurTeardownRef.current.cancel?.();
+        deferredBlurTeardownRef.current = null;
       }
+      teardownMapFocusState();
     };
-  }, []);
+  }, [teardownMapFocusState]);
+
+  useEffect(() => {
+    return () => {
+      clearViewportDebounce();
+    };
+  }, [clearViewportDebounce]);
 
   return { handleMapIdle, isViewportCoveredBySubscriptionGrid };
 }
