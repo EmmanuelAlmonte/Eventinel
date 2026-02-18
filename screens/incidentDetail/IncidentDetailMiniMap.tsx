@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { ActivityIndicator, StyleSheet, Text as RNText, View } from 'react-native';
+import { StyleSheet, Text as RNText, View } from 'react-native';
 import Mapbox from '@rnmapbox/maps';
 
 import { MAP_STYLES } from '@lib/map/types';
@@ -15,14 +15,12 @@ type IncidentDetailMiniMapProps = {
   };
   markerColor: string;
   markerGlyph: string;
-  spinnerColor: string;
 };
 
 export function IncidentDetailMiniMap({
   location,
   markerColor,
   markerGlyph,
-  spinnerColor,
 }: IncidentDetailMiniMapProps) {
   const [mapReady, setMapReady] = useState(false);
 
@@ -60,7 +58,7 @@ export function IncidentDetailMiniMap({
         </Mapbox.MapView>
       ) : (
         <View style={[styles.miniMap, styles.mapPlaceholder]}>
-          <ActivityIndicator size="small" color={spinnerColor} />
+          <View style={styles.placeholderDot} />
         </View>
       )}
     </View>
@@ -81,6 +79,13 @@ const styles = StyleSheet.create({
     backgroundColor: '#1a1a2e',
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  placeholderDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#fff',
+    opacity: 0.6,
   },
   mapMarker: {
     width: 32,

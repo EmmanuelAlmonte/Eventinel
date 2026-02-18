@@ -86,7 +86,6 @@ export function IncidentDetailScreenView({
           location={incident.location}
           markerColor={typeConfig.color}
           markerGlyph={typeConfig.glyph}
-          spinnerColor={colors.textMuted}
         />
 
         <IncidentDetailInfoCards
