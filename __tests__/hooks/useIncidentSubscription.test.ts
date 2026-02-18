@@ -310,6 +310,36 @@ describe('useIncidentSubscription', () => {
 
       expect(mockNDKHooks.getNDK().subscribe).toHaveBeenCalled();
     });
+
+    it('preserves incidents when disabling while location is still available', async () => {
+      const mockEvent = createMockIncidentEvent({
+        title: 'Persist Me',
+        severity: 2,
+      });
+      mockSubscription.setEvents([mockEvent]);
+      mockSubscription.setEose(true);
+
+      const { result, rerender } = renderHook(
+        ({ enabled }) =>
+          useIncidentSubscription({
+            location: [-75.1652, 39.9526],
+            enabled,
+          }),
+        {
+          initialProps: { enabled: true },
+        }
+      );
+
+      await waitFor(() => {
+        expect(result.current.incidents.length).toBe(1);
+      });
+
+      rerender({ enabled: false });
+
+      expect(result.current.incidents.length).toBe(1);
+      expect(result.current.incidents[0].title).toBe('Persist Me');
+      expect(result.current.incidents[0].severity).toBe(2);
+    });
   });
 
   // =============================================================================

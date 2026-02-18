@@ -36,6 +36,7 @@ export function useIncidentSubscription({
   enabled = true,
   maxIncidents = INCIDENT_LIMITS.MAX_VISIBLE,
 }: UseIncidentSubscriptionOptions): UseIncidentSubscriptionResult {
+  const hasLocation = location !== null;
   const effectiveMaxIncidents = Math.min(maxIncidents, INCIDENT_LIMITS.MAX_VISIBLE);
   const {
     stableLocation,
@@ -93,21 +94,28 @@ export function useIncidentSubscription({
 
     clearQueuedEvents();
     stopAllSubscriptions();
-    incidentMapRef.current.clear();
-    lastUpdatedRef.current = null;
-    lastTotalEventsRef.current = 0;
-    lastFilterKeyRef.current = 'disabled';
 
-    setState({
-      incidents: [],
-      severityCounts: EMPTY_SEVERITY_COUNTS,
-      updatedIncidents: [],
-      totalEventsReceived: 0,
-      hasReceivedHistory: false,
-    });
+    // Preserve last-known incidents during transient disables (navigation focus/app inactive)
+    // to avoid a 2-3s empty-map flash while subscriptions restart. Hard-clear only when the
+    // app has no location (true session-end condition we can detect locally).
+    if (!hasLocation) {
+      incidentMapRef.current.clear();
+      lastUpdatedRef.current = null;
+      lastTotalEventsRef.current = 0;
+      lastFilterKeyRef.current = 'disabled';
+
+      setState({
+        incidents: [],
+        severityCounts: EMPTY_SEVERITY_COUNTS,
+        updatedIncidents: [],
+        totalEventsReceived: 0,
+        hasReceivedHistory: false,
+      });
+    }
   }, [
     clearQueuedEvents,
     enabled,
+    hasLocation,
     incidentMapRef,
     lastFilterKeyRef,
     lastTotalEventsRef,
