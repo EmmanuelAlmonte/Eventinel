@@ -40,6 +40,7 @@ export function useMapViewportSubscription({
 }: UseMapViewportSubscriptionOptions) {
   const viewportDebounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const deferredBlurTeardownRef = useRef<{ cancel?: () => void } | null>(null);
+  const suppressViewportUpdatesRef = useRef(false);
   const lastViewportAnchorHashRef = useRef<string | null>(null);
   const lastViewportZoomRef = useRef<number | null>(null);
   const lastViewportUpdateAtRef = useRef(0);
@@ -47,7 +48,7 @@ export function useMapViewportSubscription({
 
   const handleMapIdle = useCallback(
     (state: MapIdleState) => {
-      if (!isFocused) {
+      if (!isFocused || suppressViewportUpdatesRef.current) {
         return;
       }
 
@@ -161,9 +162,13 @@ export function useMapViewportSubscription({
     }
 
     if (isFocused) {
+      suppressViewportUpdatesRef.current = false;
       setMapFocused(true);
       return;
     }
+
+    suppressViewportUpdatesRef.current = true;
+    clearViewportDebounce();
 
     // Defer blur teardown until after transition interactions to avoid delaying
     // stack animation start on marker press navigation.
@@ -178,7 +183,7 @@ export function useMapViewportSubscription({
         deferredBlurTeardownRef.current = null;
       }
     };
-  }, [isFocused, setMapFocused, teardownMapFocusState]);
+  }, [clearViewportDebounce, isFocused, setMapFocused, teardownMapFocusState]);
 
   useEffect(() => {
     return () => {
