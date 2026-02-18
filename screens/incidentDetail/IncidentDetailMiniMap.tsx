@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { StyleSheet, Text as RNText, View } from 'react-native';
 import Mapbox from '@rnmapbox/maps';
 
@@ -22,45 +22,45 @@ export function IncidentDetailMiniMap({
   markerColor,
   markerGlyph,
 }: IncidentDetailMiniMapProps) {
-  const [mapReady, setMapReady] = useState(false);
+  const [isMapVisible, setIsMapVisible] = useState(false);
+  const markerCoordinate = useMemo<[number, number]>(
+    () => [location.lng, location.lat],
+    [location.lng, location.lat]
+  );
 
   return (
-    <View
-      style={styles.mapContainer}
-      onLayout={(event) => {
-        if (event.nativeEvent.layout.width > 0 && !mapReady) {
-          setMapReady(true);
-        }
-      }}
-    >
-      {mapReady ? (
-        <Mapbox.MapView
-          style={styles.miniMap}
-          styleURL={MAP_STYLES.DARK}
-          scrollEnabled={false}
-          pitchEnabled={false}
-          rotateEnabled={false}
-          zoomEnabled={false}
-          maxPitch={65}
-        >
-          <Mapbox.Camera
-            zoomLevel={MINI_MAP_ZOOM}
-            centerCoordinate={[location.lng, location.lat]}
-            pitch={MINI_MAP_PITCH}
-            heading={MINI_MAP_HEADING}
-            animationDuration={0}
-          />
-          <Mapbox.MarkerView coordinate={[location.lng, location.lat]}>
-            <View style={[styles.mapMarker, { backgroundColor: markerColor }]}>
-              <RNText style={styles.mapMarkerGlyph}>{markerGlyph}</RNText>
-            </View>
-          </Mapbox.MarkerView>
-        </Mapbox.MapView>
-      ) : (
-        <View style={[styles.miniMap, styles.mapPlaceholder]}>
-          <View style={styles.placeholderDot} />
+    <View style={styles.mapContainer}>
+      <View style={[styles.miniMap, styles.mapPlaceholder]}>
+        <View style={[styles.mapMarker, { backgroundColor: markerColor }]}>
+          <RNText style={styles.mapMarkerGlyph}>{markerGlyph}</RNText>
         </View>
-      )}
+      </View>
+
+      <Mapbox.MapView
+        style={[styles.miniMap, !isMapVisible && styles.mapHiddenUntilReady]}
+        styleURL={MAP_STYLES.DARK}
+        scrollEnabled={false}
+        pitchEnabled={false}
+        rotateEnabled={false}
+        zoomEnabled={false}
+        maxPitch={65}
+        onDidFinishLoadingStyle={() => setIsMapVisible(true)}
+        onDidFinishLoadingMap={() => setIsMapVisible(true)}
+        onDidFinishRenderingMapFully={() => setIsMapVisible(true)}
+      >
+        <Mapbox.Camera
+          zoomLevel={MINI_MAP_ZOOM}
+          centerCoordinate={markerCoordinate}
+          pitch={MINI_MAP_PITCH}
+          heading={MINI_MAP_HEADING}
+          animationDuration={0}
+        />
+        <Mapbox.MarkerView coordinate={markerCoordinate}>
+          <View style={[styles.mapMarker, { backgroundColor: markerColor }]}>
+            <RNText style={styles.mapMarkerGlyph}>{markerGlyph}</RNText>
+          </View>
+        </Mapbox.MarkerView>
+      </Mapbox.MapView>
     </View>
   );
 }
@@ -71,21 +71,18 @@ const styles = StyleSheet.create({
     margin: 16,
     borderRadius: 16,
     overflow: 'hidden',
+    backgroundColor: '#0B1220',
   },
   miniMap: {
-    flex: 1,
+    ...StyleSheet.absoluteFillObject,
   },
   mapPlaceholder: {
-    backgroundColor: '#1a1a2e',
+    backgroundColor: '#0F172A',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  placeholderDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: '#fff',
-    opacity: 0.6,
+  mapHiddenUntilReady: {
+    opacity: 0,
   },
   mapMarker: {
     width: 32,
