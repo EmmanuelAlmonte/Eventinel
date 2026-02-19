@@ -13,6 +13,7 @@ import { type EdgeInsets } from 'react-native-safe-area-context';
 import {
   CLUSTER_COUNT_LAYER_ID,
   CLUSTER_LAYER_ID,
+  CLUSTER_MAX_ZOOM_LEVEL,
   CLUSTER_RADIUS,
   INCIDENT_ICON_LAYER_ID,
   INCIDENT_LAYER_ID,
@@ -125,6 +126,7 @@ export function MapScreenCanvas({
               shape={incidentFeatureCollection}
               cluster
               clusterRadius={CLUSTER_RADIUS}
+              clusterMaxZoomLevel={CLUSTER_MAX_ZOOM_LEVEL}
               hitbox={{ width: 44, height: 44 }}
               onPress={onShapeSourcePress}
             >

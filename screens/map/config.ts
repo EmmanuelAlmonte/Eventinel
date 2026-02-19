@@ -75,6 +75,7 @@ export const CLUSTER_COUNT_LAYER_ID = 'incident-cluster-count';
 export const INCIDENT_LAYER_ID = 'incident-points';
 export const INCIDENT_ICON_LAYER_ID = 'incident-point-icons';
 export const CLUSTER_RADIUS = 52;
+export const CLUSTER_MAX_ZOOM_LEVEL = 12;
 
 export const clusterFilter = ['has', 'point_count'] as const;
 export const pointFilter = ['!', ['has', 'point_count']] as const;
