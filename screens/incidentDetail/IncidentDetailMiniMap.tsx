@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useRef, useState } from 'react';
-import { StyleSheet, Text as RNText, View } from 'react-native';
+import { Image, type ImageSourcePropType, StyleSheet, View } from 'react-native';
 import Mapbox from '@rnmapbox/maps';
 
 import { MAP_STYLES } from '@lib/map/types';
@@ -18,13 +18,15 @@ type IncidentDetailMiniMapProps = {
     lng: number;
   };
   markerColor: string;
-  markerGlyph: string;
+  markerIconSource: ImageSourcePropType;
+  markerIconTintColor: string;
 };
 
 export function IncidentDetailMiniMap({
   location,
   markerColor,
-  markerGlyph,
+  markerIconSource,
+  markerIconTintColor,
 }: IncidentDetailMiniMapProps) {
   const [isMapVisible, setIsMapVisible] = useState(false);
   const mountStartedAtRef = useRef(Date.now());
@@ -55,7 +57,11 @@ export function IncidentDetailMiniMap({
     <View style={styles.mapContainer}>
       <View style={[styles.miniMap, styles.mapPlaceholder]}>
         <View style={[styles.mapMarker, { backgroundColor: markerColor }]}>
-          <RNText style={styles.mapMarkerGlyph}>{markerGlyph}</RNText>
+          <Image
+            source={markerIconSource}
+            style={[styles.mapMarkerIcon, { tintColor: markerIconTintColor }]}
+            resizeMode="contain"
+          />
         </View>
       </View>
 
@@ -82,7 +88,11 @@ export function IncidentDetailMiniMap({
         />
         <Mapbox.MarkerView coordinate={markerCoordinate}>
           <View style={[styles.mapMarker, { backgroundColor: markerColor }]}>
-            <RNText style={styles.mapMarkerGlyph}>{markerGlyph}</RNText>
+            <Image
+              source={markerIconSource}
+              style={[styles.mapMarkerIcon, { tintColor: markerIconTintColor }]}
+              resizeMode="contain"
+            />
           </View>
         </Mapbox.MarkerView>
       </Mapbox.MapView>
@@ -118,8 +128,8 @@ const styles = StyleSheet.create({
     borderWidth: 3,
     borderColor: '#0F172A',
   },
-  mapMarkerGlyph: {
-    fontSize: 14,
-    textAlign: 'center',
+  mapMarkerIcon: {
+    width: 22,
+    height: 22,
   },
 });

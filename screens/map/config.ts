@@ -3,6 +3,7 @@ import type { ComponentType } from 'react';
 import type { IncidentType } from '@lib/nostr/config';
 import { SEVERITY_COLORS } from '@lib/map/types';
 import { INCIDENT_MARKER } from '@lib/map/constants';
+import { incidentTypeIconAssetByType } from '@lib/map/incidentTypeIconAssets';
 
 export type CameraAnimationMode = 'flyTo' | 'easeTo' | 'linearTo' | 'moveTo' | 'none';
 
@@ -114,14 +115,14 @@ const INCIDENT_TYPE_ICON_KEYS: Record<IncidentType, string> = {
 };
 
 export const incidentIconImages = {
-  [INCIDENT_TYPE_ICON_KEYS.fire]: require('../../assets/Icons/64/fire.png'),
-  [INCIDENT_TYPE_ICON_KEYS.medical]: require('../../assets/Icons/64/medical.png'),
-  [INCIDENT_TYPE_ICON_KEYS.traffic]: require('../../assets/Icons/64/traffic.png'),
-  [INCIDENT_TYPE_ICON_KEYS.violent_crime]: require('../../assets/Icons/64/violent_crime.png'),
-  [INCIDENT_TYPE_ICON_KEYS.property_crime]: require('../../assets/Icons/64/property_crime.png'),
-  [INCIDENT_TYPE_ICON_KEYS.disturbance]: require('../../assets/Icons/64/disturbance.png'),
-  [INCIDENT_TYPE_ICON_KEYS.suspicious]: require('../../assets/Icons/64/suspicious.png'),
-  [INCIDENT_TYPE_ICON_KEYS.other]: require('../../assets/Icons/64/other.png'),
+  [INCIDENT_TYPE_ICON_KEYS.fire]: incidentTypeIconAssetByType.fire,
+  [INCIDENT_TYPE_ICON_KEYS.medical]: incidentTypeIconAssetByType.medical,
+  [INCIDENT_TYPE_ICON_KEYS.traffic]: incidentTypeIconAssetByType.traffic,
+  [INCIDENT_TYPE_ICON_KEYS.violent_crime]: incidentTypeIconAssetByType.violent_crime,
+  [INCIDENT_TYPE_ICON_KEYS.property_crime]: incidentTypeIconAssetByType.property_crime,
+  [INCIDENT_TYPE_ICON_KEYS.disturbance]: incidentTypeIconAssetByType.disturbance,
+  [INCIDENT_TYPE_ICON_KEYS.suspicious]: incidentTypeIconAssetByType.suspicious,
+  [INCIDENT_TYPE_ICON_KEYS.other]: incidentTypeIconAssetByType.other,
 } as const;
 
 export const incidentIconStyle = {

@@ -4,6 +4,7 @@ import type { EdgeInsets } from 'react-native-safe-area-context';
 
 import { type CommentDeletionNotice, type IncidentComment } from '@hooks';
 import { TYPE_CONFIG, SEVERITY_COLORS } from '@lib/nostr/config';
+import { incidentTypeIconAssetByType } from '@lib/map/incidentTypeIconAssets';
 import type { ProcessedIncident } from '@hooks/useIncidentSubscription';
 
 import { IncidentCommentsSection } from './IncidentCommentsSection';
@@ -63,6 +64,7 @@ export function IncidentDetailScreenView({
   onDirections,
 }: IncidentDetailScreenViewProps) {
   const typeConfig = TYPE_CONFIG[incident.type] || TYPE_CONFIG.other;
+  const typeIconSource = incidentTypeIconAssetByType[incident.type] || incidentTypeIconAssetByType.other;
   const severityColor = SEVERITY_COLORS[incident.severity] || SEVERITY_COLORS[1];
 
   return (
@@ -85,13 +87,15 @@ export function IncidentDetailScreenView({
         <IncidentDetailMiniMap
           location={incident.location}
           markerColor={typeConfig.color}
-          markerGlyph={typeConfig.glyph}
+          markerIconSource={typeIconSource}
+          markerIconTintColor={severityColor}
         />
 
         <IncidentDetailInfoCards
           incident={incident}
           colors={colors}
           typeConfig={typeConfig}
+          typeIconSource={typeIconSource}
           severityColor={severityColor}
         />
 

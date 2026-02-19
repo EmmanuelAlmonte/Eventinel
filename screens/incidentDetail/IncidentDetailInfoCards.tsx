@@ -1,14 +1,11 @@
-import { StyleSheet, View } from 'react-native';
+import { Image, type ImageSourcePropType, StyleSheet, View } from 'react-native';
 import { Card, Icon, Text } from '@rneui/themed';
-import { LinearGradient } from 'expo-linear-gradient';
 
 import { formatRelativeTime } from '@lib/utils/time';
 import type { ProcessedIncident } from '@hooks/useIncidentSubscription';
 
 type TypeConfig = {
   color: string;
-  gradient: [string, string, ...string[]];
-  icon: string;
 };
 
 type ThemeColors = {
@@ -24,6 +21,7 @@ type IncidentDetailInfoCardsProps = {
   incident: ProcessedIncident;
   colors: ThemeColors;
   typeConfig: TypeConfig;
+  typeIconSource: ImageSourcePropType;
   severityColor: string;
 };
 
@@ -31,6 +29,7 @@ export function IncidentDetailInfoCards({
   incident,
   colors,
   typeConfig,
+  typeIconSource,
   severityColor,
 }: IncidentDetailInfoCardsProps) {
   return (
@@ -38,14 +37,13 @@ export function IncidentDetailInfoCards({
       <View style={styles.section}>
         <Card containerStyle={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
           <View style={styles.incidentHeader}>
-            <LinearGradient
-              colors={typeConfig.gradient}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-              style={styles.iconGradient}
-            >
-              <Icon name={typeConfig.icon} type="material" size={32} color="#FFFFFF" />
-            </LinearGradient>
+            <View style={[styles.iconFrame, { backgroundColor: `${typeConfig.color}20` }]}>
+              <Image
+                source={typeIconSource}
+                style={[styles.typeIconImage, { tintColor: severityColor }]}
+                resizeMode="contain"
+              />
+            </View>
 
             <View style={styles.incidentInfo}>
               <View style={styles.badgeRow}>
@@ -139,12 +137,16 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: 16,
   },
-  iconGradient: {
+  iconFrame: {
     width: 64,
     height: 64,
     borderRadius: 18,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  typeIconImage: {
+    width: 36,
+    height: 36,
   },
   incidentInfo: {
     flex: 1,
