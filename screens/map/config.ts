@@ -1,5 +1,6 @@
 import type { ComponentType } from 'react';
 
+import type { IncidentType } from '@lib/nostr/config';
 import { SEVERITY_COLORS } from '@lib/map/types';
 import { INCIDENT_MARKER } from '@lib/map/constants';
 
@@ -31,6 +32,7 @@ export type ShapeSourcePressEvent = {
 export type MapboxModule = {
   MapView: ComponentType<Record<string, unknown>>;
   Camera: ComponentType<Record<string, unknown>>;
+  Images: ComponentType<Record<string, unknown>>;
   PointAnnotation: ComponentType<Record<string, unknown>>;
   ShapeSource: ComponentType<Record<string, unknown>>;
   CircleLayer: ComponentType<Record<string, unknown>>;
@@ -71,7 +73,7 @@ export const INCIDENT_SOURCE_ID = 'incidents-source';
 export const CLUSTER_LAYER_ID = 'incident-clusters';
 export const CLUSTER_COUNT_LAYER_ID = 'incident-cluster-count';
 export const INCIDENT_LAYER_ID = 'incident-points';
-export const INCIDENT_LABEL_LAYER_ID = 'incident-point-labels';
+export const INCIDENT_ICON_LAYER_ID = 'incident-point-icons';
 export const CLUSTER_RADIUS = 52;
 
 export const clusterFilter = ['has', 'point_count'] as const;
@@ -99,11 +101,50 @@ export const incidentCircleStyle = {
   circleOpacity: 0.95,
 };
 
-export const incidentLabelStyle = {
-  textField: ['to-string', ['get', 'severity']] as const,
-  textSize: INCIDENT_MARKER.TEXT_FONT_SIZE,
-  textColor: INCIDENT_MARKER.TEXT_COLOR,
-  textAllowOverlap: true,
-  textIgnorePlacement: true,
-  textAnchor: 'center' as const,
+const INCIDENT_TYPE_ICON_KEYS: Record<IncidentType, string> = {
+  fire: 'incident-icon-fire',
+  medical: 'incident-icon-medical',
+  traffic: 'incident-icon-traffic',
+  violent_crime: 'incident-icon-violent-crime',
+  property_crime: 'incident-icon-property-crime',
+  disturbance: 'incident-icon-disturbance',
+  suspicious: 'incident-icon-suspicious',
+  other: 'incident-icon-other',
+};
+
+export const incidentIconImages = {
+  [INCIDENT_TYPE_ICON_KEYS.fire]: require('../../assets/markers/fire.png'),
+  [INCIDENT_TYPE_ICON_KEYS.medical]: require('../../assets/markers/medical.png'),
+  [INCIDENT_TYPE_ICON_KEYS.traffic]: require('../../assets/markers/traffic.png'),
+  [INCIDENT_TYPE_ICON_KEYS.violent_crime]: require('../../assets/markers/violent_crime.png'),
+  [INCIDENT_TYPE_ICON_KEYS.property_crime]: require('../../assets/markers/property_crime.png'),
+  [INCIDENT_TYPE_ICON_KEYS.disturbance]: require('../../assets/markers/disturbance.png'),
+  [INCIDENT_TYPE_ICON_KEYS.suspicious]: require('../../assets/markers/suspicious.png'),
+  [INCIDENT_TYPE_ICON_KEYS.other]: require('../../assets/markers/other.png'),
+} as const;
+
+export const incidentIconStyle = {
+  iconImage: [
+    'match',
+    ['get', 'incidentType'],
+    'fire',
+    INCIDENT_TYPE_ICON_KEYS.fire,
+    'medical',
+    INCIDENT_TYPE_ICON_KEYS.medical,
+    'traffic',
+    INCIDENT_TYPE_ICON_KEYS.traffic,
+    'violent_crime',
+    INCIDENT_TYPE_ICON_KEYS.violent_crime,
+    'property_crime',
+    INCIDENT_TYPE_ICON_KEYS.property_crime,
+    'disturbance',
+    INCIDENT_TYPE_ICON_KEYS.disturbance,
+    'suspicious',
+    INCIDENT_TYPE_ICON_KEYS.suspicious,
+    INCIDENT_TYPE_ICON_KEYS.other,
+  ] as const,
+  iconSize: 0.45,
+  iconAllowOverlap: true,
+  iconIgnorePlacement: true,
+  iconAnchor: 'center' as const,
 };

@@ -6,7 +6,7 @@
  */
 
 import type { ParsedIncident } from '../nostr/events/types';
-import { SEVERITY_COLORS } from '../nostr/config';
+import { SEVERITY_COLORS, type IncidentType } from '../nostr/config';
 
 // Re-export SEVERITY_COLORS for backward compatibility
 export { SEVERITY_COLORS };
@@ -69,6 +69,7 @@ export function incidentToCoordinate(incident: ParsedIncident): [number, number]
 export interface IncidentFeatureProperties {
   incidentId: string;
   severity: number;
+  incidentType: IncidentType;
 }
 
 /**
@@ -98,6 +99,7 @@ export function incidentsToFeatureCollection(
       properties: {
         incidentId: incident.incidentId,
         severity: incident.severity,
+        incidentType: incident.type,
       },
     });
   }

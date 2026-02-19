@@ -14,11 +14,12 @@ import {
   CLUSTER_COUNT_LAYER_ID,
   CLUSTER_LAYER_ID,
   CLUSTER_RADIUS,
-  INCIDENT_LABEL_LAYER_ID,
+  INCIDENT_ICON_LAYER_ID,
   INCIDENT_LAYER_ID,
   INCIDENT_SOURCE_ID,
   incidentCircleStyle,
-  incidentLabelStyle,
+  incidentIconImages,
+  incidentIconStyle,
   type ShapeSourcePressEvent,
   type MapboxModule,
   clusterFilter,
@@ -116,6 +117,8 @@ export function MapScreenCanvas({
               </mapbox.PointAnnotation>
             ) : null}
 
+            <mapbox.Images images={incidentIconImages} />
+
             <mapbox.ShapeSource
               id={INCIDENT_SOURCE_ID}
               ref={camera.shapeSourceRef}
@@ -141,9 +144,9 @@ export function MapScreenCanvas({
                 style={incidentCircleStyle}
               />
               <mapbox.SymbolLayer
-                id={INCIDENT_LABEL_LAYER_ID}
+                id={INCIDENT_ICON_LAYER_ID}
                 filter={pointFilter}
-                style={incidentLabelStyle}
+                style={incidentIconStyle}
               />
             </mapbox.ShapeSource>
           </mapbox.MapView>
