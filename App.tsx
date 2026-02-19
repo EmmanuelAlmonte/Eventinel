@@ -1,5 +1,5 @@
 import 'react-native-get-random-values'; // MUST be first import!
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
@@ -11,10 +11,19 @@ import { useAppRelayBootstrap } from './hooks/useAppRelayBootstrap';
 import { ndk } from './lib/ndk';
 import { theme } from './lib/theme';
 import { useAppTheme } from '@hooks';
-import { useNDKInit, useSessionMonitor, useNDKCurrentUser } from '@nostr-dev-kit/mobile';
+import {
+  loadSessionsFromStorage,
+  migrateLegacyLogin,
+  NDKSessionExpoSecureStore,
+  useNDKCurrentPubkey,
+  useNDKInit,
+  useSessionMonitor,
+} from '@nostr-dev-kit/mobile';
 import { IncidentCacheProvider, LocationProvider, IncidentSubscriptionProvider, RelayStatusProvider } from '@contexts';
 import { ToastProvider, ErrorBoundary } from '@components/ui';
 import { ThemeProvider } from '@rneui/themed';
+
+const AUTH_RESTORE_TIMEOUT_MS = __DEV__ ? 3500 : 2000;
 
 function LoginWrapper() {
   const { isDark } = useAppTheme();
@@ -27,10 +36,68 @@ function LoginWrapper() {
   );
 }
 
+function useAuthRestoreGate() {
+  const currentPubkey = useNDKCurrentPubkey();
+  const [hasStoredSession, setHasStoredSession] = useState<boolean | null>(null);
+  const [didRestoreTimeout, setDidRestoreTimeout] = useState(false);
+
+  // Detect if this device has a persisted NDK session before deciding whether
+  // we should hold startup while session restoration finishes.
+  useEffect(() => {
+    let isCancelled = false;
+
+    const detectStoredSession = async () => {
+      try {
+        const storageAdapter = new NDKSessionExpoSecureStore();
+        await migrateLegacyLogin(storageAdapter);
+        const sessions = loadSessionsFromStorage(storageAdapter);
+        if (!isCancelled) {
+          setHasStoredSession(sessions.length > 0);
+        }
+      } catch (error) {
+        if (__DEV__) {
+          console.warn('[App] Failed to inspect stored NDK sessions:', error);
+        }
+        if (!isCancelled) {
+          setHasStoredSession(false);
+        }
+      }
+    };
+
+    void detectStoredSession();
+
+    return () => {
+      isCancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (hasStoredSession !== true || currentPubkey || didRestoreTimeout) {
+      return;
+    }
+
+    const timeoutId = setTimeout(() => {
+      setDidRestoreTimeout(true);
+      console.warn(
+        `[App] Session restore timeout after ${AUTH_RESTORE_TIMEOUT_MS}ms; showing Login fallback.`
+      );
+    }, AUTH_RESTORE_TIMEOUT_MS);
+
+    return () => {
+      clearTimeout(timeoutId);
+    };
+  }, [currentPubkey, didRestoreTimeout, hasStoredSession]);
+
+  const isAuthRestoreResolved =
+    hasStoredSession === false || Boolean(currentPubkey) || didRestoreTimeout;
+
+  return { currentPubkey, isAuthRestoreResolved };
+}
+
 function AppContent() {
   const isReady = useAppRelayBootstrap();
   const initializeNDK = useNDKInit(); // Initialize all 4 stores (NDK, sessions, profiles, mutes)
-  const currentUser = useNDKCurrentUser();
+  const { currentPubkey, isAuthRestoreResolved } = useAuthRestoreGate();
 
   // Initialize NDK and all dependent stores (sessions, profiles, mutes)
   // This MUST run before useSessionMonitor can work properly
@@ -53,9 +120,9 @@ function AppContent() {
 
   const { isDark, colors } = useAppTheme();
 
-  return !isReady ? (
+  return !isReady || !isAuthRestoreResolved ? (
     <AppStartupScreen colors={colors} isDark={isDark} />
-  ) : !currentUser ? (
+  ) : !currentPubkey ? (
     <LoginWrapper />
   ) : (
     <LocationProvider>
