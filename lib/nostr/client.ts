@@ -1,21 +1,23 @@
 /**
  * Eventinel NDK Client
  *
- * Singleton NDK instance for React Native.
- * Handles relay configuration from environment variables.
+ * NDK access helpers for React Native.
+ * Uses the shared singleton from lib/ndk.ts.
  *
- * NOTE: For mobile apps, prefer using lib/ndk.ts which includes
- * SQLite caching. This module provides a factory function for
- * creating additional NDK instances if needed.
+ * NOTE: This module intentionally does not create additional NDK instances.
+ * It proxies access to the app-level singleton so connection/session state
+ * remains centralized.
  *
  * @see https://github.com/nostr-dev-kit/ndk
  */
 
-import NDK, { type NDKCacheAdapter } from '@nostr-dev-kit/mobile';
+import type NDK from '@nostr-dev-kit/mobile';
+import { type NDKCacheAdapter } from '@nostr-dev-kit/mobile';
 import { getRelayUrls } from './config';
+import { ndk as sharedNDK } from '../ndk';
 
 // Singleton instance
-let ndkInstance: NDK | null = null;
+let ndkInstance: NDK | null = sharedNDK;
 
 /**
  * Options for creating an NDK instance
@@ -30,7 +32,7 @@ export interface CreateNDKOptions {
 }
 
 /**
- * Creates a new NDK instance with Eventinel configuration
+ * Returns the shared NDK instance with optional connect behavior
  *
  * @example
  * ```typescript
@@ -54,14 +56,20 @@ export async function createNDK(
     autoConnect = false,
   } = options;
 
-  // Get relay URLs from options or environment
-  const explicitRelayUrls = relayUrls || getRelayUrls();
+  if (relayUrls || cacheAdapter) {
+    const configuredRelays = getRelayUrls();
+    console.warn(
+      '[nostr/client] createNDK relayUrls/cacheAdapter overrides are ignored; using shared singleton from lib/ndk.ts',
+      {
+        relayUrlsProvided: Boolean(relayUrls),
+        cacheAdapterProvided: Boolean(cacheAdapter),
+        configuredRelayCount: configuredRelays.length,
+      }
+    );
+  }
 
-  // Create NDK instance
-  const ndk = new NDK({
-    explicitRelayUrls,
-    cacheAdapter,
-  });
+  const ndk = ndkInstance ?? sharedNDK;
+  ndkInstance = ndk;
 
   // Auto-connect if requested
   if (autoConnect) {
@@ -83,10 +91,9 @@ export async function createNDK(
  * ```
  */
 export async function getSharedNDK(): Promise<NDK> {
-  if (!ndkInstance) {
-    ndkInstance = await createNDK();
-  }
-  return ndkInstance;
+  const ndk = ndkInstance ?? sharedNDK;
+  ndkInstance = ndk;
+  return ndk;
 }
 
 /**
@@ -95,32 +102,32 @@ export async function getSharedNDK(): Promise<NDK> {
  * @throws Error if NDK hasn't been initialized yet
  */
 export function getSharedNDKSync(): NDK {
-  if (!ndkInstance) {
-    throw new Error(
-      'NDK not initialized. Call getSharedNDK() first or use NDKProvider.'
-    );
-  }
-  return ndkInstance;
+  return ndkInstance ?? sharedNDK;
 }
 
 /**
  * Sets the shared NDK instance (for testing or custom initialization)
  */
 export function setSharedNDK(ndk: NDK): void {
-  ndkInstance = ndk;
+  if (ndk !== sharedNDK) {
+    console.warn(
+      '[nostr/client] setSharedNDK ignored; app uses singleton from lib/ndk.ts'
+    );
+    return;
+  }
+  ndkInstance = sharedNDK;
 }
 
 /**
  * Resets the shared NDK instance (for testing)
  */
 export function resetSharedNDK(): void {
-  if (ndkInstance) {
-    // Disconnect all relays before resetting
-    for (const relay of ndkInstance.pool.relays.values()) {
-      relay.disconnect();
-    }
+  // Keep the singleton identity stable; only disconnect active relays.
+  const activeNdk = ndkInstance ?? sharedNDK;
+  for (const relay of activeNdk.pool.relays.values()) {
+    relay.disconnect();
   }
-  ndkInstance = null;
+  ndkInstance = sharedNDK;
 }
 
 /**
