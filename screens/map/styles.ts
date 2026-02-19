@@ -172,13 +172,13 @@ export const mapLayerStyles = {
     circleColor: [
       'step',
       ['get', 'point_count'],
-      '#60a5fa',
+      '#c4b5fd',
       10,
-      '#3b82f6',
+      '#a78bfa',
       25,
-      '#2563eb',
+      '#8b5cf6',
       50,
-      '#1d4ed8',
+      '#6d28d9',
     ] as const,
     circleRadius: [
       'step',
