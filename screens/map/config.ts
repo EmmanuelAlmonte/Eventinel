@@ -114,14 +114,14 @@ const INCIDENT_TYPE_ICON_KEYS: Record<IncidentType, string> = {
 };
 
 export const incidentIconImages = {
-  [INCIDENT_TYPE_ICON_KEYS.fire]: require('../../assets/markers/fire.png'),
-  [INCIDENT_TYPE_ICON_KEYS.medical]: require('../../assets/markers/medical.png'),
-  [INCIDENT_TYPE_ICON_KEYS.traffic]: require('../../assets/markers/traffic.png'),
-  [INCIDENT_TYPE_ICON_KEYS.violent_crime]: require('../../assets/markers/violent_crime.png'),
-  [INCIDENT_TYPE_ICON_KEYS.property_crime]: require('../../assets/markers/property_crime.png'),
-  [INCIDENT_TYPE_ICON_KEYS.disturbance]: require('../../assets/markers/disturbance.png'),
-  [INCIDENT_TYPE_ICON_KEYS.suspicious]: require('../../assets/markers/suspicious.png'),
-  [INCIDENT_TYPE_ICON_KEYS.other]: require('../../assets/markers/other.png'),
+  [INCIDENT_TYPE_ICON_KEYS.fire]: require('../../assets/Icons/64/fire.png'),
+  [INCIDENT_TYPE_ICON_KEYS.medical]: require('../../assets/Icons/64/medical.png'),
+  [INCIDENT_TYPE_ICON_KEYS.traffic]: require('../../assets/Icons/64/traffic.png'),
+  [INCIDENT_TYPE_ICON_KEYS.violent_crime]: require('../../assets/Icons/64/violent_crime.png'),
+  [INCIDENT_TYPE_ICON_KEYS.property_crime]: require('../../assets/Icons/64/property_crime.png'),
+  [INCIDENT_TYPE_ICON_KEYS.disturbance]: require('../../assets/Icons/64/disturbance.png'),
+  [INCIDENT_TYPE_ICON_KEYS.suspicious]: require('../../assets/Icons/64/suspicious.png'),
+  [INCIDENT_TYPE_ICON_KEYS.other]: require('../../assets/Icons/64/other.png'),
 } as const;
 
 export const incidentIconStyle = {
