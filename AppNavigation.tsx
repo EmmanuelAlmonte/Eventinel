@@ -13,7 +13,6 @@ import RelayConnectScreen from './screens/RelayConnectScreen';
 import WalletScreen from './screens/WalletScreen';
 import { navigationRef } from './lib/navigation';
 import IncidentNotificationBridge from './components/notifications/IncidentNotificationBridge';
-import { logStartupFlow } from './lib/debug/startupFlowTrace';
 import { StatusBar } from 'expo-status-bar';
 
 const Tab = createBottomTabNavigator();
@@ -46,10 +45,6 @@ function TabNavigator() {
       <Tab.Screen
         name="Map"
         component={MapScreen}
-        listeners={{
-          tabPress: () => logStartupFlow('tab.press', { tab: 'Map' }),
-          focus: () => logStartupFlow('tab.focus', { tab: 'Map' }),
-        }}
         options={{
           tabBarLabel: 'Map',
           tabBarIcon: ({ color }) => <Text style={{ fontSize: 18, color }}>🗺️</Text>,
@@ -58,10 +53,6 @@ function TabNavigator() {
       <Tab.Screen
         name="Incidents"
         component={IncidentFeedScreen}
-        listeners={{
-          tabPress: () => logStartupFlow('tab.press', { tab: 'Incidents' }),
-          focus: () => logStartupFlow('tab.focus', { tab: 'Incidents' }),
-        }}
         options={{
           tabBarLabel: 'Incidents',
           tabBarIcon: ({ color }) => <Text style={{ fontSize: 18, color }}>📋</Text>,
@@ -70,10 +61,6 @@ function TabNavigator() {
       <Tab.Screen
         name="Profile"
         component={ProfileScreen}
-        listeners={{
-          tabPress: () => logStartupFlow('tab.press', { tab: 'Profile' }),
-          focus: () => logStartupFlow('tab.focus', { tab: 'Profile' }),
-        }}
         options={{
           tabBarLabel: 'Profile',
           tabBarIcon: ({ color }) => <Text style={{ fontSize: 18, color }}>👤</Text>,
@@ -87,21 +74,7 @@ export function MainNavigation() {
   const { isDark, colors } = useAppTheme();
 
   return (
-    <NavigationContainer
-      ref={navigationRef}
-      onReady={() => {
-        const route = navigationRef.getCurrentRoute();
-        logStartupFlow('nav.ready', {
-          route: route?.name ?? 'unknown',
-        });
-      }}
-      onStateChange={() => {
-        const route = navigationRef.getCurrentRoute();
-        logStartupFlow('nav.state.change', {
-          route: route?.name ?? 'unknown',
-        });
-      }}
-    >
+    <NavigationContainer ref={navigationRef}>
       <StatusBar style={isDark ? 'light' : 'dark'} />
       <IncidentNotificationBridge />
       <Stack.Navigator screenOptions={{ headerShown: false }}>

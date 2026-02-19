@@ -11,6 +11,8 @@ import NDK from '@nostr-dev-kit/mobile';
 import { NDKCacheAdapterSqlite } from '@nostr-dev-kit/mobile';
 
 const IS_PRODUCTION_BUILD = !__DEV__ && process.env.NODE_ENV === 'production';
+const DEBUG_CACHE_QUERY =
+  __DEV__ && process.env.EXPO_PUBLIC_DEBUG_CACHE_QUERY === '1';
 const NON_PRODUCTION_RELAY_POLICY = Object.freeze({
   enableOutboxModel: false,
   autoConnectUserRelays: false,
@@ -157,7 +159,7 @@ cacheAdapter.ndk = ndk;
 // This restores tag-based cache queries for kind 30911.
 
 // Debug: Log cache query results (simplified)
-if (__DEV__) {
+if (DEBUG_CACHE_QUERY) {
   const originalQuery = cacheAdapter.query.bind(cacheAdapter);
   cacheAdapter.query = (subscription: any) => {
     const results = originalQuery(subscription);

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { AppState, type AppStateStatus } from 'react-native';
+import { AppState, InteractionManager, type AppStateStatus } from 'react-native';
 
 import { MAPBOX_CONFIG } from '@lib/map/constants';
 import type { MapSubscriptionViewport } from '@lib/map/subscriptionPlanner';
@@ -25,6 +25,7 @@ export function useSubscriptionGate(): SubscriptionGateState {
   const { location } = useSharedLocation();
   const [isMapFocused, setIsMapFocused] = useState(false);
   const [isFeedFocused, setIsFeedFocused] = useState(false);
+  const [isStartupInteractionSettled, setIsStartupInteractionSettled] = useState(false);
   const [mapSubscriptionAnchor, setMapSubscriptionAnchor] = useState<[number, number] | null>(
     null
   );
@@ -38,6 +39,21 @@ export function useSubscriptionGate(): SubscriptionGateState {
       setIsAppActive(isAppStateActive(nextState));
     });
     return () => subscription?.remove?.();
+  }, []);
+
+  useEffect(() => {
+    let isMounted = true;
+    const interactionHandle = InteractionManager.runAfterInteractions(() => {
+      if (!isMounted) {
+        return;
+      }
+      setIsStartupInteractionSettled(true);
+    });
+
+    return () => {
+      isMounted = false;
+      interactionHandle.cancel?.();
+    };
   }, []);
 
   const handleSetMapFocused = useCallback((focused: boolean) => {
@@ -63,7 +79,8 @@ export function useSubscriptionGate(): SubscriptionGateState {
   );
 
   const isScreenFocused = isMapFocused || isFeedFocused;
-  const isSubscriptionEnabled = !!location && isScreenFocused && isAppActive;
+  const isSubscriptionEnabled =
+    !!location && isScreenFocused && isAppActive && isStartupInteractionSettled;
   const subscriptionLocation = isMapFocused ? mapSubscriptionAnchor ?? location : location;
 
   const effectiveSubscriptionViewport = useMemo(() => {
