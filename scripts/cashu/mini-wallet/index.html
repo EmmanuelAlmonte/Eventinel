@@ -10,10 +10,15 @@
     <main class="container">
       <h1>Cashu Mini Wallet</h1>
       <p class="subtitle">Local dev wallet for testing token send/receive with Eventinel Android.</p>
+      <div id="feedbackBanner" class="feedback-banner" role="status" aria-live="polite" hidden></div>
 
-      <section class="card">
-        <div class="section-header">
-          <h2>Wallet State</h2>
+      <section class="card stage-card" id="stageWallet">
+        <div class="stage-header">
+          <div>
+            <p class="stage-kicker">Step 1</p>
+            <h2>Connect Mint</h2>
+            <p class="stage-help">Set mint URL and establish connection before wallet operations.</p>
+          </div>
           <div id="connectionStatus" class="status-badge status-unknown" title="Mint connection status">
             <span id="connectionDot" class="status-dot"></span>
             <span id="connectionLabel">Checking...</span>
@@ -37,58 +42,100 @@
         <pre id="mintInfo" class="mono"></pre>
       </section>
 
-      <section class="card">
-        <h2>Mint Quote (Top-Up)</h2>
-        <div class="grid three">
+      <section class="card stage-card is-locked" id="stageTopUp">
+        <div class="stage-header">
           <div>
-            <label>Amount (sats)</label>
-            <input id="quoteAmount" type="number" min="1" step="1" placeholder="100" />
+            <p class="stage-kicker">Step 2</p>
+            <h2>Top Up Wallet</h2>
+            <p class="stage-help">Create and settle a mint quote, then mint proofs into this wallet.</p>
           </div>
-          <div>
-            <label>Quote ID</label>
-            <input id="quoteId" type="text" placeholder="Quote from mint" />
-          </div>
-          <div class="actions align-end">
-            <button id="createQuoteBtn">Create Quote</button>
-            <button id="checkQuoteBtn" class="secondary">Check</button>
-            <button id="mintQuoteBtn" class="secondary">Mint Proofs</button>
-          </div>
+          <span id="topUpStatus" class="stage-badge stage-badge-locked">Locked</span>
         </div>
-        <label>Invoice</label>
-        <textarea id="quoteInvoice" rows="3" readonly></textarea>
-      </section>
-
-      <section class="card">
-        <h2>Send Token</h2>
-        <div class="grid two">
-          <div>
-            <label>Amount (sats)</label>
-            <input id="sendAmount" type="number" min="1" step="1" placeholder="10" />
+        <p id="topUpLockedHint" class="stage-locked-hint">Connect mint to unlock top-up controls.</p>
+        <div id="topUpBody" class="stage-body">
+          <div class="grid three">
+            <div>
+              <label>Amount (sats)</label>
+              <input id="quoteAmount" type="number" min="1" step="1" placeholder="100" />
+            </div>
+            <div>
+              <label>Quote ID</label>
+              <input id="quoteId" type="text" placeholder="Quote from mint" />
+            </div>
+            <div class="actions align-end">
+              <button id="createQuoteBtn">Create Quote</button>
+              <button id="checkQuoteBtn" class="secondary">Check</button>
+              <button id="mintQuoteBtn" class="secondary">Mint Proofs</button>
+            </div>
           </div>
-          <div class="actions align-end">
-            <button id="sendBtn">Create Token</button>
-            <button id="copyTokenBtn" class="secondary">Copy</button>
-          </div>
-        </div>
-        <label>Token (share to Android app)</label>
-        <textarea id="sendToken" rows="5" readonly></textarea>
-      </section>
-
-      <section class="card">
-        <h2>Receive Token</h2>
-        <label>Paste incoming token</label>
-        <textarea id="receiveToken" rows="5" placeholder="cashuB..."></textarea>
-        <div class="actions">
-          <button id="receiveBtn">Receive Token</button>
-          <button id="resetBtn" class="danger">Reset Proofs</button>
+          <p id="quoteActionHint" class="field-hint"></p>
+          <label>Invoice</label>
+          <textarea id="quoteInvoice" rows="3" readonly></textarea>
         </div>
       </section>
 
-      <section class="card">
-        <h2>Activity</h2>
-        <pre id="activity" class="mono"></pre>
+      <section class="card stage-card is-locked" id="stageTransfer">
+        <div class="stage-header">
+          <div>
+            <p class="stage-kicker">Step 3</p>
+            <h2>Send or Receive</h2>
+            <p class="stage-help">Create tokens to send and import tokens to receive.</p>
+          </div>
+          <span id="transferStatus" class="stage-badge stage-badge-locked">Locked</span>
+        </div>
+        <p id="transferLockedHint" class="stage-locked-hint">Connect mint to unlock send and receive controls.</p>
+        <div id="transferBody" class="stage-body">
+          <div class="subcard">
+            <h3>Send Token</h3>
+            <div class="grid two">
+              <div>
+                <label>Amount (sats)</label>
+                <input id="sendAmount" type="number" min="1" step="1" placeholder="10" />
+              </div>
+              <div class="actions align-end">
+                <button id="sendBtn">Create Token</button>
+                <button id="copyTokenBtn" class="secondary">Copy</button>
+              </div>
+            </div>
+            <p id="sendActionHint" class="field-hint"></p>
+            <label>Token (share to Android app)</label>
+            <textarea id="sendToken" rows="5" readonly></textarea>
+          </div>
+
+          <div class="subcard">
+            <h3>Receive Token</h3>
+            <label>Paste incoming token</label>
+            <textarea id="receiveToken" rows="5" placeholder="cashuB..."></textarea>
+            <div class="actions">
+              <button id="receiveBtn">Receive Token</button>
+              <button id="resetBtn" class="danger">Reset Proofs</button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="card stage-card" id="stageActivity">
+        <div class="stage-header">
+          <div>
+            <p class="stage-kicker">Step 4</p>
+            <h2>Activity</h2>
+            <p class="stage-help">Recent wallet events are listed newest first.</p>
+          </div>
+          <span class="stage-badge">Live</span>
+        </div>
+        <div id="activity" class="activity-list"></div>
       </section>
     </main>
+    <div id="resetModal" class="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="resetModalTitle" hidden>
+      <div class="modal">
+        <h3 id="resetModalTitle">Reset Wallet Proofs?</h3>
+        <p>This will permanently remove all local proofs and set balance to zero.</p>
+        <div class="actions">
+          <button id="resetCancelBtn" class="secondary">Cancel</button>
+          <button id="resetConfirmBtn" class="danger">Reset Proofs</button>
+        </div>
+      </div>
+    </div>
 
     <script type="module" src="/app.js"></script>
   </body>
