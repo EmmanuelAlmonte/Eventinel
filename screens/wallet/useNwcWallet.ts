@@ -96,7 +96,7 @@ function parsePositiveAmount(amountText: string): number | null {
   return Number.isFinite(amount) && amount > 0 ? amount : null;
 }
 
-export function useNwcWallet() {
+export function useNwcWallet(enabled = true) {
   const [nwcPairingCodeInput, setNwcPairingCodeInput] = useState('');
   const [nwcWallet, setNwcWallet] = useState<NDKNWCWallet | null>(null);
   const [nwcInfo, setNwcInfo] = useState<NDKNWCGetInfoResult | null>(null);
@@ -116,6 +116,11 @@ export function useNwcWallet() {
   }, [nwcWallet?.pairingCode]);
 
   const disconnectNwc = useCallback(async () => {
+    if (!enabled) {
+      showToast.error('Lightning wallet is disabled in this build');
+      return;
+    }
+
     await runWithNwcBusy(
       setNwcBusy,
       async () => {
@@ -145,10 +150,15 @@ export function useNwcWallet() {
         showToast.error('Failed to disconnect', error instanceof Error ? error.message : 'Unknown error');
       }
     );
-  }, [nwcWallet]);
+  }, [enabled, nwcWallet]);
 
   const connectNwc = useCallback(
     async (pairingCode: string, opts?: { persist?: boolean }) => {
+      if (!enabled) {
+        showToast.error('Lightning wallet is disabled in this build');
+        return;
+      }
+
       const persist = opts?.persist ?? true;
       const parsed = tryParseNwcUri(pairingCode);
       if (!parsed) {
@@ -192,10 +202,32 @@ export function useNwcWallet() {
         }
       );
     },
-    [disconnectNwc, nwcWallet]
+    [disconnectNwc, enabled, nwcWallet]
   );
 
   useEffect(() => {
+    if (!enabled) {
+      const pool = nwcWallet?.pool;
+      if (pool) {
+        for (const relay of pool.relays.values()) {
+          try {
+            relay.disconnect();
+          } catch {
+            // ignore
+          }
+        }
+      }
+
+      clearNwcWalletState(
+        setNwcWallet,
+        setNwcInfo,
+        setNwcStatus,
+        setNwcBalance,
+        setNwcCreatedInvoice
+      );
+      return;
+    }
+
     let isCancelled = false;
 
     loadNwcPairingCode()
@@ -209,15 +241,20 @@ export function useNwcWallet() {
     return () => {
       isCancelled = true;
     };
-  }, [connectNwc]);
+  }, [connectNwc, enabled, nwcWallet]);
 
   useEffect(() => {
-    if (!nwcWallet) return;
+    if (!enabled || !nwcWallet) return;
 
     return bindNwcWalletEvents(nwcWallet, setNwcStatus, setNwcBalance);
-  }, [nwcWallet]);
+  }, [enabled, nwcWallet]);
 
   const handleNwcPay = useCallback(async () => {
+    if (!enabled) {
+      showToast.error('Lightning wallet is disabled in this build');
+      return;
+    }
+
     if (!nwcWallet) {
       showToast.error('Connect a Lightning wallet first');
       return;
@@ -242,9 +279,14 @@ export function useNwcWallet() {
         showToast.error('Payment failed', formatError(error, 'Unknown error'));
       }
     );
-  }, [nwcPayInvoice, nwcWallet]);
+  }, [enabled, nwcPayInvoice, nwcWallet]);
 
   const handleNwcMakeInvoice = useCallback(async () => {
+    if (!enabled) {
+      showToast.error('Lightning wallet is disabled in this build');
+      return;
+    }
+
     if (!nwcWallet) {
       showToast.error('Connect a Lightning wallet first');
       return;
@@ -267,7 +309,7 @@ export function useNwcWallet() {
         showToast.error('Failed to create invoice', formatError(error, 'Unknown error'));
       }
     );
-  }, [nwcMakeAmount, nwcMakeDesc, nwcWallet]);
+  }, [enabled, nwcMakeAmount, nwcMakeDesc, nwcWallet]);
 
   const copyToClipboard = useCallback(async (value: string, label: string) => {
     try {

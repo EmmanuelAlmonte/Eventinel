@@ -145,9 +145,17 @@ type SettingsCardProps = {
   colors: ThemeColors;
   onWalletPress: () => void;
   onRelayPress: () => void;
+  walletEnabled: boolean;
+  walletDescription: string;
 };
 
-export function SettingsCard({ colors, onWalletPress, onRelayPress }: SettingsCardProps) {
+export function SettingsCard({
+  colors,
+  onWalletPress,
+  onRelayPress,
+  walletEnabled,
+  walletDescription,
+}: SettingsCardProps) {
   return (
     <Card containerStyle={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
       <View style={styles.cardHeader}>
@@ -155,21 +163,23 @@ export function SettingsCard({ colors, onWalletPress, onRelayPress }: SettingsCa
         <Text style={[styles.cardTitle, { color: colors.text }]}>Settings</Text>
       </View>
 
-      <Pressable
-        onPress={onWalletPress}
-        style={({ pressed }) => [styles.settingRow, pressed && { opacity: 0.7 }]}
-      >
-        <View style={styles.settingInfo}>
-          <Icon name="account-balance-wallet" type="material" size={24} color={colors.textMuted} />
-          <View style={styles.settingText}>
-            <Text style={[styles.settingLabel, { color: colors.text }]}>Wallet</Text>
-            <Text style={[styles.settingDescription, { color: colors.textMuted }]}>
-              Lightning (NWC) and Cashu payments
-            </Text>
+      {walletEnabled ? (
+        <Pressable
+          onPress={onWalletPress}
+          style={({ pressed }) => [styles.settingRow, pressed && { opacity: 0.7 }]}
+        >
+          <View style={styles.settingInfo}>
+            <Icon name="account-balance-wallet" type="material" size={24} color={colors.textMuted} />
+            <View style={styles.settingText}>
+              <Text style={[styles.settingLabel, { color: colors.text }]}>Wallet</Text>
+              <Text style={[styles.settingDescription, { color: colors.textMuted }]}>
+                {walletDescription}
+              </Text>
+            </View>
           </View>
-        </View>
-        <Icon name="chevron-right" type="material" size={24} color={colors.textMuted} />
-      </Pressable>
+          <Icon name="chevron-right" type="material" size={24} color={colors.textMuted} />
+        </Pressable>
+      ) : null}
 
       <Pressable
         onPress={onRelayPress}

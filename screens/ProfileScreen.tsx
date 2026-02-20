@@ -11,6 +11,7 @@ import { useNavigation } from '@react-navigation/native';
 import { useNDKCurrentPubkey, useNDKCurrentUser, useNDKSessionLogout } from '@nostr-dev-kit/mobile';
 
 import { type AppNavigation } from '@lib/navigation';
+import { isCashuWalletFeatureEnabled, isLightningWalletFeatureEnabled } from '@lib/featureFlags';
 import { ScreenContainer } from '@components/ui';
 import { useAppTheme } from '@hooks';
 
@@ -59,6 +60,15 @@ export default function ProfileScreen() {
   };
 
   const permissionLabel = permissionLabelFromStatus(pushPermissionStatus);
+  const lightningEnabled = isLightningWalletFeatureEnabled;
+  const cashuEnabled = isCashuWalletFeatureEnabled;
+  const walletSettingsEnabled = lightningEnabled || cashuEnabled;
+  const walletDescription =
+    lightningEnabled && cashuEnabled
+      ? 'Lightning (NWC) and Cashu payments'
+      : lightningEnabled
+        ? 'Lightning (NWC) payments'
+        : 'Cashu payments';
   const permissionColor = useMemo(() => {
     if (!pushPermissionStatus) return colors.textMuted;
     switch (pushPermissionStatus) {
@@ -103,6 +113,8 @@ export default function ProfileScreen() {
         colors={colors}
         onWalletPress={() => navigation.navigate('Wallet')}
         onRelayPress={() => navigation.navigate('Relays')}
+        walletEnabled={walletSettingsEnabled}
+        walletDescription={walletDescription}
       />
 
       <PushTokenCard

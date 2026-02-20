@@ -1,0 +1,31 @@
+services:
+  nutshell-dev:
+    image: cashubtc/nutshell:0.19.2
+    container_name: eventinel-cashu-mint
+    command: ["poetry", "run", "mint"]
+    restart: unless-stopped
+    environment:
+      MINT_BACKEND_BOLT11_SAT: ${MINT_BACKEND_BOLT11_SAT:-FakeWallet}
+      MINT_LISTEN_HOST: 0.0.0.0
+      MINT_LISTEN_PORT: ${MINT_LISTEN_PORT:-3338}
+      MINT_PRIVATE_KEY: ${MINT_PRIVATE_KEY:-TEST_PRIVATE_KEY_CHANGE_ME}
+    ports:
+      - ${MINT_HOST_BIND:-127.0.0.1}:${MINT_LISTEN_PORT:-3338}:3338
+    volumes:
+      - cashu_mint_data:/root/.cashu
+
+  cashu-cli:
+    image: cashubtc/nutshell:0.19.2
+    container_name: eventinel-cashu-cli
+    entrypoint: ["poetry", "run", "cashu"]
+    command: ["--help"]
+    environment:
+      MINT_URL: ${CASHU_CLI_MINT_URL:-http://nutshell-dev:3338}
+    depends_on:
+      - nutshell-dev
+    volumes:
+      - cashu_cli_data:/root/.cashu
+
+volumes:
+  cashu_mint_data:
+  cashu_cli_data:

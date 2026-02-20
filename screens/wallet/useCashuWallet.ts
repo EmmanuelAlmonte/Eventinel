@@ -99,7 +99,7 @@ function parseSatsAmount(rawAmount: string): number | null {
   return Number.isFinite(amount) && amount > 0 ? amount : null;
 }
 
-export function useCashuWallet(currentPubkey?: string) {
+export function useCashuWallet(currentPubkey?: string, enabled = true) {
   const [cashuWallet, setCashuWallet] = useState<NDKCashuWallet | null>(null);
   const [cashuStatus, setCashuStatus] = useState<NDKWalletStatus | undefined>(undefined);
   const [cashuBalance, setCashuBalance] = useState(0);
@@ -111,7 +111,7 @@ export function useCashuWallet(currentPubkey?: string) {
   const [cashuReceiveToken, setCashuReceiveToken] = useState('');
 
   const refreshCashuWallet = useCallback(async () => {
-    if (!currentPubkey) return;
+    if (!enabled || !currentPubkey) return;
     await runWithCashuBusy(
       setCashuBusy,
       async () => {
@@ -132,18 +132,27 @@ export function useCashuWallet(currentPubkey?: string) {
         showToast.error('Failed to load Cashu wallet', formatError(error, 'Unknown error'));
       }
     );
-  }, [currentPubkey]);
+  }, [currentPubkey, enabled]);
 
   useEffect(() => {
+    if (!enabled) {
+      resetCashuWalletState(setCashuWallet, setCashuStatus, setCashuBalance);
+      return;
+    }
     refreshCashuWallet();
-  }, [refreshCashuWallet]);
+  }, [enabled, refreshCashuWallet]);
 
   useEffect(() => {
-    if (!cashuWallet) return;
+    if (!enabled || !cashuWallet) return;
     return bindCashuWalletEvents(cashuWallet, setCashuStatus, setCashuBalance);
-  }, [cashuWallet]);
+  }, [cashuWallet, enabled]);
 
   const handleCreateCashuWallet = useCallback(async () => {
+    if (!enabled) {
+      showToast.error('Cashu wallet is disabled in this build');
+      return;
+    }
+
     const mints = splitUrls(cashuCreateMints);
     if (!mints.length) {
       showToast.error('Add at least one mint URL');
@@ -170,9 +179,14 @@ export function useCashuWallet(currentPubkey?: string) {
         showToast.error('Failed to create Cashu wallet', formatError(error, 'Unknown error'));
       }
     );
-  }, [cashuCreateMints, cashuCreateRelays]);
+  }, [cashuCreateMints, cashuCreateRelays, enabled]);
 
   const handleCashuDeposit = useCallback(async () => {
+    if (!enabled) {
+      showToast.error('Cashu wallet is disabled in this build');
+      return;
+    }
+
     if (!cashuWallet) {
       showToast.error('Create or load a Cashu wallet first');
       return;
@@ -204,9 +218,14 @@ export function useCashuWallet(currentPubkey?: string) {
         showToast.error('Failed to create deposit', formatError(error, 'Unknown error'));
       }
     );
-  }, [cashuDepositAmount, cashuWallet]);
+  }, [cashuDepositAmount, cashuWallet, enabled]);
 
   const handleCashuReceiveToken = useCallback(async () => {
+    if (!enabled) {
+      showToast.error('Cashu wallet is disabled in this build');
+      return;
+    }
+
     if (!cashuWallet) {
       showToast.error('Create or load a Cashu wallet first');
       return;
@@ -232,7 +251,7 @@ export function useCashuWallet(currentPubkey?: string) {
         showToast.error('Failed to receive token', formatError(error, 'Unknown error'));
       }
     );
-  }, [cashuReceiveToken, cashuWallet]);
+  }, [cashuReceiveToken, cashuWallet, enabled]);
 
   return {
     cashuWallet,

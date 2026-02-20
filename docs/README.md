@@ -33,6 +33,10 @@ npm run web
 npx tsc --noEmit
 npm test
 npm run test:coverage
+npm run cashu:mint:up
+npm run cashu:mint:down
+npm run cashu:cli:smoke
+npm run cashu:web:wallet
 ```
 
 ## Data Notes
@@ -46,3 +50,5 @@ npm run test:coverage
 - Canonical summary: `docs/PROJECT_SUMMARY.md`
 - Architecture (short): `docs/ARCHITECTURE.md`
 - Roadmap (short): `docs/MOBILE_ROADMAP.md`
+- Blossom references: `docs/BLOSSOM_REFERENCE_GUIDE.md`
+- Cashu local dev setup: `docs/CASHU_LOCAL_DEV_SETUP.md`
