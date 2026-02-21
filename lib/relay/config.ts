@@ -5,7 +5,7 @@
  */
 
 const DEFAULT_PRODUCTION_RELAYS = ['wss://relay.eventinel.com'];
-const DEFAULT_LOCAL_RELAYS = ['wss://relay.eventinel.com'];
+const DEFAULT_LOCAL_RELAYS = ['ws://10.0.2.2:8085'];
 
 /**
  * Normalize relay URL for consistent comparison.
@@ -79,6 +79,7 @@ export function isUsingLocalRelaysOnly(): boolean {
     (relay) =>
       relay.includes('localhost') ||
       relay.includes('127.0.0.1') ||
+      relay.includes('10.0.2.2') ||
       relay.includes('relay.eventinel.com')
   );
 }

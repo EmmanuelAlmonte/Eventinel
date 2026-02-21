@@ -65,6 +65,10 @@ Use these mint URLs in Wallet -> Cashu:
 - iOS simulator: `http://127.0.0.1:3338`
 - Physical device: `http://<your-computer-lan-ip>:3338` (requires `MINT_HOST_BIND=0.0.0.0`)
 
+Dev default behavior:
+- Android dev builds prefill Cashu mint URL with `http://10.0.2.2:3338`.
+- Optional override via `.env.local`: `EXPO_PUBLIC_CASHU_DEV_MINT_URL=<your-url>`.
+
 ## Mini Web Wallet (Recommended for single-emulator tests)
 
 Run a simple local web wallet included in this repo:

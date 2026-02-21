@@ -30,10 +30,15 @@ type CashuSectionProps = {
   depositAmount: string;
   setDepositAmount: (value: string) => void;
   depositInvoice: string | null;
+  sendAmount: string;
+  setSendAmount: (value: string) => void;
+  sendToken: string | null;
   receiveToken: string;
   setReceiveToken: (value: string) => void;
   onCreateWallet: () => void;
   onCreateDeposit: () => void;
+  onSendToken: () => void;
+  onCopySendToken: (value: string) => void;
   onReceiveToken: () => void;
   onRefresh: () => void;
   onCopyInvoice: (value: string) => void;
@@ -44,6 +49,7 @@ type SectionInputProps = {
   placeholder: string;
   value: string;
   onChangeText: (value: string) => void;
+  editable?: boolean;
   multiline?: boolean;
   keyboardType?: 'numeric' | 'default';
   autoCapitalize?: 'none' | 'sentences';
@@ -115,12 +121,43 @@ function DepositInvoicePanel({
   );
 }
 
+function SendTokenPanel({
+  colors,
+  token,
+  onCopy,
+}: {
+  colors: ThemeColors;
+  token: string | null;
+  onCopy: (value: string) => void;
+}) {
+  if (!token) return null;
+
+  return (
+    <View style={styles.invoiceBox}>
+      <Text style={[styles.invoiceLabel, { color: colors.textMuted }]}>Token</Text>
+      <Text style={[styles.invoiceValue, { color: colors.text }]} selectable>
+        {token}
+      </Text>
+      <View style={styles.invoiceActions}>
+        <Pressable
+          onPress={() => onCopy(token)}
+          style={({ pressed }) => [styles.smallAction, pressed && { opacity: 0.7 }]}
+        >
+          <Icon name="content-copy" type="material" size={18} color={colors.primary} />
+          <Text style={[styles.smallActionText, { color: colors.primary }]}>Copy</Text>
+        </Pressable>
+      </View>
+    </View>
+  );
+}
+
 function SectionInput({
   colors,
   placeholder,
   value,
   onChangeText,
   multiline,
+  editable = true,
   keyboardType = 'default',
   autoCapitalize = 'none',
   autoCorrect = false,
@@ -136,6 +173,7 @@ function SectionInput({
       autoCapitalize={autoCapitalize}
       autoCorrect={autoCorrect}
       secureTextEntry={secureTextEntry}
+      editable={editable}
       multiline={multiline}
       {...sharedStyles}
     />
@@ -151,6 +189,11 @@ function CashuWalletConnectedPanel({
   onCreateDeposit,
   depositInvoice,
   onCopyInvoice,
+  sendAmount,
+  setSendAmount,
+  onSendToken,
+  sendToken,
+  onCopySendToken,
   receiveToken,
   setReceiveToken,
   onReceiveToken,
@@ -165,6 +208,11 @@ function CashuWalletConnectedPanel({
   onCreateDeposit: () => void;
   depositInvoice: string | null;
   onCopyInvoice: (value: string) => void;
+  sendAmount: string;
+  setSendAmount: (value: string) => void;
+  onSendToken: () => void;
+  sendToken: string | null;
+  onCopySendToken: (value: string) => void;
   receiveToken: string;
   setReceiveToken: (value: string) => void;
   onReceiveToken: () => void;
@@ -187,6 +235,17 @@ function CashuWalletConnectedPanel({
       />
       <Button title="Create Deposit Invoice" onPress={onCreateDeposit} disabled={busy} containerStyle={styles.buttonContainer} />
       <DepositInvoicePanel colors={colors} invoice={depositInvoice} onCopy={onCopyInvoice} />
+      <Divider style={[styles.divider, { backgroundColor: colors.border }]} />
+      <Text style={[styles.sectionTitle, { color: colors.text }]}>Send Token</Text>
+      <SectionInput
+        colors={colors}
+        placeholder="Amount (sats)"
+        keyboardType="numeric"
+        value={sendAmount}
+        onChangeText={setSendAmount}
+      />
+      <Button title="Create Token" type="outline" onPress={onSendToken} disabled={busy} containerStyle={styles.buttonContainer} />
+      <SendTokenPanel colors={colors} token={sendToken} onCopy={onCopySendToken} />
       <Divider style={[styles.divider, { backgroundColor: colors.border }]} />
       <Text style={[styles.sectionTitle, { color: colors.text }]}>Receive Token</Text>
       <SectionInput
@@ -236,12 +295,12 @@ function CashuWalletCreatePanel({
       />
       <SectionInput
         colors={colors}
-        placeholder="Wallet relay URLs (optional)"
+        placeholder="Wallet relay URL"
         value={createRelays}
         onChangeText={setCreateRelays}
         autoCapitalize="none"
         autoCorrect={false}
-        multiline
+        editable={false}
       />
       <Button title="Create Cashu Wallet" onPress={onCreateWallet} disabled={busy} containerStyle={styles.buttonContainer} />
     </>
@@ -263,10 +322,15 @@ export function CashuSection({
   depositAmount,
   setDepositAmount,
   depositInvoice,
+  sendAmount,
+  setSendAmount,
+  sendToken,
   receiveToken,
   setReceiveToken,
   onCreateWallet,
   onCreateDeposit,
+  onSendToken,
+  onCopySendToken,
   onReceiveToken,
   onRefresh,
   onCopyInvoice,
@@ -289,6 +353,11 @@ export function CashuSection({
           onCreateDeposit={onCreateDeposit}
           depositInvoice={depositInvoice}
           onCopyInvoice={onCopyInvoice}
+          sendAmount={sendAmount}
+          setSendAmount={setSendAmount}
+          onSendToken={onSendToken}
+          sendToken={sendToken}
+          onCopySendToken={onCopySendToken}
           receiveToken={receiveToken}
           setReceiveToken={setReceiveToken}
           onReceiveToken={onReceiveToken}

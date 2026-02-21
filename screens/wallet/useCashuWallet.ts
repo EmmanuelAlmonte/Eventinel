@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
+import { Platform } from 'react-native';
 import {
   NDKCashuWallet,
   NDKKind,
@@ -99,15 +100,33 @@ function parseSatsAmount(rawAmount: string): number | null {
   return Number.isFinite(amount) && amount > 0 ? amount : null;
 }
 
+const DEFAULT_ANDROID_DEV_CASHU_MINT_URL = 'http://10.0.2.2:3338';
+const FIXED_CASHU_WALLET_RELAY_URL = 'wss://relay.eventinel.com';
+
+function getInitialCashuCreateMints(): string {
+  if (!__DEV__) {
+    return '';
+  }
+
+  const configuredMintUrl = process.env.EXPO_PUBLIC_CASHU_DEV_MINT_URL?.trim();
+  if (configuredMintUrl) {
+    return configuredMintUrl;
+  }
+
+  return Platform.OS === 'android' ? DEFAULT_ANDROID_DEV_CASHU_MINT_URL : '';
+}
+
 export function useCashuWallet(currentPubkey?: string, enabled = true) {
   const [cashuWallet, setCashuWallet] = useState<NDKCashuWallet | null>(null);
   const [cashuStatus, setCashuStatus] = useState<NDKWalletStatus | undefined>(undefined);
   const [cashuBalance, setCashuBalance] = useState(0);
   const [cashuBusy, setCashuBusy] = useState(false);
-  const [cashuCreateMints, setCashuCreateMints] = useState('');
-  const [cashuCreateRelays, setCashuCreateRelays] = useState('');
+  const [cashuCreateMints, setCashuCreateMints] = useState(getInitialCashuCreateMints);
+  const [cashuCreateRelays, setCashuCreateRelays] = useState(FIXED_CASHU_WALLET_RELAY_URL);
   const [cashuDepositAmount, setCashuDepositAmount] = useState('');
   const [cashuDepositInvoice, setCashuDepositInvoice] = useState<string | null>(null);
+  const [cashuSendAmount, setCashuSendAmount] = useState('');
+  const [cashuSendToken, setCashuSendToken] = useState<string | null>(null);
   const [cashuReceiveToken, setCashuReceiveToken] = useState('');
 
   const refreshCashuWallet = useCallback(async () => {
@@ -158,12 +177,10 @@ export function useCashuWallet(currentPubkey?: string, enabled = true) {
       showToast.error('Add at least one mint URL');
       return;
     }
-    const relays = splitUrls(cashuCreateRelays);
-
     await runWithCashuBusy(
       setCashuBusy,
       async () => {
-        const wallet = await NDKCashuWallet.create(ndk, mints, relays.length > 0 ? relays : undefined);
+        const wallet = await NDKCashuWallet.create(ndk, mints, [FIXED_CASHU_WALLET_RELAY_URL]);
         if (!wallet) {
           throw new Error('Wallet creation returned empty response');
         }
@@ -179,7 +196,7 @@ export function useCashuWallet(currentPubkey?: string, enabled = true) {
         showToast.error('Failed to create Cashu wallet', formatError(error, 'Unknown error'));
       }
     );
-  }, [cashuCreateMints, cashuCreateRelays, enabled]);
+  }, [cashuCreateMints, enabled]);
 
   const handleCashuDeposit = useCallback(async () => {
     if (!enabled) {
@@ -253,6 +270,49 @@ export function useCashuWallet(currentPubkey?: string, enabled = true) {
     );
   }, [cashuReceiveToken, cashuWallet, enabled]);
 
+  const handleCashuSendToken = useCallback(async () => {
+    if (!enabled) {
+      showToast.error('Cashu wallet is disabled in this build');
+      return;
+    }
+
+    if (!cashuWallet) {
+      showToast.error('Create or load a Cashu wallet first');
+      return;
+    }
+
+    const amount = parseSatsAmount(cashuSendAmount);
+    if (amount == null) {
+      showToast.error('Enter a valid send amount (sats)');
+      return;
+    }
+
+    if (amount > cashuBalance) {
+      showToast.error('Insufficient balance', `Available: ${cashuBalance} sats`);
+      return;
+    }
+
+    await runWithCashuBusy(
+      setCashuBusy,
+      async () => {
+        const token = await cashuWallet.send(amount, 'Eventinel transfer');
+        if (!token.trim()) {
+          throw new Error('Send returned an empty token');
+        }
+
+        setCashuSendToken(token);
+        setCashuSendAmount('');
+        await cashuWallet.updateBalance?.();
+        setCashuBalance(balanceAmount(cashuWallet.balance));
+        showToast.success('Token created');
+      },
+      (error) => {
+        console.warn('[Wallet] Cashu send failed:', error);
+        showToast.error('Failed to create token', formatError(error, 'Unknown error'));
+      }
+    );
+  }, [cashuBalance, cashuSendAmount, cashuWallet, enabled]);
+
   return {
     cashuWallet,
     cashuStatus,
@@ -265,11 +325,15 @@ export function useCashuWallet(currentPubkey?: string, enabled = true) {
     cashuDepositAmount,
     setCashuDepositAmount,
     cashuDepositInvoice,
+    cashuSendAmount,
+    setCashuSendAmount,
+    cashuSendToken,
     cashuReceiveToken,
     setCashuReceiveToken,
     refreshCashuWallet,
     handleCreateCashuWallet,
     handleCashuDeposit,
+    handleCashuSendToken,
     handleCashuReceiveToken,
   };
 }
