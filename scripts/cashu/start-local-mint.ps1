@@ -31,5 +31,5 @@ if ($LASTEXITCODE -ne 0) {
   exit $LASTEXITCODE
 }
 
-Write-Host "Cashu mint is running on http://127.0.0.1:3338"
-Write-Host "Android emulator mint URL: http://10.0.2.2:3338"
+Write-Host "Cashu mint local URL: http://127.0.0.1:3338"
+Write-Host "Cashu mint physical phone URL: http://10.0.0.197:3338"

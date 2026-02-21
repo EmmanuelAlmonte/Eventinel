@@ -6,15 +6,16 @@ import { ndk } from '@lib/ndk';
 
 import { balanceAmount, splitUrls } from './helpers';
 import {
-  DEFAULT_CASHU_WALLET_RELAY_URL,
   bindCashuWalletEvents,
   fetchCashuWallet,
   formatError,
+  getInitialCashuCreateRelays,
   getInitialCashuCreateMints,
   isValidMintUrl,
   isValidRelayUrl,
   parseSatsAmount,
   resetCashuWalletState,
+  resolveCashuCreateRelays,
   runWithCashuBusy,
   syncCashuWalletState,
   walletRelayUrls,
@@ -26,7 +27,7 @@ export function useCashuWallet(currentPubkey?: string, enabled = true) {
   const [cashuBalance, setCashuBalance] = useState(0);
   const [cashuBusy, setCashuBusy] = useState(false);
   const [cashuCreateMints, setCashuCreateMints] = useState(getInitialCashuCreateMints);
-  const [cashuCreateRelays, setCashuCreateRelays] = useState(DEFAULT_CASHU_WALLET_RELAY_URL);
+  const [cashuCreateRelays, setCashuCreateRelays] = useState(getInitialCashuCreateRelays);
   const [cashuDepositAmount, setCashuDepositAmount] = useState('');
   const [cashuDepositInvoice, setCashuDepositInvoice] = useState<string | null>(null);
   const [cashuEditMints, setCashuEditMints] = useState('');
@@ -74,6 +75,27 @@ export function useCashuWallet(currentPubkey?: string, enabled = true) {
   }, [enabled, refreshCashuWallet]);
 
   useEffect(() => {
+    if (!enabled) return;
+
+    let cancelled = false;
+    resolveCashuCreateRelays()
+      .then((relays) => {
+        if (cancelled) return;
+        setCashuCreateRelays(relays.join('\n'));
+      })
+      .catch((error) => {
+        console.warn('[Wallet] Failed to resolve Cashu create relays:', error);
+        if (!cancelled) {
+          setCashuCreateRelays(getInitialCashuCreateRelays());
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [enabled]);
+
+  useEffect(() => {
     if (!enabled || !cashuWallet) return;
     return bindCashuWalletEvents(cashuWallet, setCashuStatus, setCashuBalance);
   }, [cashuWallet, enabled]);
@@ -92,7 +114,8 @@ export function useCashuWallet(currentPubkey?: string, enabled = true) {
     await runWithCashuBusy(
       setCashuBusy,
       async () => {
-        const wallet = await NDKCashuWallet.create(ndk, mints, [DEFAULT_CASHU_WALLET_RELAY_URL]);
+        const relays = await resolveCashuCreateRelays();
+        const wallet = await NDKCashuWallet.create(ndk, mints, relays);
         if (!wallet) {
           throw new Error('Wallet creation returned empty response');
         }
@@ -103,6 +126,7 @@ export function useCashuWallet(currentPubkey?: string, enabled = true) {
         setCashuBalance(balanceAmount(wallet.balance));
         setCashuEditMints(wallet.mints.join('\n'));
         setCashuEditRelays(walletRelayUrls(wallet).join('\n'));
+        setCashuCreateRelays(relays.join('\n'));
         showToast.success('Cashu wallet created');
       },
       (error) => {

@@ -77,7 +77,7 @@ jest.mock('../../lib/relay/storage', () => {
     removeRelayFromStorage,
     saveRelays: jest.fn().mockResolvedValue(undefined),
     DEFAULT_RELAYS: ['wss://relay.eventinel.com'],
-    LOCAL_RELAYS: ['ws://10.0.2.2:8085'],
+    LOCAL_RELAYS: ['ws://10.0.0.197:8085'],
   };
 });
 
