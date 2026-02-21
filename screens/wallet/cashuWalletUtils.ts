@@ -51,7 +51,16 @@ export function bindCashuWalletEvents(
     setCashuBalance(balanceAmount(wallet.balance));
   };
   const handleBalanceUpdated = (balance?: NDKWalletBalance) => {
-    setCashuBalance(balanceAmount(balance));
+    const nextBalance =
+      balance == null ? balanceAmount(wallet.balance) : balanceAmount(balance);
+    setCashuBalance(nextBalance);
+    if (__DEV__) {
+      console.log('[Wallet][CashuDebug] event:balance_updated', {
+        payloadBalance: balanceAmount(balance),
+        walletBalance: balanceAmount(wallet.balance),
+        appliedBalance: nextBalance,
+      });
+    }
   };
   const handleStatusChanged = (status: NDKWalletStatus) => {
     setCashuStatus(status);

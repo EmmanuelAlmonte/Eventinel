@@ -21,6 +21,15 @@ import {
   walletRelayUrls,
 } from './cashuWalletUtils';
 
+function logCashuDebug(message: string, details?: Record<string, unknown>) {
+  if (!__DEV__) return;
+  if (details) {
+    console.log(`[Wallet][CashuDebug] ${message}`, details);
+    return;
+  }
+  console.log(`[Wallet][CashuDebug] ${message}`);
+}
+
 export function useCashuWallet(currentPubkey?: string, enabled = true) {
   const [cashuWallet, setCashuWallet] = useState<NDKCashuWallet | null>(null);
   const [cashuStatus, setCashuStatus] = useState<NDKWalletStatus | undefined>(undefined);
@@ -41,21 +50,50 @@ export function useCashuWallet(currentPubkey?: string, enabled = true) {
     await runWithCashuBusy(
       setCashuBusy,
       async () => {
+        logCashuDebug('refresh:start', { pubkey: currentPubkey });
         const wallet = await fetchCashuWallet(ndk, currentPubkey);
         if (!wallet) {
+          logCashuDebug('refresh:no-wallet-event', { pubkey: currentPubkey });
           resetCashuWalletState(setCashuWallet, setCashuStatus, setCashuBalance);
           setCashuEditMints('');
           setCashuEditRelays('');
           return;
         }
 
-        syncCashuWalletState(wallet, setCashuWallet, setCashuStatus, setCashuBalance);
-        await wallet.start();
-        await wallet.updateBalance?.();
+        logCashuDebug('refresh:fetched-wallet', {
+          status: wallet.status,
+          balance: balanceAmount(wallet.balance),
+          mints: wallet.mints,
+          relays: walletRelayUrls(wallet),
+        });
+        setCashuWallet(wallet);
         setCashuStatus(wallet.status);
-        setCashuBalance(balanceAmount(wallet.balance));
+        logCashuDebug('refresh:after-wallet-set', {
+          status: wallet.status,
+          balance: balanceAmount(wallet.balance),
+        });
+
+        await wallet.start();
+        logCashuDebug('refresh:after-start', {
+          status: wallet.status,
+          balance: balanceAmount(wallet.balance),
+        });
+
+        await wallet.updateBalance?.();
+        logCashuDebug('refresh:after-updateBalance', {
+          status: wallet.status,
+          balance: balanceAmount(wallet.balance),
+        });
+
+        syncCashuWalletState(wallet, setCashuWallet, setCashuStatus, setCashuBalance);
         setCashuEditMints(wallet.mints.join('\n'));
         setCashuEditRelays(walletRelayUrls(wallet).join('\n'));
+        logCashuDebug('refresh:done', {
+          status: wallet.status,
+          balance: balanceAmount(wallet.balance),
+          mints: wallet.mints,
+          relays: walletRelayUrls(wallet),
+        });
       },
       (error) => {
         console.warn('[Wallet] Failed to refresh Cashu wallet:', error);
@@ -166,6 +204,9 @@ export function useCashuWallet(currentPubkey?: string, enabled = true) {
 
         const invoice = await deposit.start();
         setCashuDepositInvoice(invoice);
+        if (__DEV__) {
+          console.log(`[Wallet] Cashu deposit invoice (${amount} sats):`, invoice);
+        }
         showToast.success('Deposit invoice created');
       },
       (error) => {
@@ -285,11 +326,33 @@ export function useCashuWallet(currentPubkey?: string, enabled = true) {
     await runWithCashuBusy(
       setCashuBusy,
       async () => {
+        logCashuDebug('settings-save:start', {
+          previousBalance: balanceAmount(cashuWallet.balance),
+          currentStatus: cashuWallet.status,
+          requestedMints: mints,
+          requestedRelays: relays,
+        });
         await cashuWallet.update({ mints, relays });
+        logCashuDebug('settings-save:after-update-call', {
+          balance: balanceAmount(cashuWallet.balance),
+          status: cashuWallet.status,
+        });
         setCashuEditMints(mints.join('\n'));
         setCashuEditRelays(relays.join('\n'));
+
         await cashuWallet.updateBalance?.();
+        logCashuDebug('settings-save:after-updateBalance', {
+          balance: balanceAmount(cashuWallet.balance),
+          status: cashuWallet.status,
+        });
+
         syncCashuWalletState(cashuWallet, setCashuWallet, setCashuStatus, setCashuBalance);
+        logCashuDebug('settings-save:done', {
+          finalBalance: balanceAmount(cashuWallet.balance),
+          finalStatus: cashuWallet.status,
+          appliedMints: cashuWallet.mints,
+          appliedRelays: walletRelayUrls(cashuWallet),
+        });
         showToast.success('Wallet settings updated');
       },
       (error) => {
