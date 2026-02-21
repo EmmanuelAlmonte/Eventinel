@@ -82,6 +82,8 @@ export default function WalletScreen() {
           depositAmount={cashu.cashuDepositAmount}
           setDepositAmount={cashu.setCashuDepositAmount}
           depositInvoice={cashu.cashuDepositInvoice}
+          editMints={cashu.cashuEditMints}
+          setEditMints={cashu.setCashuEditMints}
           sendAmount={cashu.cashuSendAmount}
           setSendAmount={cashu.setCashuSendAmount}
           sendToken={cashu.cashuSendToken}
@@ -89,6 +91,7 @@ export default function WalletScreen() {
           setReceiveToken={cashu.setCashuReceiveToken}
           onCreateWallet={() => void cashu.handleCreateCashuWallet()}
           onCreateDeposit={() => void cashu.handleCashuDeposit()}
+          onSaveMints={() => void cashu.handleCashuUpdateMints()}
           onSendToken={() => void cashu.handleCashuSendToken()}
           onCopySendToken={(value) => void nwc.copyToClipboard(value, 'Token')}
           onReceiveToken={() => void cashu.handleCashuReceiveToken()}

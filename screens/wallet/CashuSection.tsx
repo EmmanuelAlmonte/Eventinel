@@ -30,6 +30,8 @@ type CashuSectionProps = {
   depositAmount: string;
   setDepositAmount: (value: string) => void;
   depositInvoice: string | null;
+  editMints: string;
+  setEditMints: (value: string) => void;
   sendAmount: string;
   setSendAmount: (value: string) => void;
   sendToken: string | null;
@@ -37,6 +39,7 @@ type CashuSectionProps = {
   setReceiveToken: (value: string) => void;
   onCreateWallet: () => void;
   onCreateDeposit: () => void;
+  onSaveMints: () => void;
   onSendToken: () => void;
   onCopySendToken: (value: string) => void;
   onReceiveToken: () => void;
@@ -189,6 +192,9 @@ function CashuWalletConnectedPanel({
   onCreateDeposit,
   depositInvoice,
   onCopyInvoice,
+  editMints,
+  setEditMints,
+  onSaveMints,
   sendAmount,
   setSendAmount,
   onSendToken,
@@ -208,6 +214,9 @@ function CashuWalletConnectedPanel({
   onCreateDeposit: () => void;
   depositInvoice: string | null;
   onCopyInvoice: (value: string) => void;
+  editMints: string;
+  setEditMints: (value: string) => void;
+  onSaveMints: () => void;
   sendAmount: string;
   setSendAmount: (value: string) => void;
   onSendToken: () => void;
@@ -223,6 +232,10 @@ function CashuWalletConnectedPanel({
     <>
       <Text style={[styles.meta, { color: colors.textMuted }]}>Balance: <Text style={{ color: colors.text }}>{balance}</Text> sats</Text>
       <MintsList colors={colors} mints={mints} />
+      <Divider style={[styles.divider, { backgroundColor: colors.border }]} />
+      <Text style={[styles.sectionTitle, { color: colors.text }]}>Edit Mints</Text>
+      <SectionInput colors={colors} placeholder="Mint URLs (space/comma/newline separated)" value={editMints} onChangeText={setEditMints} autoCapitalize="none" autoCorrect={false} multiline />
+      <Button title="Save Mint Config" type="outline" onPress={onSaveMints} disabled={busy} containerStyle={styles.buttonContainer} />
       <Divider style={[styles.divider, { backgroundColor: colors.border }]} />
       <Text style={[styles.sectionTitle, { color: colors.text }]}>Deposit (Mint)</Text>
       <Text style={[styles.meta, { color: colors.textMuted }]}>Generate a Lightning invoice to mint ecash into your Cashu wallet.</Text>
@@ -322,6 +335,8 @@ export function CashuSection({
   depositAmount,
   setDepositAmount,
   depositInvoice,
+  editMints,
+  setEditMints,
   sendAmount,
   setSendAmount,
   sendToken,
@@ -329,6 +344,7 @@ export function CashuSection({
   setReceiveToken,
   onCreateWallet,
   onCreateDeposit,
+  onSaveMints,
   onSendToken,
   onCopySendToken,
   onReceiveToken,
@@ -353,6 +369,9 @@ export function CashuSection({
           onCreateDeposit={onCreateDeposit}
           depositInvoice={depositInvoice}
           onCopyInvoice={onCopyInvoice}
+          editMints={editMints}
+          setEditMints={setEditMints}
+          onSaveMints={onSaveMints}
           sendAmount={sendAmount}
           setSendAmount={setSendAmount}
           onSendToken={onSendToken}
