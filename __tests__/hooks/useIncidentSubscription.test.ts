@@ -242,23 +242,18 @@ describe('useIncidentSubscription', () => {
   // =============================================================================
 
   describe('Filter Construction', () => {
-    it('subscribes when location is null (global mode)', () => {
-      renderHook(() =>
+    it('does not subscribe when location is null (no desired geohash cells)', () => {
+      const { result } = renderHook(() =>
         useIncidentSubscription({
           location: null,
         })
       );
 
-      const calls = getSubscribeCalls();
-      const filters = calls[0]?.[0];
-
-      expect(Array.isArray(filters)).toBe(true);
-      expect((filters as any)[0]).toEqual(
-        expect.objectContaining({
-          kinds: [30911],
-          limit: INCIDENT_LIMITS.FETCH_LIMIT,
-        })
-      );
+      expect(getSubscribeCalls().length).toBe(0);
+      expect(result.current.incidents).toEqual([]);
+      expect(result.current.totalEventsReceived).toBe(0);
+      expect(result.current.hasReceivedHistory).toBe(true);
+      expect(result.current.isInitialLoading).toBe(false);
     });
 
     it('subscribes when location is provided', () => {
@@ -278,19 +273,14 @@ describe('useIncidentSubscription', () => {
       expect(hasGeoHashFilter).toBe(true);
     });
 
-    it('uses simple global filter without geohash/since', () => {
+    it('does not build filters when location is null', () => {
       renderHook(() =>
         useIncidentSubscription({
           location: null,
         })
       );
 
-      const filterCall = getSubscribeCalls()[0];
-      const filters = filterCall[0];
-
-      expect(filters[0].kinds).toEqual([30911]);
-      expect(filters[0].limit).toBe(INCIDENT_LIMITS.FETCH_LIMIT);
-      expect(filters[0]['#g']).toBeUndefined();
+      expect(getSubscribeCalls().length).toBe(0);
     });
   });
 
@@ -319,6 +309,36 @@ describe('useIncidentSubscription', () => {
       );
 
       expect(mockNDKHooks.getNDK().subscribe).toHaveBeenCalled();
+    });
+
+    it('preserves incidents when disabling while location is still available', async () => {
+      const mockEvent = createMockIncidentEvent({
+        title: 'Persist Me',
+        severity: 2,
+      });
+      mockSubscription.setEvents([mockEvent]);
+      mockSubscription.setEose(true);
+
+      const { result, rerender } = renderHook(
+        ({ enabled }) =>
+          useIncidentSubscription({
+            location: [-75.1652, 39.9526],
+            enabled,
+          }),
+        {
+          initialProps: { enabled: true },
+        }
+      );
+
+      await waitFor(() => {
+        expect(result.current.incidents.length).toBe(1);
+      });
+
+      rerender({ enabled: false });
+
+      expect(result.current.incidents.length).toBe(1);
+      expect(result.current.incidents[0].title).toBe('Persist Me');
+      expect(result.current.incidents[0].severity).toBe(2);
     });
   });
 
@@ -840,18 +860,19 @@ describe('useIncidentSubscription', () => {
 
       const { result } = renderHook(() =>
         useIncidentSubscription({
-          location: null,
+          location: [-75.1652, 39.9526],
         })
       );
+      const subscriptionCount = getSubscribeCalls().length;
       mockSubscription.setEvents([cacheEvent]);
       mockSubscription.addEvent(relayEvent);
       mockSubscription.setEose(true);
 
       await waitFor(() => {
-        expect(result.current.totalEventsReceived).toBe(2);
+        expect(result.current.totalEventsReceived).toBe(subscriptionCount * 2);
         expect(result.current.incidents).toHaveLength(1);
         expect(result.current.incidents[0].title).toBe('Relay');
-        expect(result.current.updatedIncidents[0].title).toBe('Relay');
+        expect(result.current.updatedIncidents.some((incident) => incident.title === 'Relay')).toBe(true);
       });
     });
   });
@@ -915,9 +936,10 @@ describe('useIncidentSubscription', () => {
           location: [-75.1652, 39.9526],
         })
       );
+      const subscriptionCount = getSubscribeCalls().length;
 
       await waitFor(() => {
-        expect(result.current.totalEventsReceived).toBe(2);
+        expect(result.current.totalEventsReceived).toBe(subscriptionCount * 2);
         expect(result.current.incidents.length).toBe(1);
       });
     });
@@ -927,20 +949,20 @@ describe('useIncidentSubscription', () => {
   // SIMPLE FILTER TESTS
   // =============================================================================
 
-  describe('Simple Filter', () => {
-    it('always uses subscription fetch limit with no since filter', () => {
-      renderHook(() =>
+  describe('Empty Desired Cells', () => {
+    it('subscribes to no relays and resolves loading when location is null', () => {
+      const { result } = renderHook(() =>
         useIncidentSubscription({
           location: null,
           maxIncidents: 9999, // Runtime cap should still be 200
         })
       );
 
-      const calls = getSubscribeCalls();
-      const filters = calls[0]?.[0];
-
-      expect(filters[0].limit).toBe(INCIDENT_LIMITS.FETCH_LIMIT);
-      expect(filters[0].since).toBeUndefined();
+      expect(getSubscribeCalls().length).toBe(0);
+      expect(result.current.incidents).toEqual([]);
+      expect(result.current.totalEventsReceived).toBe(0);
+      expect(result.current.hasReceivedHistory).toBe(true);
+      expect(result.current.isInitialLoading).toBe(false);
     });
   });
 

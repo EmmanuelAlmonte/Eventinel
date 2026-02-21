@@ -1,4 +1,3 @@
-import geohash from 'ngeohash';
 import {
   buildGeohashGrid,
   encodeGeohashFromLngLat,
@@ -6,6 +5,12 @@ import {
   type LngLat,
   type ViewportBounds,
 } from './geohashViewport';
+import {
+  isFiniteLngLat,
+  uniqueSorted,
+  sortCellsByProximity,
+  expandCellsByRing,
+} from './subscriptionPlannerCells';
 
 export type MapSubscriptionViewport = {
   center: [number, number];
@@ -38,18 +43,7 @@ export interface SubscriptionPlan {
   truncated: boolean;
 }
 
-const EARTH_RADIUS_METERS = 6371000;
 const DEFAULT_ZOOM_FALLBACK = 14;
-
-function isFinitePair(value: LngLat | null | undefined): value is LngLat {
-  return (
-    !!value &&
-    Number.isFinite(value[0]) &&
-    Number.isFinite(value[1]) &&
-    Math.abs(value[1]) <= 90 &&
-    Math.abs(value[0]) <= 180
-  );
-}
 
 function normalizePrecision(precision: number): number {
   if (!Number.isFinite(precision)) {
@@ -69,102 +63,7 @@ function normalizeMaxCells(maxCells: number): number {
 }
 
 function isFiniteBounds(bounds: ViewportBounds): boolean {
-  return isFinitePair(bounds?.ne) && isFinitePair(bounds?.sw);
-}
-
-function uniqueSorted(values: string[]): string[] {
-  return Array.from(new Set(values.filter((value) => value.length > 0))).sort();
-}
-
-function toRadians(degrees: number): number {
-  return (degrees * Math.PI) / 180;
-}
-
-function distanceMetersFromCoordinates(lat1: number, lng1: number, lat2: number, lng2: number): number {
-  const dLat = toRadians(lat2 - lat1);
-  const dLng = toRadians(lng2 - lng1);
-  const radLat1 = toRadians(lat1);
-  const radLat2 = toRadians(lat2);
-
-  const sinLat = Math.sin(dLat / 2);
-  const sinLng = Math.sin(dLng / 2);
-  const a =
-    sinLat * sinLat +
-    Math.cos(radLat1) * Math.cos(radLat2) * sinLng * sinLng;
-
-  const normalizedA = Math.min(1, Math.max(0, a));
-  return 2 * EARTH_RADIUS_METERS * Math.atan2(Math.sqrt(normalizedA), Math.sqrt(1 - normalizedA));
-}
-
-function cellDistanceToCenter(cell: string, center: LngLat): number {
-  const [lng, lat] = center;
-  try {
-    const decoded = geohash.decode(cell);
-    return distanceMetersFromCoordinates(lat, lng, decoded.latitude, decoded.longitude);
-  } catch {
-    return Number.POSITIVE_INFINITY;
-  }
-}
-
-function sortCellsByProximity(cells: string[], center: LngLat): string[] {
-  return [...new Set(cells)].sort((left, right) => {
-    const leftDistance = cellDistanceToCenter(left, center);
-    const rightDistance = cellDistanceToCenter(right, center);
-
-    if (leftDistance === rightDistance) {
-      return left.localeCompare(right);
-    }
-
-    return leftDistance - rightDistance;
-  });
-}
-
-function toNeighborArray(neighbors: string[] | Record<string, string>): string[] {
-  if (Array.isArray(neighbors)) {
-    return neighbors.filter((neighbor): neighbor is string => typeof neighbor === 'string');
-  }
-
-  return ['n', 'ne', 'e', 'se', 's', 'sw', 'w', 'nw']
-    .map((key) => neighbors[key])
-    .filter((neighbor): neighbor is string => typeof neighbor === 'string' && neighbor.length > 0);
-}
-
-function expandByRing(cells: string[], ring: number, center: LngLat): string[] {
-  const radius = Math.max(0, Math.floor(ring));
-  if (radius <= 0 || cells.length === 0) {
-    return [];
-  }
-
-  const base = new Set(uniqueSorted(cells));
-  const visited = new Set<string>(base);
-  let frontier = new Set(base);
-
-  for (let step = 0; step < radius; step += 1) {
-    const next = new Set<string>();
-    for (const cell of frontier) {
-      const neighbors = geohash.neighbors(cell);
-      const neighborValues = toNeighborArray(neighbors);
-      for (const neighbor of neighborValues) {
-        if (!neighbor) {
-          continue;
-        }
-        if (!visited.has(neighbor)) {
-          visited.add(neighbor);
-          next.add(neighbor);
-        }
-      }
-    }
-    frontier = next;
-    if (frontier.size === 0) {
-      break;
-    }
-  }
-
-  for (const cell of base) {
-    visited.delete(cell);
-  }
-
-  return sortCellsByProximity(Array.from(visited), center);
+  return isFiniteLngLat(bounds?.ne) && isFiniteLngLat(bounds?.sw);
 }
 
 function applyCapPolicy(
@@ -197,6 +96,101 @@ function applyCapPolicy(
     truncated: true,
     selectedPrefetchCells: selectedPrefetch,
   };
+}
+
+function buildInvalidPlan(
+  mode: SubscriptionPlannerMode,
+  precision: number,
+  zoom: number
+): SubscriptionPlan {
+  return {
+    desiredCells: [],
+    visibleCells: [],
+    prefetchCells: [],
+    key: `mode:${mode}|precision:${precision}|zoom:${zoom.toFixed(2)}|invalid`,
+    truncated: false,
+  };
+}
+
+function deriveRequestedCells(options: {
+  mode: SubscriptionPlannerMode;
+  center: LngLat;
+  bounds: ViewportBounds;
+  zoom: number;
+  precision: number;
+  prefetchRing: number;
+}): {
+  visibleCells: string[];
+  prefetchCandidates: string[];
+  modeRadius: number | null;
+} {
+  const {
+    mode,
+    center,
+    bounds,
+    zoom,
+    precision,
+    prefetchRing,
+  } = options;
+  const centerHash = encodeGeohashFromLngLat(center, precision);
+
+  if (!centerHash) {
+    return { visibleCells: [], prefetchCandidates: [], modeRadius: null };
+  }
+
+  if (mode === 'center-grid') {
+    const modeRadius = computeCenterGridRadiusForZoom(zoom);
+    const visibleCells = buildGeohashGrid(centerHash, modeRadius);
+    const prefetchCandidates =
+      prefetchRing > 0
+        ? buildGeohashGrid(centerHash, modeRadius + prefetchRing).filter(
+            (cell) => !visibleCells.includes(cell)
+          )
+        : [];
+
+    return { visibleCells, prefetchCandidates, modeRadius };
+  }
+
+  const visibleCells = getViewportGeohashes(bounds, precision);
+  const prefetchCandidates =
+    prefetchRing > 0
+      ? expandCellsByRing(visibleCells, prefetchRing, center)
+      : [];
+
+  return { visibleCells, prefetchCandidates, modeRadius: null };
+}
+
+function buildPlanKey(input: {
+  mode: SubscriptionPlannerMode;
+  precision: number;
+  zoom: number;
+  modeRadius: number | null;
+  maxCells: number;
+  visibleCount: number;
+  prefetchCount: number;
+  desiredCells: string[];
+}): string {
+  const {
+    mode,
+    precision,
+    zoom,
+    modeRadius,
+    maxCells,
+    visibleCount,
+    prefetchCount,
+    desiredCells,
+  } = input;
+
+  return [
+    `mode:${mode}`,
+    `precision:${precision}`,
+    `zoom:${zoom.toFixed(2)}`,
+    `radius:${modeRadius ?? 0}`,
+    `max:${maxCells}`,
+    `visible:${visibleCount}`,
+    `prefetch:${prefetchCount}`,
+    `cells:${desiredCells.join('|')}`,
+  ].join('|');
 }
 
 /**
@@ -243,44 +237,25 @@ export function planIncidentCells(
   const prefetchRing = Math.max(0, Math.floor(rawPrefetchRing || 0));
   const normalizedZoom = Number.isFinite(zoom) ? zoom : DEFAULT_ZOOM_FALLBACK;
 
-  if (!isFinitePair(center) || !isFiniteBounds(bounds) || precision <= 0) {
-    return {
-      desiredCells: [],
-      visibleCells: [],
-      prefetchCells: [],
-      key: `mode:${mode}|precision:${precision}|zoom:${normalizedZoom.toFixed(2)}|invalid`,
-      truncated: false,
-    };
+  if (!isFiniteLngLat(center) || !isFiniteBounds(bounds) || precision <= 0) {
+    return buildInvalidPlan(mode, precision, normalizedZoom);
   }
 
-  let visibleCells: string[] = [];
-  let prefetchCandidates: string[] = [];
-  let modeRadius: number | null = null;
+  const {
+    visibleCells,
+    prefetchCandidates,
+    modeRadius,
+  } = deriveRequestedCells({
+    mode,
+    center,
+    bounds,
+    zoom: normalizedZoom,
+    precision,
+    prefetchRing,
+  });
 
-  const centerHash = encodeGeohashFromLngLat(center, precision);
-  if (!centerHash) {
-    return {
-      desiredCells: [],
-      visibleCells: [],
-      prefetchCells: [],
-      key: `mode:${mode}|precision:${precision}|zoom:${normalizedZoom.toFixed(2)}|invalid`,
-      truncated: false,
-    };
-  }
-
-  if (mode === 'center-grid') {
-    modeRadius = computeCenterGridRadiusForZoom(normalizedZoom);
-    visibleCells = buildGeohashGrid(centerHash, modeRadius);
-    if (prefetchRing > 0) {
-      prefetchCandidates = buildGeohashGrid(centerHash, modeRadius + prefetchRing).filter(
-        (cell) => !visibleCells.includes(cell)
-      );
-    }
-  } else {
-    visibleCells = getViewportGeohashes(bounds, precision);
-    if (prefetchRing > 0) {
-      prefetchCandidates = expandByRing(visibleCells, prefetchRing, center);
-    }
+  if (visibleCells.length === 0 && prefetchCandidates.length === 0) {
+    return buildInvalidPlan(mode, precision, normalizedZoom);
   }
 
   const sortedVisible = sortCellsByProximity(uniqueSorted(visibleCells), center);
@@ -292,22 +267,20 @@ export function planIncidentCells(
     maxCells
   );
 
-  const keyParts = [
-    `mode:${mode}`,
-    `precision:${precision}`,
-    `zoom:${normalizedZoom.toFixed(2)}`,
-    `radius:${modeRadius ?? 0}`,
-    `max:${maxCells}`,
-    `visible:${sortedVisible.length}`,
-    `prefetch:${selectedPrefetchCells.length}`,
-    `cells:${desiredCells.join('|')}`,
-  ];
-
   return {
     visibleCells: sortedVisible,
     prefetchCells: selectedPrefetchCells,
     desiredCells,
-    key: keyParts.join('|'),
+    key: buildPlanKey({
+      mode,
+      precision,
+      zoom: normalizedZoom,
+      modeRadius,
+      maxCells,
+      visibleCount: sortedVisible.length,
+      prefetchCount: selectedPrefetchCells.length,
+      desiredCells,
+    }),
     truncated,
   };
 }

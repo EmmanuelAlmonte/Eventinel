@@ -12,50 +12,221 @@ type PermissionStatus = 'undetermined' | 'granted' | 'denied';
 type LocationSource = 'fresh' | 'cached' | 'default' | 'none';
 
 export interface UseUserLocationOptions {
-  /** What to do when permission denied: 'default' uses fallback, 'none' returns null */
   fallback?: 'default' | 'none';
-  /** Default location [longitude, latitude] if fallback='default' */
   defaultLocation?: [number, number];
-  /** Location accuracy */
   accuracy?: Location.Accuracy;
-  /** Timeout for location fetch in ms (default: 10000 in dev, 5000 in prod) */
   timeout?: number;
-  /** Max age for last known location in ms (default: 24h) */
   lastKnownMaxAgeMs?: number;
 }
 
-// Longer timeout in development (emulators are slow)
 const DEFAULT_TIMEOUT = __DEV__ ? 10000 : 5000;
 const DEFAULT_LAST_KNOWN_MAX_AGE_MS = 24 * 60 * 60 * 1000;
 
 export interface UseUserLocationResult {
-  /** [longitude, latitude] or null */
   location: [number, number] | null;
-  /** Permission state */
   permission: PermissionStatus;
-  /** Where location came from */
   source: LocationSource;
-  /** True during initial fetch */
   isLoading: boolean;
-  /** Error message if failed */
   error: string | null;
-  /** Request fresh location */
   refresh: () => Promise<void>;
 }
 
-// Debug logger - only in DEV
-const logLocation = (tag: string, data?: any) => {
+const logLocation = (tag: string, data?: unknown) => {
   if (__DEV__) {
     const timestamp = new Date().toISOString().split('T')[1].slice(0, 12);
     console.log(`[Location ${timestamp}] ${tag}`, data !== undefined ? data : '');
   }
 };
 
+type LocationContext = {
+  fallback: 'default' | 'none';
+  defaultLocation?: [number, number];
+  accuracy: Location.Accuracy;
+  timeout: number;
+  lastKnownMaxAgeMs: number;
+  currentLocation: [number, number] | null;
+};
+
+type LocationSetters = {
+  setLocation: (value: [number, number] | null) => void;
+  setPermission: (value: PermissionStatus) => void;
+  setSource: (value: LocationSource) => void;
+  setIsLoading: (value: boolean) => void;
+  setError: (value: string | null) => void;
+};
+
+function applyDefaultLocation(context: LocationContext, setters: LocationSetters): boolean {
+  if (context.fallback === 'default' && context.defaultLocation) {
+    setters.setLocation(context.defaultLocation);
+    setters.setSource('default');
+    setters.setIsLoading(false);
+    return true;
+  }
+  return false;
+}
+
+async function resolvePermission(setters: LocationSetters): Promise<Location.PermissionStatus> {
+  logLocation('🔒 Checking permission...');
+  let { status } = await Location.getForegroundPermissionsAsync();
+  logLocation('🔒 Current permission status:', status);
+
+  if (status !== 'granted') {
+    logLocation('🔒 Requesting permission...');
+    const result = await Location.requestForegroundPermissionsAsync();
+    status = result.status;
+    logLocation('🔒 Permission result:', status);
+  }
+
+  setters.setPermission(status === 'granted' ? 'granted' : 'denied');
+  return status;
+}
+
+async function resolveCachedLocation(
+  maxAgeMs: number
+): Promise<[number, number] | null> {
+  logLocation(`📦 Checking CACHED location (maxAge: ${Math.round(maxAgeMs / 1000)}s)...`);
+  try {
+    const cached = await Location.getLastKnownPositionAsync({ maxAge: maxAgeMs });
+    if (!cached) {
+      logLocation('📦 No cached location available');
+      return null;
+    }
+
+    const cachedCoords: [number, number] = [cached.coords.longitude, cached.coords.latitude];
+    logLocation('📦 Got CACHED location', {
+      coords: cachedCoords,
+      age: cached.timestamp ? `${Math.round((Date.now() - cached.timestamp) / 1000)}s ago` : 'unknown',
+    });
+    return cachedCoords;
+  } catch (error) {
+    logLocation('📦 Cache error:', error);
+    return null;
+  }
+}
+
+async function resolveFreshLocation(
+  timeout: number,
+  accuracy: Location.Accuracy
+): Promise<Location.LocationObject | null> {
+  logLocation(`🛰️ Fetching FRESH location via watchPosition (timeout: ${timeout}ms)...`);
+
+  return new Promise<Location.LocationObject | null>((resolve) => {
+    let subscription: Location.LocationSubscription | null = null;
+    let resolved = false;
+
+    const timeoutId = setTimeout(() => {
+      if (resolved) return;
+      resolved = true;
+      logLocation(`🛰️ ⏰ TIMEOUT after ${timeout}ms!`);
+      subscription?.remove();
+      resolve(null);
+    }, timeout);
+
+    Location.watchPositionAsync(
+      {
+        accuracy,
+        distanceInterval: 0,
+        timeInterval: 100,
+      },
+      (locationUpdate) => {
+        if (resolved) return;
+        resolved = true;
+        clearTimeout(timeoutId);
+        subscription?.remove();
+        resolve(locationUpdate);
+      }
+    )
+      .then((sub) => {
+        subscription = sub;
+        if (resolved) {
+          sub.remove();
+        }
+      })
+      .catch((error) => {
+        if (resolved) return;
+        resolved = true;
+        clearTimeout(timeoutId);
+        logLocation('🛰️ watchPosition setup error:', error);
+        resolve(null);
+      });
+  });
+}
+
+function handlePermissionDenied(context: LocationContext, setters: LocationSetters): void {
+  logLocation('❌ Permission DENIED - using fallback');
+  if (!applyDefaultLocation(context, setters)) {
+    setters.setSource('none');
+    setters.setIsLoading(false);
+  }
+}
+
+async function updateFromFreshLocation(
+  context: LocationContext,
+  setters: LocationSetters
+): Promise<void> {
+  const freshStartTime = Date.now();
+
+  try {
+    const freshLocation = await resolveFreshLocation(context.timeout, context.accuracy);
+    const elapsed = Date.now() - freshStartTime;
+
+    if (freshLocation) {
+      const freshCoords: [number, number] = [freshLocation.coords.longitude, freshLocation.coords.latitude];
+      logLocation(`🛰️ ✅ Got FRESH GPS location in ${elapsed}ms`, {
+        coords: freshCoords,
+        accuracy: freshLocation.coords.accuracy,
+      });
+      setters.setLocation(freshCoords);
+      setters.setSource('fresh');
+      setters.setIsLoading(false);
+      return;
+    }
+
+    logLocation(`🛰️ ❌ Fresh location TIMED OUT after ${elapsed}ms - keeping current location`);
+    if (!context.currentLocation) {
+      applyDefaultLocation(context, setters);
+    }
+  } catch (error) {
+    logLocation('🛰️ ❌ Fresh location ERROR:', error);
+    if (!context.currentLocation) {
+      applyDefaultLocation(context, setters);
+    }
+  }
+}
+
+async function resolveLocationFlow(context: LocationContext, setters: LocationSetters): Promise<void> {
+  if (context.fallback === 'default' && context.defaultLocation && !context.currentLocation) {
+    logLocation('📍 Setting DEFAULT location', context.defaultLocation);
+    setters.setLocation(context.defaultLocation);
+    setters.setSource('default');
+    setters.setIsLoading(false);
+  }
+
+  const permissionStatus = await resolvePermission(setters);
+  if (permissionStatus !== 'granted') {
+    handlePermissionDenied(context, setters);
+    return;
+  }
+
+  logLocation('✅ Permission GRANTED');
+  const cachedCoords = await resolveCachedLocation(context.lastKnownMaxAgeMs);
+  if (cachedCoords) {
+    setters.setLocation(cachedCoords);
+    setters.setSource('cached');
+    setters.setIsLoading(false);
+    logLocation('🟢 Released loading from cached location; fresh lookup continues');
+  } else {
+    logLocation('🟡 No cached location; waiting on fresh location for initial release');
+  }
+
+  await updateFromFreshLocation(context, setters);
+}
+
 export function useUserLocation(options: UseUserLocationOptions = {}): UseUserLocationResult {
   const {
     fallback = 'none',
     defaultLocation,
-    accuracy = Location.Accuracy.Balanced,
+    accuracy = Location.Accuracy.High,
     timeout = DEFAULT_TIMEOUT,
     lastKnownMaxAgeMs = DEFAULT_LAST_KNOWN_MAX_AGE_MS,
   } = options;
@@ -71,166 +242,38 @@ export function useUserLocation(options: UseUserLocationOptions = {}): UseUserLo
     setIsLoading(true);
     setError(null);
 
-    // Set default location IMMEDIATELY if available (UI shows instantly)
-    if (fallback === 'default' && defaultLocation && !location) {
-      logLocation('📍 Setting DEFAULT location', defaultLocation);
-      setLocation(defaultLocation);
-      setSource('default');
-      setIsLoading(false); // Map shows immediately while we fetch real location in background
-    }
+    const context: LocationContext = {
+      fallback,
+      defaultLocation,
+      accuracy,
+      timeout,
+      lastKnownMaxAgeMs,
+      currentLocation: location,
+    };
+    const setters: LocationSetters = {
+      setLocation,
+      setPermission,
+      setSource,
+      setIsLoading,
+      setError,
+    };
 
     try {
-      // Check/request permission
-      logLocation('🔒 Checking permission...');
-      let { status } = await Location.getForegroundPermissionsAsync();
-      logLocation('🔒 Current permission status:', status);
-
-      if (status !== 'granted') {
-        logLocation('🔒 Requesting permission...');
-        const result = await Location.requestForegroundPermissionsAsync();
-        status = result.status;
-        logLocation('🔒 Permission result:', status);
-      }
-
-      setPermission(status === 'granted' ? 'granted' : 'denied');
-
-      if (status !== 'granted') {
-        logLocation('❌ Permission DENIED - using fallback');
-        if (fallback === 'default' && defaultLocation) {
-          setLocation(defaultLocation);
-          setSource('default');
-          setIsLoading(false); // UI shows immediately with default location
-        } else {
-          setSource('none');
-          setIsLoading(false);
-        }
-        return;
-      }
-
-      logLocation('✅ Permission GRANTED');
-
-      // Try cached location first (faster)
-      logLocation(`📦 Checking CACHED location (maxAge: ${Math.round(lastKnownMaxAgeMs / 1000)}s)...`);
-      try {
-        const cached = await Location.getLastKnownPositionAsync({
-          maxAge: lastKnownMaxAgeMs,
-        });
-        if (cached) {
-          const cachedCoords: [number, number] = [cached.coords.longitude, cached.coords.latitude];
-          logLocation('📦 Got CACHED location', {
-            coords: cachedCoords,
-            age: cached.timestamp ? `${Math.round((Date.now() - cached.timestamp) / 1000)}s ago` : 'unknown',
-          });
-          setLocation(cachedCoords);
-          setSource('cached');
-          setIsLoading(false); // UI shows immediately with cached location
-        } else {
-          logLocation('📦 No cached location available');
-        }
-      } catch (cacheError) {
-        logLocation('📦 Cache error:', cacheError);
-      }
-
-      // Get fresh location using watchPositionAsync (more reliable on emulators than getCurrentPositionAsync)
-      // getCurrentPositionAsync is known to hang indefinitely on Android emulators
-      logLocation(`🛰️ Fetching FRESH location via watchPosition (timeout: ${timeout}ms)...`);
-      const freshStartTime = Date.now();
-
-      try {
-        const freshLocation = await new Promise<Location.LocationObject | null>((resolve) => {
-          let subscription: Location.LocationSubscription | null = null;
-          let resolved = false;
-
-          // Timeout handler
-          const timeoutId = setTimeout(() => {
-            if (!resolved) {
-              resolved = true;
-              logLocation(`🛰️ ⏰ TIMEOUT after ${timeout}ms!`);
-              subscription?.remove();
-              resolve(null);
-            }
-          }, timeout);
-
-          // Start watching for location updates
-          Location.watchPositionAsync(
-            {
-              accuracy: Location.Accuracy.High, // Higher accuracy works better in emulators
-              distanceInterval: 0, // Get first available position
-              timeInterval: 100, // Check frequently
-            },
-            (locationUpdate) => {
-              if (!resolved) {
-                resolved = true;
-                clearTimeout(timeoutId);
-                subscription?.remove();
-                resolve(locationUpdate);
-              }
-            }
-          ).then((sub) => {
-            subscription = sub;
-            // If already resolved (timeout), clean up immediately
-            if (resolved) {
-              sub.remove();
-            }
-          }).catch((err) => {
-            if (!resolved) {
-              resolved = true;
-              clearTimeout(timeoutId);
-              logLocation('🛰️ watchPosition setup error:', err);
-              resolve(null);
-            }
-          });
-        });
-
-        const elapsed = Date.now() - freshStartTime;
-
-        if (freshLocation) {
-          const freshCoords: [number, number] = [freshLocation.coords.longitude, freshLocation.coords.latitude];
-          logLocation(`🛰️ ✅ Got FRESH GPS location in ${elapsed}ms`, {
-            coords: freshCoords,
-            accuracy: freshLocation.coords.accuracy,
-          });
-          setLocation(freshCoords);
-          setSource('fresh');
-          setIsLoading(false);
-        } else {
-          logLocation(`🛰️ ❌ Fresh location TIMED OUT after ${elapsed}ms - keeping current location`);
-          // Keep cached/default if we have it
-          if (!location && fallback === 'default' && defaultLocation) {
-            logLocation('🛰️ Using DEFAULT as final fallback');
-            setLocation(defaultLocation);
-            setSource('default');
-            setIsLoading(false);
-          }
-        }
-      } catch (freshError) {
-        logLocation('🛰️ ❌ Fresh location ERROR:', freshError);
-        if (!location && fallback === 'default' && defaultLocation) {
-          setLocation(defaultLocation);
-          setSource('default');
-          setIsLoading(false);
-        }
-      }
-    } catch (err) {
-      logLocation('❌ FATAL ERROR:', err);
-      setError(err instanceof Error ? err.message : 'Location error');
-
-      if (fallback === 'default' && defaultLocation) {
-        setLocation(defaultLocation);
-        setSource('default');
-        setIsLoading(false); // UI shows with fallback
-      }
+      await resolveLocationFlow(context, setters);
+    } catch (errorValue) {
+      logLocation('❌ FATAL ERROR:', errorValue);
+      setters.setError(errorValue instanceof Error ? errorValue.message : 'Location error');
+      applyDefaultLocation(context, setters);
     } finally {
-      // Ensure loading is always false at the end (safety net)
       logLocation('🏁 END getLocation()');
-      setIsLoading(false);
+      setters.setIsLoading(false);
     }
-  }, [fallback, defaultLocation, accuracy, timeout, location]);
+  }, [accuracy, defaultLocation, fallback, lastKnownMaxAgeMs, location, timeout]);
 
   useEffect(() => {
     getLocation();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []); // Only run once on mount
+  }, []);
 
   return { location, permission, source, isLoading, error, refresh: getLocation };
 }

@@ -1,5 +1,62 @@
 # Repository Guidelines
 
+## Agent Task Protocol (MCP-First)
+This repository follows a strict, repeatable task execution flow for agents.
+
+### Execution Mode
+- Default mode is sequential: one MCP task at a time.
+- Parallel mode is allowed only for independent tasks with no conflict of interest.
+- Do not start another task in parallel unless all of the following are true:
+  - Dependency-safe: neither task depends on the other (directly or transitively).
+  - Scope-safe: planned file/module touch sets do not overlap.
+  - Validation-safe: each task still has clear, attributable validation evidence.
+  - Ownership-safe: each task has separate MCP status tracking and completion notes.
+- If overlap/conflict is discovered mid-task, pause one lane immediately and continue with a single active lane until resolved.
+- Use MCP as the source of truth for task status, dependencies, and completion notes.
+- Respect dependency order from MCP tasks before starting implementation.
+
+### Required MCP Workflow
+1. Select next task
+   - Check active goal (`planning.current`).
+   - List pending tasks (`todo.list`).
+   - Read task details/dependencies (`todo.get`).
+   - If proposing parallel work, perform and record a dependency/scope conflict check first.
+2. Start task
+   - Set MCP status to `in_progress` (`todo.status`).
+   - Confirm acceptance criteria and validation commands from the task description.
+   - For parallel lanes, set each independent task to `in_progress` separately and track notes per task.
+3. Implement
+   - Make focused, scoped changes for the selected task only.
+   - Avoid unrelated file changes unless required for correctness.
+   - Do not touch shared files across active parallel lanes.
+4. Validate
+   - Run required task-specific checks.
+   - Minimum default: `npx tsc --noEmit`.
+   - Keep validation output attributable to each task.
+5. Complete task
+   - If blocked: set MCP status to `blocked` with concrete reason and evidence.
+   - If complete: set MCP status to `completed` with short completion notes.
+
+### Mobile Verification Standard (No Web/Playwright Assumption)
+- Do not require Playwright/web-localhost checks for this repo.
+- Use React Native/Expo-appropriate validation:
+  - `npx tsc --noEmit` (default type check)
+  - Task-relevant Jest suites (`npm test -- <path>` or scoped scripts)
+  - Manual verification notes for UI/lifecycle-sensitive flows (map, auth, notifications, navigation) when touched.
+
+### Commit Convention for MCP Tasks
+- Follow Conventional Commits (`feat:`, `fix:`, `refactor:`, `chore:`, `test:`).
+- When a task ID exists, prefer:
+  - `<type>(task:<first-8-task-id>): <summary>`
+- Keep commits scoped to one task only (never mix multiple task IDs in one commit).
+
+### Definition of Done (Per Task)
+- Scoped implementation is complete.
+- Required validation commands pass.
+- Any required manual mobile checks are recorded in task notes.
+- MCP task status is updated accurately (`completed` or `blocked`).
+- No unrelated work is bundled into the task.
+
 ## Project Structure & Module Organization
 - `App.tsx` boots the app, handles NDK init, and wires navigation; `index.ts` is the Expo entrypoint.
 - UI lives in `screens/` (Home, Map, IncidentFeed, IncidentDetail, Profile, RelayConnect, Login, Menu) with shared primitives in `components/ui` (ScreenContainer, ErrorBoundary, Toast) plus `components/map`, `components/incident`, and `components/notifications` widgets.
@@ -25,6 +82,12 @@
 - NDK rules: import only from `@nostr-dev-kit/mobile`; keep `react-native-get-random-values` as the first import; use the module-level `ndk` from `lib/ndk.ts`; timestamps in seconds and hex pubkeys; `login(signer, true)`; avoid web-only patterns (`NDKHeadless`, `NDKNip07Signer`, `localStorage`).
 - UI: pull RNE components from `@rneui/themed`, theme via `useAppTheme`, wrap screens in `ScreenContainer` for layout/padding.
 - Naming: components/screens in PascalCase `.tsx`; utilities/hooks in `camelCase.ts`; tests as `*.test.ts(x)` inside `__tests__`; mocks mirror module names in `__mocks__`.
+- Programming Standard B (size guardrails):
+  - Target file size: 300 lines max per file (soft), 400 lines hard stop.
+  - Target function size: 40 lines max (soft), 80 lines hard stop.
+  - Cyclomatic complexity: aim ≤10, hard stop at 15.
+  - If a file or function exceeds hard stops, split extraction before adding new behavior in that area.
+- Complexity-first refactors are preferred when a file grows too broad; avoid “one-file mega” patterns.
 
 ## Testing Guidelines
 - Framework: Jest with `jest-expo` + `@testing-library/react-native`; setup/mocks live in `jest.setup.js` and `__mocks__/`.

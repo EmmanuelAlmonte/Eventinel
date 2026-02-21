@@ -12,14 +12,14 @@ The following areas are currently the best candidates for durable user-facing do
 - Profile and settings flows
 - Relay management
 - Login and signer authentication flows
-- Incident detail behavior
+- Incident detail behavior and module split
 - Incident feed behavior
 
 ## Moderate stability
 
-The map screen UX is documented at a user-behavior level (markers, clustering,
-empty states, relay banners, and location controls), but not low-level
-subscription algorithms.
+- Map screen UX and overlay composition are stable enough for user-facing docs.
+- Viewport coverage thresholds and subscription anchor behavior remain
+  moderate-stability internals.
 
 ## Deferred for now
 
@@ -28,6 +28,11 @@ for geohash planning, viewport anchoring, and reconciliation should wait until
 that refactor settles:
 
 - `hooks/useIncidentSubscription.ts`
+- `hooks/incidentSubscription/useIncidentSubscriptionCore.ts`
 - `contexts/IncidentSubscriptionContext.tsx`
 - `lib/map/subscriptionPlanner.ts`
 - `lib/map/geohashViewport.ts`
+
+Track these in:
+
+- [Incident Subscription Refactor (Deferred)](./deferred/incident-subscription-refactor)

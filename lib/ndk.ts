@@ -10,6 +10,24 @@
 import NDK from '@nostr-dev-kit/mobile';
 import { NDKCacheAdapterSqlite } from '@nostr-dev-kit/mobile';
 
+const IS_PRODUCTION_BUILD = !__DEV__ && process.env.NODE_ENV === 'production';
+const DEBUG_CACHE_QUERY =
+  __DEV__ && process.env.EXPO_PUBLIC_DEBUG_CACHE_QUERY === '1';
+const NON_PRODUCTION_RELAY_POLICY = Object.freeze({
+  enableOutboxModel: false,
+  autoConnectUserRelays: false,
+});
+
+if (
+  !IS_PRODUCTION_BUILD &&
+  (NON_PRODUCTION_RELAY_POLICY.enableOutboxModel ||
+    NON_PRODUCTION_RELAY_POLICY.autoConnectUserRelays)
+) {
+  throw new Error(
+    '[NDK] Non-production policy violation: outbox model and auto-connect user relays must stay disabled.'
+  );
+}
+
 // Initialize SQLite cache adapter
 const cacheAdapter = new NDKCacheAdapterSqlite('eventinel.db');
 cacheAdapter.initialize(); // Create database tables
@@ -28,10 +46,31 @@ if (__DEV__) {
       const incidentCount = cacheAdapter.db.getFirstSync(
         'SELECT COUNT(*) as count FROM events WHERE kind = 30911'
       ) as { count: number } | null;
+      const pageSizeRow = cacheAdapter.db.getFirstSync(
+        'PRAGMA page_size'
+      ) as { page_size: number } | null;
+      const pageCountRow = cacheAdapter.db.getFirstSync(
+        'PRAGMA page_count'
+      ) as { page_count: number } | null;
+      const freeListRow = cacheAdapter.db.getFirstSync(
+        'PRAGMA freelist_count'
+      ) as { freelist_count: number } | null;
+
+      const pageSize = pageSizeRow?.page_size ?? 0;
+      const pageCount = pageCountRow?.page_count ?? 0;
+      const freePages = freeListRow?.freelist_count ?? 0;
+      const totalBytes = pageSize * pageCount;
+      const usedBytes = pageSize * Math.max(0, pageCount - freePages);
 
       console.log('💾 [Cache] SQLite cache stats:');
       console.log(`   → Total events: ${eventCount?.count ?? 0}`);
       console.log(`   → Incidents (kind:30911): ${incidentCount?.count ?? 0}`);
+      console.log(
+        `   → Total DB size: ${(totalBytes / (1024 * 1024)).toFixed(2)} MB`
+      );
+      console.log(
+        `   → Used DB size: ${(usedBytes / (1024 * 1024)).toFixed(2)} MB`
+      );
     } catch (e) {
       console.warn('💾 [Cache] Could not read cache stats:', e);
     }
@@ -43,12 +82,11 @@ export const ndk = new NDK({
   explicitRelayUrls: [],
   cacheAdapter,
 
-  // DISABLE outbox model - prevents auto-connecting to purplepag.es, nos.lol
-  enableOutboxModel: false,
+  // Keep disabled by policy outside production to prevent unexpected relay expansion.
+  enableOutboxModel: NON_PRODUCTION_RELAY_POLICY.enableOutboxModel,
 
-  // DISABLE auto-connect to user's relay list - prevents connecting to
-  // relays stored in user's kind:10002 event (relay.damus.io, relay.primal.net, etc.)
-  autoConnectUserRelays: false,
+  // Keep disabled by policy outside production; only explicit relays are allowed.
+  autoConnectUserRelays: NON_PRODUCTION_RELAY_POLICY.autoConnectUserRelays,
 
   // Enable AI guardrails in dev to catch common Nostr/NDK mistakes early.
   aiGuardrails: __DEV__,
@@ -121,7 +159,7 @@ cacheAdapter.ndk = ndk;
 // This restores tag-based cache queries for kind 30911.
 
 // Debug: Log cache query results (simplified)
-if (__DEV__) {
+if (DEBUG_CACHE_QUERY) {
   const originalQuery = cacheAdapter.query.bind(cacheAdapter);
   cacheAdapter.query = (subscription: any) => {
     const results = originalQuery(subscription);

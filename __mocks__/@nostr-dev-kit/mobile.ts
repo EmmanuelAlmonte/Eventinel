@@ -29,6 +29,11 @@ interface MockSignerApp {
   name?: string;
 }
 
+interface MockStoredSession {
+  pubkey: string;
+  signerPayload?: string;
+}
+
 const createMockNDK = () => ({
   connect: jest.fn().mockResolvedValue(undefined),
   addExplicitRelay: jest.fn(),
@@ -68,6 +73,7 @@ const createMockNDK = () => ({
 const mockState = {
   currentUser: null as MockUser | null,
   currentPubkey: null as string | null,
+  storedSessions: [] as MockStoredSession[],
   ndk: createMockNDK(),
   nip55: {
     isAvailable: true,
@@ -93,9 +99,13 @@ export const mockNDKHooks = {
   setNip55Apps: (apps: MockSignerApp[]) => {
     mockState.nip55.apps = apps;
   },
+  setStoredSessions: (sessions: MockStoredSession[]) => {
+    mockState.storedSessions = sessions;
+  },
   reset: () => {
     mockState.currentUser = null;
     mockState.currentPubkey = null;
+    mockState.storedSessions = [];
     mockState.nip55.isAvailable = true;
     mockState.nip55.apps = [
       { packageName: 'com.greenart7c3.nostrsigner', name: 'Amber' },
@@ -185,6 +195,29 @@ export const useNip55 = jest.fn(() => ({
 export const useSessionMonitor = jest.fn(() => {
   // No-op in tests - session monitoring handled differently
 });
+
+/**
+ * Mock NDK mobile session storage adapter and helpers
+ */
+export class NDKSessionExpoSecureStore {
+  getItem(_key: string) {
+    return null;
+  }
+
+  setItem(_key: string, _value: string) {
+    return;
+  }
+
+  deleteItem(_key: string) {
+    return;
+  }
+}
+
+export const migrateLegacyLogin = jest.fn(async () => {
+  return;
+});
+
+export const loadSessionsFromStorage = jest.fn(() => mockState.storedSessions);
 
 /**
  * Mock useNDKStore hook (Zustand store)

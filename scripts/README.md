@@ -64,3 +64,31 @@ If you modify the hooks:
 1. Edit `scripts/pre-commit`
 2. Run `bash scripts/install-git-hooks.sh` to update `.git/hooks/`
 3. Commit the updated `scripts/pre-commit` to version control
+
+## Cashu Local Mint Scripts
+
+For local Cashu transaction testing, use:
+
+```bash
+npm run cashu:mint:up
+npm run cashu:mint:status
+npm run cashu:mint:logs
+npm run cashu:mint:down
+npm run cashu:cli:help
+npm run cashu:cli:info
+npm run cashu:cli:wallets
+npm run cashu:cli:balance
+npm run cashu:cli:smoke
+npm run cashu:web:wallet
+```
+
+Backed by:
+- `scripts/cashu/docker-compose.nutshell.yml`
+- `scripts/cashu/start-local-mint.ps1`
+- `scripts/cashu/stop-local-mint.ps1`
+- `scripts/cashu/logs-local-mint.ps1`
+- `scripts/cashu/status-local-mint.ps1`
+- `scripts/cashu/cashu-cli.ps1`
+- `scripts/cashu/cashu-cli-smoke.ps1`
+- `scripts/cashu/mini-wallet-server.mjs`
+- `scripts/cashu/mini-wallet/index.html`

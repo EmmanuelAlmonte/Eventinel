@@ -43,6 +43,8 @@ yarn-error.*
 # local env files
 .env
 .env*.local
+scripts/cashu/.env.nutshell
+scripts/cashu/.mini-wallet-state.json
 
 # typescript
 *.tsbuildinfo
