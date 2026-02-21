@@ -75,6 +75,7 @@ export default function WalletScreen() {
           balance={cashu.cashuBalance}
           busy={cashu.cashuBusy}
           mints={cashu.cashuWallet?.mints}
+          relays={cashu.cashuWalletRelays}
           createMints={cashu.cashuCreateMints}
           setCreateMints={cashu.setCashuCreateMints}
           createRelays={cashu.cashuCreateRelays}
@@ -84,6 +85,8 @@ export default function WalletScreen() {
           depositInvoice={cashu.cashuDepositInvoice}
           editMints={cashu.cashuEditMints}
           setEditMints={cashu.setCashuEditMints}
+          editRelays={cashu.cashuEditRelays}
+          setEditRelays={cashu.setCashuEditRelays}
           sendAmount={cashu.cashuSendAmount}
           setSendAmount={cashu.setCashuSendAmount}
           sendToken={cashu.cashuSendToken}

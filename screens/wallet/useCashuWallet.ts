@@ -1,120 +1,24 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Platform } from 'react-native';
-import {
-  NDKCashuWallet,
-  NDKKind,
-  NDKWalletStatus,
-  type NDKWalletBalance,
-} from '@nostr-dev-kit/mobile';
+import { NDKCashuWallet, NDKWalletStatus } from '@nostr-dev-kit/mobile';
 
 import { showToast } from '@components/ui';
 import { ndk } from '@lib/ndk';
 
 import { balanceAmount, splitUrls } from './helpers';
-
-type NdkInstance = typeof ndk;
-
-type AsyncError = (error: unknown) => void;
-
-function formatError(error: unknown, fallback: string): string {
-  return error instanceof Error ? error.message : fallback;
-}
-
-function resetCashuWalletState(
-  setCashuWallet: (wallet: NDKCashuWallet | null) => void,
-  setCashuStatus: (status: NDKWalletStatus | undefined) => void,
-  setCashuBalance: (balance: number) => void
-) {
-  setCashuWallet(null);
-  setCashuStatus(undefined);
-  setCashuBalance(0);
-}
-
-function syncCashuWalletState(
-  wallet: NDKCashuWallet,
-  setCashuWallet: (wallet: NDKCashuWallet | null) => void,
-  setCashuStatus: (status: NDKWalletStatus | undefined) => void,
-  setCashuBalance: (balance: number) => void
-) {
-  setCashuWallet(wallet);
-  setCashuStatus(wallet.status);
-  setCashuBalance(balanceAmount(wallet.balance));
-}
-
-function bindCashuWalletEvents(
-  wallet: NDKCashuWallet,
-  setCashuStatus: (status: NDKWalletStatus | undefined) => void,
-  setCashuBalance: (balance: number) => void
-) {
-  const handleReady = () => {
-    setCashuStatus(wallet.status);
-    setCashuBalance(balanceAmount(wallet.balance));
-  };
-  const handleBalanceUpdated = (balance?: NDKWalletBalance) => {
-    setCashuBalance(balanceAmount(balance));
-  };
-  const handleStatusChanged = (status: NDKWalletStatus) => {
-    setCashuStatus(status);
-  };
-
-  wallet.on('ready', handleReady);
-  wallet.on('balance_updated', handleBalanceUpdated);
-  wallet.on('status_changed', handleStatusChanged);
-
-  return () => {
-    wallet.off('ready', handleReady);
-    wallet.off('balance_updated', handleBalanceUpdated);
-    wallet.off('status_changed', handleStatusChanged);
-  };
-}
-
-async function runWithCashuBusy(
-  setBusy: (busy: boolean) => void,
-  action: () => Promise<void>,
-  onError: AsyncError
-): Promise<void> {
-  setBusy(true);
-  try {
-    await action();
-  } catch (error) {
-    onError(error);
-  } finally {
-    setBusy(false);
-  }
-}
-
-async function fetchCashuWallet(ndk: NdkInstance, currentPubkey: string): Promise<NDKCashuWallet | null> {
-  const event = await ndk.fetchEvent({
-    kinds: [NDKKind.CashuWallet],
-    authors: [currentPubkey],
-  });
-
-  if (!event) return null;
-
-  const wallet = await NDKCashuWallet.from(event);
-  return wallet ?? null;
-}
-
-function parseSatsAmount(rawAmount: string): number | null {
-  const amount = Number.parseInt(rawAmount.trim(), 10);
-  return Number.isFinite(amount) && amount > 0 ? amount : null;
-}
-
-const DEFAULT_ANDROID_DEV_CASHU_MINT_URL = 'http://10.0.2.2:3338';
-const FIXED_CASHU_WALLET_RELAY_URL = 'wss://relay.eventinel.com';
-
-function getInitialCashuCreateMints(): string {
-  if (!__DEV__) {
-    return '';
-  }
-
-  const configuredMintUrl = process.env.EXPO_PUBLIC_CASHU_DEV_MINT_URL?.trim();
-  if (configuredMintUrl) {
-    return configuredMintUrl;
-  }
-
-  return Platform.OS === 'android' ? DEFAULT_ANDROID_DEV_CASHU_MINT_URL : '';
-}
+import {
+  DEFAULT_CASHU_WALLET_RELAY_URL,
+  bindCashuWalletEvents,
+  fetchCashuWallet,
+  formatError,
+  getInitialCashuCreateMints,
+  isValidMintUrl,
+  isValidRelayUrl,
+  parseSatsAmount,
+  resetCashuWalletState,
+  runWithCashuBusy,
+  syncCashuWalletState,
+  walletRelayUrls,
+} from './cashuWalletUtils';
 
 export function useCashuWallet(currentPubkey?: string, enabled = true) {
   const [cashuWallet, setCashuWallet] = useState<NDKCashuWallet | null>(null);
@@ -122,10 +26,11 @@ export function useCashuWallet(currentPubkey?: string, enabled = true) {
   const [cashuBalance, setCashuBalance] = useState(0);
   const [cashuBusy, setCashuBusy] = useState(false);
   const [cashuCreateMints, setCashuCreateMints] = useState(getInitialCashuCreateMints);
-  const [cashuCreateRelays, setCashuCreateRelays] = useState(FIXED_CASHU_WALLET_RELAY_URL);
+  const [cashuCreateRelays, setCashuCreateRelays] = useState(DEFAULT_CASHU_WALLET_RELAY_URL);
   const [cashuDepositAmount, setCashuDepositAmount] = useState('');
   const [cashuDepositInvoice, setCashuDepositInvoice] = useState<string | null>(null);
   const [cashuEditMints, setCashuEditMints] = useState('');
+  const [cashuEditRelays, setCashuEditRelays] = useState('');
   const [cashuSendAmount, setCashuSendAmount] = useState('');
   const [cashuSendToken, setCashuSendToken] = useState<string | null>(null);
   const [cashuReceiveToken, setCashuReceiveToken] = useState('');
@@ -139,6 +44,7 @@ export function useCashuWallet(currentPubkey?: string, enabled = true) {
         if (!wallet) {
           resetCashuWalletState(setCashuWallet, setCashuStatus, setCashuBalance);
           setCashuEditMints('');
+          setCashuEditRelays('');
           return;
         }
 
@@ -148,6 +54,7 @@ export function useCashuWallet(currentPubkey?: string, enabled = true) {
         setCashuStatus(wallet.status);
         setCashuBalance(balanceAmount(wallet.balance));
         setCashuEditMints(wallet.mints.join('\n'));
+        setCashuEditRelays(walletRelayUrls(wallet).join('\n'));
       },
       (error) => {
         console.warn('[Wallet] Failed to refresh Cashu wallet:', error);
@@ -160,6 +67,7 @@ export function useCashuWallet(currentPubkey?: string, enabled = true) {
     if (!enabled) {
       resetCashuWalletState(setCashuWallet, setCashuStatus, setCashuBalance);
       setCashuEditMints('');
+      setCashuEditRelays('');
       return;
     }
     refreshCashuWallet();
@@ -184,7 +92,7 @@ export function useCashuWallet(currentPubkey?: string, enabled = true) {
     await runWithCashuBusy(
       setCashuBusy,
       async () => {
-        const wallet = await NDKCashuWallet.create(ndk, mints, [FIXED_CASHU_WALLET_RELAY_URL]);
+        const wallet = await NDKCashuWallet.create(ndk, mints, [DEFAULT_CASHU_WALLET_RELAY_URL]);
         if (!wallet) {
           throw new Error('Wallet creation returned empty response');
         }
@@ -194,6 +102,7 @@ export function useCashuWallet(currentPubkey?: string, enabled = true) {
         setCashuStatus(wallet.status);
         setCashuBalance(balanceAmount(wallet.balance));
         setCashuEditMints(wallet.mints.join('\n'));
+        setCashuEditRelays(walletRelayUrls(wallet).join('\n'));
         showToast.success('Cashu wallet created');
       },
       (error) => {
@@ -334,22 +243,39 @@ export function useCashuWallet(currentPubkey?: string, enabled = true) {
       showToast.error('Add at least one valid mint URL');
       return;
     }
+    if (mints.some((mint) => !isValidMintUrl(mint))) {
+      showToast.error('Mint URLs must start with http:// or https://');
+      return;
+    }
+
+    const relays = Array.from(new Set(splitUrls(cashuEditRelays)));
+    if (!relays.length) {
+      showToast.error('Add at least one relay URL');
+      return;
+    }
+    if (relays.some((relay) => !isValidRelayUrl(relay))) {
+      showToast.error('Relay URLs must start with wss:// or ws://');
+      return;
+    }
 
     await runWithCashuBusy(
       setCashuBusy,
       async () => {
-        await cashuWallet.update({ mints, relays: [FIXED_CASHU_WALLET_RELAY_URL] });
+        await cashuWallet.update({ mints, relays });
         setCashuEditMints(mints.join('\n'));
+        setCashuEditRelays(relays.join('\n'));
         await cashuWallet.updateBalance?.();
         syncCashuWalletState(cashuWallet, setCashuWallet, setCashuStatus, setCashuBalance);
-        showToast.success('Wallet mints updated');
+        showToast.success('Wallet settings updated');
       },
       (error) => {
         console.warn('[Wallet] Cashu mint update failed:', error);
-        showToast.error('Failed to update mints', formatError(error, 'Unknown error'));
+        showToast.error('Failed to update wallet settings', formatError(error, 'Unknown error'));
       }
     );
-  }, [cashuEditMints, cashuWallet, enabled]);
+  }, [cashuEditMints, cashuEditRelays, cashuWallet, enabled]);
+
+  const cashuWalletRelays = cashuWallet ? walletRelayUrls(cashuWallet) : [];
 
   return {
     cashuWallet,
@@ -365,6 +291,9 @@ export function useCashuWallet(currentPubkey?: string, enabled = true) {
     cashuDepositInvoice,
     cashuEditMints,
     setCashuEditMints,
+    cashuEditRelays,
+    setCashuEditRelays,
+    cashuWalletRelays,
     cashuSendAmount,
     setCashuSendAmount,
     cashuSendToken,

@@ -121,6 +121,7 @@ describe('WalletScreen', () => {
       cashuStatus: undefined,
       cashuBalance: 12,
       cashuBusy: false,
+      cashuWalletRelays: ['wss://relay.eventinel.com'],
       cashuCreateMints: 'http://10.0.2.2:3338',
       setCashuCreateMints: jest.fn(),
       cashuCreateRelays: 'wss://relay.eventinel.com',
@@ -130,6 +131,8 @@ describe('WalletScreen', () => {
       cashuDepositInvoice: null,
       cashuEditMints: 'http://10.0.2.2:3338',
       setCashuEditMints: jest.fn(),
+      cashuEditRelays: 'wss://relay.eventinel.com',
+      setCashuEditRelays: jest.fn(),
       cashuSendAmount: '5',
       setCashuSendAmount: jest.fn(),
       cashuSendToken: 'cashuB1_example',
@@ -159,6 +162,7 @@ describe('WalletScreen', () => {
     const { getByTestId } = render(<WalletScreen />);
 
     expect(lastCashuSectionProps?.editMints).toBe('http://10.0.2.2:3338');
+    expect(lastCashuSectionProps?.editRelays).toBe('wss://relay.eventinel.com');
     fireEvent.press(getByTestId('cashu-save-mints'));
     expect(mockHandleCashuUpdateMints).toHaveBeenCalledTimes(1);
   });
