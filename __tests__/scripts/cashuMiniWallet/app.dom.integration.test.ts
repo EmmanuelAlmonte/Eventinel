@@ -227,4 +227,39 @@ describe('cashu mini-wallet app dom integration', () => {
     expect(receiveToken.value).toBe('');
     expect(feedback.textContent).toContain('Wallet proofs reset');
   });
+
+  it('shows feedback when clipboard copy fails', async () => {
+    jest.isolateModules(() => {
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      require('../../../scripts/cashu/mini-wallet/app.js');
+    });
+    await flush();
+
+    const connectBtn = document.getElementById('saveMintBtn') as HTMLButtonElement;
+    const sendToken = document.getElementById('sendToken') as HTMLTextAreaElement;
+    const copyBtn = document.getElementById('copyTokenBtn') as HTMLButtonElement;
+    const activity = document.getElementById('activity') as HTMLElement;
+    const feedback = document.getElementById('feedbackBanner') as HTMLElement;
+
+    connectBtn.click();
+    await flush(24);
+
+    sendToken.value = 'cashuB_token_payload';
+    sendToken.dispatchEvent(new Event('input', { bubbles: true }));
+    expect(copyBtn.disabled).toBe(false);
+
+    const clipboard = window.navigator.clipboard as unknown as { writeText: jest.Mock };
+    const clipboardError = new Error('Write denied by browser');
+    clipboardError.name = 'NotAllowedError';
+    clipboard.writeText.mockRejectedValueOnce(clipboardError);
+
+    copyBtn.click();
+    await flush();
+
+    expect(feedback.hidden).toBe(false);
+    expect(feedback.textContent).toContain('Copy failed');
+    expect(feedback.textContent).toContain('Clipboard permission denied');
+    expect(activity.textContent).toContain('Copy token failed');
+    expect(activity.textContent).toContain('Write denied by browser');
+  });
 });
