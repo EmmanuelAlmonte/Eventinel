@@ -6,14 +6,14 @@ Use these as copy/paste operator prompts for future LLM runs.
 
 ## Template 1 — Challenge 5
 
-You are executing one task in `Eventinel-mobile` using AGENTS.md workflow.
+You are executing task work in `Eventinel-mobile` using AGENTS.md workflow (single-task by default; parallel only when AGENTS conflict checks pass).
 
 Task to execute now:
 - ID: `780dec75-ac28-45cd-9d5c-106f3d433a60`
 - Title: `Harden type safety and illegal-state guards (Challenge 5)`
 
 Required behavior:
-1) Follow AGENTS.md sequential protocol and MCP status updates.
+1) Follow AGENTS.md execution protocol: sequential by default, parallel only when dependency/scope conflict checks pass, with MCP status updates per task.
 2) Implement only this task scope with minimal, reversible diffs.
 3) Task-specific deliverables:
    - Remove high-risk runtime `any` usage in the scoped paths.
@@ -62,14 +62,14 @@ Start now by:
 
 ## Template 2 — Challenge 6
 
-You are executing one task in `Eventinel-mobile` using AGENTS.md workflow.
+You are executing task work in `Eventinel-mobile` using AGENTS.md workflow (single-task by default; parallel only when AGENTS conflict checks pass).
 
 Task to execute now:
 - ID: `1ac60d32-bccf-4ce3-bc20-32fdc8691b41`
 - Title: `Consolidate duplicated helpers and token sources (Challenge 6)`
 
 Required behavior:
-1) Follow AGENTS.md sequential protocol and MCP status updates.
+1) Follow AGENTS.md execution protocol: sequential by default, parallel only when dependency/scope conflict checks pass, with MCP status updates per task.
 2) Implement only this task scope with minimal, reversible diffs.
 3) Task-specific deliverables:
    - Consolidate duplicated relay helper logic to one canonical implementation.
@@ -116,14 +116,14 @@ Start now by:
 
 ## Template 3 — Challenge 1
 
-You are executing one task in `Eventinel-mobile` using AGENTS.md workflow.
+You are executing task work in `Eventinel-mobile` using AGENTS.md workflow (single-task by default; parallel only when AGENTS conflict checks pass).
 
 Task to execute now:
 - ID: `121a82b2-c0a2-4dae-b907-4d77a6da9813`
 - Title: `Split oversized orchestrator modules into focused units (Challenge 1)`
 
 Required behavior:
-1) Follow AGENTS.md sequential protocol and MCP status updates.
+1) Follow AGENTS.md execution protocol: sequential by default, parallel only when dependency/scope conflict checks pass, with MCP status updates per task.
 2) Implement only this task scope with minimal, reversible diffs.
 3) Task-specific deliverables:
    - Split oversized orchestrator files into focused planner/lifecycle/view/controller boundaries.
@@ -168,4 +168,3 @@ Start now by:
 - checking `planning.current`
 - reading `todo.get` for `121a82b2-c0a2-4dae-b907-4d77a6da9813`
 - if task status is not already in progress, set `todo.status(..., in_progress)`
-

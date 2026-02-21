@@ -4,8 +4,14 @@
 This repository follows a strict, repeatable task execution flow for agents.
 
 ### Execution Mode
-- Work sequentially: one MCP task at a time.
-- Do not start the next task until the current task is implemented, validated, committed (when requested), and marked complete in MCP.
+- Default mode is sequential: one MCP task at a time.
+- Parallel mode is allowed only for independent tasks with no conflict of interest.
+- Do not start another task in parallel unless all of the following are true:
+  - Dependency-safe: neither task depends on the other (directly or transitively).
+  - Scope-safe: planned file/module touch sets do not overlap.
+  - Validation-safe: each task still has clear, attributable validation evidence.
+  - Ownership-safe: each task has separate MCP status tracking and completion notes.
+- If overlap/conflict is discovered mid-task, pause one lane immediately and continue with a single active lane until resolved.
 - Use MCP as the source of truth for task status, dependencies, and completion notes.
 - Respect dependency order from MCP tasks before starting implementation.
 
@@ -14,15 +20,19 @@ This repository follows a strict, repeatable task execution flow for agents.
    - Check active goal (`planning.current`).
    - List pending tasks (`todo.list`).
    - Read task details/dependencies (`todo.get`).
+   - If proposing parallel work, perform and record a dependency/scope conflict check first.
 2. Start task
    - Set MCP status to `in_progress` (`todo.status`).
    - Confirm acceptance criteria and validation commands from the task description.
+   - For parallel lanes, set each independent task to `in_progress` separately and track notes per task.
 3. Implement
    - Make focused, scoped changes for the selected task only.
    - Avoid unrelated file changes unless required for correctness.
+   - Do not touch shared files across active parallel lanes.
 4. Validate
    - Run required task-specific checks.
    - Minimum default: `npx tsc --noEmit`.
+   - Keep validation output attributable to each task.
 5. Complete task
    - If blocked: set MCP status to `blocked` with concrete reason and evidence.
    - If complete: set MCP status to `completed` with short completion notes.
@@ -38,7 +48,7 @@ This repository follows a strict, repeatable task execution flow for agents.
 - Follow Conventional Commits (`feat:`, `fix:`, `refactor:`, `chore:`, `test:`).
 - When a task ID exists, prefer:
   - `<type>(task:<first-8-task-id>): <summary>`
-- Keep commits scoped to the active task only.
+- Keep commits scoped to one task only (never mix multiple task IDs in one commit).
 
 ### Definition of Done (Per Task)
 - Scoped implementation is complete.
