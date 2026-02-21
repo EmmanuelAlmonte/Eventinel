@@ -259,7 +259,40 @@ describe('cashu mini-wallet app dom integration', () => {
     expect(feedback.hidden).toBe(false);
     expect(feedback.textContent).toContain('Copy failed');
     expect(feedback.textContent).toContain('Clipboard permission denied');
+    expect(feedback.textContent).not.toContain('Write denied by browser');
     expect(activity.textContent).toContain('Copy token failed');
     expect(activity.textContent).toContain('Write denied by browser');
+  });
+
+  it('shows unsupported clipboard message when clipboard api is unavailable', async () => {
+    Object.defineProperty(window.navigator, 'clipboard', {
+      configurable: true,
+      value: {},
+    });
+
+    jest.isolateModules(() => {
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      require('../../../scripts/cashu/mini-wallet/app.js');
+    });
+    await flush();
+
+    const connectBtn = document.getElementById('saveMintBtn') as HTMLButtonElement;
+    const sendToken = document.getElementById('sendToken') as HTMLTextAreaElement;
+    const copyBtn = document.getElementById('copyTokenBtn') as HTMLButtonElement;
+    const activity = document.getElementById('activity') as HTMLElement;
+    const feedback = document.getElementById('feedbackBanner') as HTMLElement;
+
+    connectBtn.click();
+    await flush(24);
+
+    sendToken.value = 'cashuB_token_payload';
+    sendToken.dispatchEvent(new Event('input', { bubbles: true }));
+    copyBtn.click();
+    await flush();
+
+    expect(feedback.hidden).toBe(false);
+    expect(feedback.textContent).toContain('Clipboard not supported');
+    expect(activity.textContent).toContain('Copy token failed');
+    expect(activity.textContent).toContain('Clipboard API unavailable');
   });
 });

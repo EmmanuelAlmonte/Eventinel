@@ -198,11 +198,15 @@ function getClipboardErrorDetail(error) {
 
 function mapClipboardErrorToUserMessage(error) {
   const name = typeof error === 'object' && error && 'name' in error ? String(error.name) : '';
+  const detail = getClipboardErrorDetail(error).toLowerCase();
   if (name === 'NotAllowedError') {
     return 'Clipboard permission denied. Allow clipboard access and try again.';
   }
   if (name === 'SecurityError') {
     return 'Clipboard requires a secure context (HTTPS or localhost).';
+  }
+  if (name === 'TypeError' || detail.includes('writetext') || detail.includes('undefined')) {
+    return 'Clipboard not supported in this browser/context. Please copy manually.';
   }
   return 'Could not copy token. Please copy manually.';
 }
@@ -220,6 +224,11 @@ function setupActions() {
   copyTokenBtn.addEventListener('click', async () => {
     const token = sendTokenInput.value;
     if (!token) return;
+    if (!navigator.clipboard || typeof navigator.clipboard.writeText !== 'function') {
+      appendActivity('Copy token failed', { reason: 'Clipboard API unavailable' }, 'error');
+      feedbackBanner.showFeedback('error', 'Copy failed', 'Clipboard not supported in this browser/context. Please copy manually.');
+      return;
+    }
 
     try {
       await navigator.clipboard.writeText(token);

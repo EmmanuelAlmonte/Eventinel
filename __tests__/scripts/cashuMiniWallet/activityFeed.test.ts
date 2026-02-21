@@ -38,6 +38,8 @@ describe('cashu mini-wallet activityFeed', () => {
     expect(showFeedback).toHaveBeenCalledWith('info', 'Copied payload', 'Activity payload copied to clipboard.');
 
     feed.appendActivity('obj', payload, 'info');
+    expect(feed.getActivityItems()[0]?.payloadText).toContain('"deep"');
+    expect(feed.getActivityItems()[0]?.payloadText).toContain('"value": true');
     const copyBtn2 = activityEl.querySelector('article:first-child button:last-child') as HTMLButtonElement;
     await copyBtn2.click();
     expect(writeText).toHaveBeenCalledTimes(2);
