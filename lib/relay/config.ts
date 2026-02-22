@@ -40,9 +40,14 @@ function resolveRelayList(raw: string | null | undefined, fallback: string[]): s
 
 /**
  * Default relays to use if no saved relays exist.
- * Prefer EXPO_PUBLIC_NOSTR_RELAYS (comma-separated) when provided.
+ * In release builds, this is pinned to production relays.
+ * In development, EXPO_PUBLIC_NOSTR_RELAYS (comma-separated) can override.
  */
 export const DEFAULT_RELAYS = (() => {
+  if (!__DEV__) {
+    return DEFAULT_PRODUCTION_RELAYS.map(normalizeRelayUrl);
+  }
+
   const envRelays =
     process.env.EXPO_PUBLIC_NOSTR_RELAYS ??
     process.env.NEXT_PUBLIC_NOSTR_RELAYS;

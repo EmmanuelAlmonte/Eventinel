@@ -39,6 +39,20 @@ const mockColors = {
   border: '#3F3F46',
 };
 
+const mockFeatureFlags = {
+  isCashuWalletFeatureEnabled: true,
+  isLightningWalletFeatureEnabled: true,
+};
+
+jest.mock('@lib/featureFlags', () => ({
+  get isCashuWalletFeatureEnabled() {
+    return mockFeatureFlags.isCashuWalletFeatureEnabled;
+  },
+  get isLightningWalletFeatureEnabled() {
+    return mockFeatureFlags.isLightningWalletFeatureEnabled;
+  },
+}));
+
 jest.mock('@hooks', () => ({
   useAppTheme: () => ({
     colors: mockColors,
@@ -77,6 +91,8 @@ describe('ProfileScreen', () => {
     mockNDKHooks.reset();
     mockNDKHooks.setCurrentUser(defaultMockUser);
     mockNDKHooks.setCurrentPubkey(defaultMockUser.pubkey);
+    mockFeatureFlags.isCashuWalletFeatureEnabled = true;
+    mockFeatureFlags.isLightningWalletFeatureEnabled = true;
     jest.clearAllMocks();
   });
 
@@ -103,6 +119,23 @@ describe('ProfileScreen', () => {
     it('renders security info notice', () => {
       const { getByText } = render(<ProfileScreen />);
       expect(getByText(/session is securely stored/)).toBeTruthy();
+    });
+
+    it('shows wallet settings row when at least one wallet feature is enabled', () => {
+      mockFeatureFlags.isCashuWalletFeatureEnabled = true;
+      mockFeatureFlags.isLightningWalletFeatureEnabled = false;
+
+      const { getByText } = render(<ProfileScreen />);
+      expect(getByText('Wallet')).toBeTruthy();
+    });
+
+    it('hides wallet settings row when wallet features are disabled', () => {
+      mockFeatureFlags.isCashuWalletFeatureEnabled = false;
+      mockFeatureFlags.isLightningWalletFeatureEnabled = false;
+
+      const { getByText, queryByText } = render(<ProfileScreen />);
+      expect(queryByText('Wallet')).toBeNull();
+      expect(getByText('Relay Settings')).toBeTruthy();
     });
   });
 
