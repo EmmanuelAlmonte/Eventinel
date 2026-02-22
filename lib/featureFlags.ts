@@ -16,10 +16,16 @@ function parseOptionalBoolFlag(value: string | undefined, defaultValue: boolean)
 
 // Cashu remains a dev-only surface until the production rollout is complete.
 const cashuFlagRequested = parseOptionalBoolFlag(process.env.EXPO_PUBLIC_ENABLE_CASHU_WALLET, true);
+const cashuRecipientDiscoveryFlagRequested = parseOptionalBoolFlag(
+  process.env.EXPO_PUBLIC_ENABLE_CASHU_RECIPIENT_DISCOVERY,
+  true
+);
 const lightningFlagRequested = parseOptionalBoolFlag(
   process.env.EXPO_PUBLIC_ENABLE_LIGHTNING_WALLET,
   true
 );
 
 export const isCashuWalletFeatureEnabled = __DEV__ && cashuFlagRequested;
+export const isCashuRecipientDiscoveryFeatureEnabled =
+  __DEV__ && cashuRecipientDiscoveryFlagRequested;
 export const isLightningWalletFeatureEnabled = __DEV__ && lightningFlagRequested;

@@ -30,6 +30,22 @@ function logCashuDebug(message: string, details?: Record<string, unknown>) {
   console.log(`[Wallet][CashuDebug] ${message}`);
 }
 
+async function publishMintListBestEffort(
+  wallet: Pick<NDKCashuWallet, 'publishMintList'>,
+  context: 'create' | 'update'
+) {
+  try {
+    await wallet.publishMintList();
+  } catch (error) {
+    const detail = formatError(error, 'Unknown error');
+    console.warn(`[Wallet] Cashu mint-list publish failed (${context}):`, error);
+    showToast.warning(
+      'Wallet saved, but mint list publish failed',
+      `NIP-61 recipients may not discover this wallet yet. ${detail}`
+    );
+  }
+}
+
 export function useCashuWallet(currentPubkey?: string, enabled = true) {
   const [cashuWallet, setCashuWallet] = useState<NDKCashuWallet | null>(null);
   const [cashuStatus, setCashuStatus] = useState<NDKWalletStatus | undefined>(undefined);
@@ -160,6 +176,7 @@ export function useCashuWallet(currentPubkey?: string, enabled = true) {
         syncCashuWalletState(wallet, setCashuWallet, setCashuStatus, setCashuBalance);
         await wallet.start();
         await wallet.updateBalance?.();
+        await publishMintListBestEffort(wallet, 'create');
         setCashuStatus(wallet.status);
         setCashuBalance(balanceAmount(wallet.balance));
         setCashuEditMints(wallet.mints.join('\n'));
@@ -337,6 +354,7 @@ export function useCashuWallet(currentPubkey?: string, enabled = true) {
           balance: balanceAmount(cashuWallet.balance),
           status: cashuWallet.status,
         });
+        await publishMintListBestEffort(cashuWallet, 'update');
         setCashuEditMints(mints.join('\n'));
         setCashuEditRelays(relays.join('\n'));
 
