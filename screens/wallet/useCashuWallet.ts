@@ -6,6 +6,12 @@ import { ndk } from '@lib/ndk';
 
 import { balanceAmount, splitUrls } from './helpers';
 import {
+  logCashuDebug,
+  logCashuTx,
+  publishMintListBestEffort,
+  tokenMeta,
+} from './cashuWalletLogging';
+import {
   bindCashuWalletEvents,
   fetchCashuWallet,
   formatError,
@@ -20,31 +26,6 @@ import {
   syncCashuWalletState,
   walletRelayUrls,
 } from './cashuWalletUtils';
-
-function logCashuDebug(message: string, details?: Record<string, unknown>) {
-  if (!__DEV__) return;
-  if (details) {
-    console.log(`[Wallet][CashuDebug] ${message}`, details);
-    return;
-  }
-  console.log(`[Wallet][CashuDebug] ${message}`);
-}
-
-async function publishMintListBestEffort(
-  wallet: Pick<NDKCashuWallet, 'publishMintList'>,
-  context: 'create' | 'update'
-) {
-  try {
-    await wallet.publishMintList();
-  } catch (error) {
-    const detail = formatError(error, 'Unknown error');
-    console.warn(`[Wallet] Cashu mint-list publish failed (${context}):`, error);
-    showToast.warning(
-      'Wallet saved, but mint list publish failed',
-      `NIP-61 recipients may not discover this wallet yet. ${detail}`
-    );
-  }
-}
 
 export function useCashuWallet(currentPubkey?: string, enabled = true) {
   const [cashuWallet, setCashuWallet] = useState<NDKCashuWallet | null>(null);
@@ -169,6 +150,10 @@ export function useCashuWallet(currentPubkey?: string, enabled = true) {
       setCashuBusy,
       async () => {
         const relays = await resolveCashuCreateRelays();
+        logCashuTx('create_wallet', 'start', {
+          mintCount: mints.length,
+          relayCount: relays.length,
+        });
         const wallet = await NDKCashuWallet.create(ndk, mints, relays);
         if (!wallet) {
           throw new Error('Wallet creation returned empty response');
@@ -182,10 +167,17 @@ export function useCashuWallet(currentPubkey?: string, enabled = true) {
         setCashuEditMints(wallet.mints.join('\n'));
         setCashuEditRelays(walletRelayUrls(wallet).join('\n'));
         setCashuCreateRelays(relays.join('\n'));
+        logCashuTx('create_wallet', 'success', {
+          balance: balanceAmount(wallet.balance),
+          status: wallet.status,
+          mintCount: wallet.mints.length,
+          relayCount: walletRelayUrls(wallet).length,
+        });
         showToast.success('Cashu wallet created');
       },
       (error) => {
         console.warn('[Wallet] Failed to create Cashu wallet:', error);
+        logCashuTx('create_wallet', 'error', { detail: formatError(error, 'Unknown error') });
         showToast.error('Failed to create Cashu wallet', formatError(error, 'Unknown error'));
       }
     );
@@ -210,17 +202,24 @@ export function useCashuWallet(currentPubkey?: string, enabled = true) {
     await runWithCashuBusy(
       setCashuBusy,
       async () => {
+        logCashuTx('deposit', 'start', { amount });
         const deposit = cashuWallet.deposit(amount);
         deposit.on('success', () => {
+          logCashuTx('deposit', 'success', { amount, balance: balanceAmount(cashuWallet.balance) });
           showToast.success('Deposit confirmed');
           setCashuDepositInvoice(null);
         });
         deposit.on('error', (message) => {
+          logCashuTx('deposit', 'error', { amount, detail: message });
           showToast.error('Deposit failed', message);
         });
 
         const invoice = await deposit.start();
         setCashuDepositInvoice(invoice);
+        logCashuDebug('tx:deposit:invoice_created', {
+          amount,
+          invoiceLength: invoice.length,
+        });
         if (__DEV__) {
           console.log(`[Wallet] Cashu deposit invoice (${amount} sats):`, invoice);
         }
@@ -228,6 +227,7 @@ export function useCashuWallet(currentPubkey?: string, enabled = true) {
       },
       (error) => {
         console.warn('[Wallet] Cashu deposit failed:', error);
+        logCashuTx('deposit', 'error', { amount, detail: formatError(error, 'Unknown error') });
         showToast.error('Failed to create deposit', formatError(error, 'Unknown error'));
       }
     );
@@ -253,14 +253,29 @@ export function useCashuWallet(currentPubkey?: string, enabled = true) {
     await runWithCashuBusy(
       setCashuBusy,
       async () => {
+        const beforeBalance = balanceAmount(cashuWallet.balance);
+        logCashuTx('receive_token', 'start', {
+          ...tokenMeta(token),
+          beforeBalance,
+        });
         await cashuWallet.receiveToken(token, 'Manual import');
         await cashuWallet.updateBalance?.();
-        setCashuBalance(balanceAmount(cashuWallet.balance));
+        const afterBalance = balanceAmount(cashuWallet.balance);
+        setCashuBalance(afterBalance);
         setCashuReceiveToken('');
+        logCashuTx('receive_token', 'success', {
+          ...tokenMeta(token),
+          beforeBalance,
+          afterBalance,
+        });
         showToast.success('Token received');
       },
       (error) => {
         console.warn('[Wallet] Cashu receive failed:', error);
+        logCashuTx('receive_token', 'error', {
+          ...tokenMeta(token),
+          detail: formatError(error, 'Unknown error'),
+        });
         showToast.error('Failed to receive token', formatError(error, 'Unknown error'));
       }
     );
@@ -291,6 +306,8 @@ export function useCashuWallet(currentPubkey?: string, enabled = true) {
     await runWithCashuBusy(
       setCashuBusy,
       async () => {
+        const beforeBalance = balanceAmount(cashuWallet.balance);
+        logCashuTx('send_token', 'start', { amount, beforeBalance });
         const token = await cashuWallet.send(amount, 'Eventinel transfer');
         if (!token.trim()) {
           throw new Error('Send returned an empty token');
@@ -299,11 +316,19 @@ export function useCashuWallet(currentPubkey?: string, enabled = true) {
         setCashuSendToken(token);
         setCashuSendAmount('');
         await cashuWallet.updateBalance?.();
-        setCashuBalance(balanceAmount(cashuWallet.balance));
+        const afterBalance = balanceAmount(cashuWallet.balance);
+        setCashuBalance(afterBalance);
+        logCashuTx('send_token', 'success', {
+          amount,
+          ...tokenMeta(token),
+          beforeBalance,
+          afterBalance,
+        });
         showToast.success('Token created');
       },
       (error) => {
         console.warn('[Wallet] Cashu send failed:', error);
+        logCashuTx('send_token', 'error', { amount, detail: formatError(error, 'Unknown error') });
         showToast.error('Failed to create token', formatError(error, 'Unknown error'));
       }
     );
@@ -343,6 +368,10 @@ export function useCashuWallet(currentPubkey?: string, enabled = true) {
     await runWithCashuBusy(
       setCashuBusy,
       async () => {
+        logCashuTx('update_wallet_settings', 'start', {
+          requestedMintCount: mints.length,
+          requestedRelayCount: relays.length,
+        });
         logCashuDebug('settings-save:start', {
           previousBalance: balanceAmount(cashuWallet.balance),
           currentStatus: cashuWallet.status,
@@ -363,7 +392,6 @@ export function useCashuWallet(currentPubkey?: string, enabled = true) {
           balance: balanceAmount(cashuWallet.balance),
           status: cashuWallet.status,
         });
-
         syncCashuWalletState(cashuWallet, setCashuWallet, setCashuStatus, setCashuBalance);
         logCashuDebug('settings-save:done', {
           finalBalance: balanceAmount(cashuWallet.balance),
@@ -371,10 +399,19 @@ export function useCashuWallet(currentPubkey?: string, enabled = true) {
           appliedMints: cashuWallet.mints,
           appliedRelays: walletRelayUrls(cashuWallet),
         });
+        logCashuTx('update_wallet_settings', 'success', {
+          finalBalance: balanceAmount(cashuWallet.balance),
+          finalStatus: cashuWallet.status,
+          appliedMintCount: cashuWallet.mints.length,
+          appliedRelayCount: walletRelayUrls(cashuWallet).length,
+        });
         showToast.success('Wallet settings updated');
       },
       (error) => {
         console.warn('[Wallet] Cashu mint update failed:', error);
+        logCashuTx('update_wallet_settings', 'error', {
+          detail: formatError(error, 'Unknown error'),
+        });
         showToast.error('Failed to update wallet settings', formatError(error, 'Unknown error'));
       }
     );
