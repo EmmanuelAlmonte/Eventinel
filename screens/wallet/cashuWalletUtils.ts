@@ -14,7 +14,7 @@ import { balanceAmount } from './helpers';
 type NdkInstance = typeof ndk;
 type AsyncError = (error: unknown) => void;
 
-const DEFAULT_ANDROID_DEV_CASHU_MINT_URL = 'http://10.0.0.197:3338';
+const DEFAULT_ANDROID_DEV_CASHU_MINT_URL = 'http://10.0.2.2:3338';
 
 export function formatError(error: unknown, fallback: string): string {
   return error instanceof Error ? error.message : fallback;
