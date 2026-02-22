@@ -61,12 +61,12 @@ Tune values there if needed:
 
 Use these mint URLs in Wallet -> Cashu:
 
-- Android emulator: `http://10.0.0.197:3338`
+- Android emulator: `http://10.0.2.2:3338`
 - iOS simulator: `http://127.0.0.1:3338`
 - Physical device: `http://<your-computer-lan-ip>:3338` (requires `MINT_HOST_BIND=0.0.0.0`)
 
 Dev default behavior:
-- Android dev builds prefill Cashu mint URL with `http://10.0.0.197:3338`.
+- Android dev builds prefill Cashu mint URL with `http://10.0.2.2:3338`.
 - Optional override via `.env.local`: `EXPO_PUBLIC_CASHU_DEV_MINT_URL=<your-url>`.
 
 ## Mini Web Wallet (Recommended for single-emulator tests)
@@ -83,7 +83,7 @@ Open:
 Suggested pairing:
 1. Keep mint running at `http://127.0.0.1:3338`.
 2. In web wallet, use mint URL `http://127.0.0.1:3338`.
-3. In Android emulator app, use mint URL `http://10.0.0.197:3338`.
+3. In Android emulator app, use mint URL `http://10.0.2.2:3338`.
 4. Exchange tokens between web wallet and Android app (send/receive).
 
 What the mini wallet supports:
