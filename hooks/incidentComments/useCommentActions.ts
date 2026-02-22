@@ -32,13 +32,13 @@ export function useCommentActions({
       event.kind = NOSTR_KINDS.ALERT;
       event.content = trimmed;
       event.tags = [
-        ['a', incidentAddress, '', 'root'],
-        ['e', incident.eventId, '', 'root'],
+        ['a', incidentAddress],
+        ['e', incident.eventId],
         ['p', incident.pubkey],
       ];
 
       if (replyTo) {
-        event.tags.push(['e', replyTo.id, '', 'reply']);
+        event.tags.push(['e', replyTo.id]);
         event.tags.push(['p', replyTo.authorPubkey]);
       }
 
