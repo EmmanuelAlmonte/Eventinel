@@ -32,4 +32,4 @@ if ($LASTEXITCODE -ne 0) {
 }
 
 Write-Host "Cashu mint local URL: http://127.0.0.1:3338"
-Write-Host "Cashu mint physical phone URL: http://10.0.0.197:3338"
+Write-Host "Cashu mint physical phone URL: http://<your-lan-ip>:3338"

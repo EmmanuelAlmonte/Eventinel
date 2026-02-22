@@ -117,19 +117,19 @@ describe('WalletScreen', () => {
     });
 
     mockUseCashuWallet.mockReturnValue({
-      cashuWallet: { mints: ['http://10.0.0.197:3338'] },
+      cashuWallet: { mints: ['http://10.0.2.2:3338'] },
       cashuStatus: undefined,
       cashuBalance: 12,
       cashuBusy: false,
       cashuWalletRelays: ['wss://relay.eventinel.com'],
-      cashuCreateMints: 'http://10.0.0.197:3338',
+      cashuCreateMints: 'http://10.0.2.2:3338',
       setCashuCreateMints: jest.fn(),
       cashuCreateRelays: 'wss://relay.eventinel.com',
       setCashuCreateRelays: jest.fn(),
       cashuDepositAmount: '',
       setCashuDepositAmount: jest.fn(),
       cashuDepositInvoice: null,
-      cashuEditMints: 'http://10.0.0.197:3338',
+      cashuEditMints: 'http://10.0.2.2:3338',
       setCashuEditMints: jest.fn(),
       cashuEditRelays: 'wss://relay.eventinel.com',
       setCashuEditRelays: jest.fn(),
@@ -161,7 +161,7 @@ describe('WalletScreen', () => {
   it('wires connected-state mint save handler', () => {
     const { getByTestId } = render(<WalletScreen />);
 
-    expect(lastCashuSectionProps?.editMints).toBe('http://10.0.0.197:3338');
+    expect(lastCashuSectionProps?.editMints).toBe('http://10.0.2.2:3338');
     expect(lastCashuSectionProps?.editRelays).toBe('wss://relay.eventinel.com');
     fireEvent.press(getByTestId('cashu-save-mints'));
     expect(mockHandleCashuUpdateMints).toHaveBeenCalledTimes(1);

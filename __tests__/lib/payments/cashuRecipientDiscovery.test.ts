@@ -204,4 +204,75 @@ describe('cashuRecipientDiscovery', () => {
     expect(third.cached).toBe(false);
     expect(resolveZapInfo).toHaveBeenCalledTimes(2);
   });
+
+  it('does not cache when ttl is zero', async () => {
+    const resolveZapInfo = jest.fn().mockResolvedValue(
+      new Map<string, unknown>([
+        [
+          'nip61',
+          {
+            mints: ['https://mint.a'],
+            relays: ['wss://relay.eventinel.com'],
+            p2pk: RECIPIENT_P2PK,
+          },
+        ],
+      ])
+    );
+    const service = new CashuRecipientDiscoveryService({
+      enabled: true,
+      now: () => 1000,
+      resolveZapInfo,
+    });
+
+    const first = await service.discover({
+      recipientPubkey: RECIPIENT_PUBKEY,
+      senderMintPolicy: ['https://mint.a'],
+      cacheTtlMs: 0,
+    });
+    const second = await service.discover({
+      recipientPubkey: RECIPIENT_PUBKEY,
+      senderMintPolicy: ['https://mint.a'],
+      cacheTtlMs: 0,
+    });
+
+    expect(first.cached).toBe(false);
+    expect(second.cached).toBe(false);
+    expect(resolveZapInfo).toHaveBeenCalledTimes(2);
+  });
+
+  it('evicts expired cache entries before writing new results', async () => {
+    let nowMs = 0;
+    const resolveZapInfo = jest.fn().mockResolvedValue(
+      new Map<string, unknown>([
+        [
+          'nip61',
+          {
+            mints: ['https://mint.a'],
+            relays: ['wss://relay.eventinel.com'],
+            p2pk: RECIPIENT_P2PK,
+          },
+        ],
+      ])
+    );
+    const service = new CashuRecipientDiscoveryService({
+      enabled: true,
+      now: () => nowMs,
+      defaultCacheTtlMs: 1000,
+      resolveZapInfo,
+    });
+
+    await service.discover({
+      recipientPubkey: RECIPIENT_PUBKEY,
+      senderMintPolicy: ['https://mint.a'],
+    });
+    expect((service as any).cache.size).toBe(1);
+
+    nowMs = 1200;
+    await service.discover({
+      recipientPubkey: 'c'.repeat(64),
+      senderMintPolicy: ['https://mint.a'],
+    });
+
+    expect((service as any).cache.size).toBe(1);
+  });
 });

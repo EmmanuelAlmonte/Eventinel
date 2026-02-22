@@ -125,31 +125,46 @@ export class CashuRecipientDiscoveryService {
     }
 
     const cacheKey = buildCacheKey(input.recipientPubkey, input.senderMintPolicy, input.requireSingleMint);
-    const now = this.now();
+    let now = this.now();
     if (!input.forceRefresh) {
       const cachedEntry = this.cache.get(cacheKey);
-      if (cachedEntry && cachedEntry.expiresAt > now) {
-        pushDebug({
-          reason: 'cache_hit',
-          details: { expiresAt: cachedEntry.expiresAt },
-        });
-        return {
-          ...cachedEntry.outcome,
-          cached: true,
-          debug: [...cachedEntry.outcome.debug, ...debugEntries],
-        };
+      if (cachedEntry) {
+        if (cachedEntry.expiresAt > now) {
+          pushDebug({
+            reason: 'cache_hit',
+            details: { expiresAt: cachedEntry.expiresAt },
+          });
+          return {
+            ...cachedEntry.outcome,
+            cached: true,
+            debug: [...cachedEntry.outcome.debug, ...debugEntries],
+          };
+        }
+        this.cache.delete(cacheKey);
       }
     }
 
+    this.cleanupExpiredEntries(now);
     pushDebug({ reason: 'cache_miss' });
     const decision = await this.resolveDecision(input, pushDebug);
     const outcome = buildOutcome(decision, false, debugEntries);
-    this.cache.set(cacheKey, {
-      expiresAt: now + input.cacheTtlMs,
-      outcome,
-    });
+    if (input.cacheTtlMs > 0) {
+      now = this.now();
+      this.cache.set(cacheKey, {
+        expiresAt: now + input.cacheTtlMs,
+        outcome,
+      });
+    }
 
     return outcome;
+  }
+
+  private cleanupExpiredEntries(now: number) {
+    for (const [cacheKey, cachedEntry] of this.cache.entries()) {
+      if (cachedEntry.expiresAt <= now) {
+        this.cache.delete(cacheKey);
+      }
+    }
   }
 
   private async resolveDecision(
