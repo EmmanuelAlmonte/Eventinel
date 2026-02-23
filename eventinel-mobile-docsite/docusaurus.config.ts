@@ -5,8 +5,8 @@ import type * as Preset from '@docusaurus/preset-classic';
 // This runs in Node.js - Don't use client-side code here (browser APIs, JSX...)
 
 const config: Config = {
-  title: 'Eventinel Mobile',
-  tagline: 'Documentation for Eventinel Mobile',
+  title: 'Eventinel',
+  tagline: 'Nostr-native mobile public safety awareness',
   favicon: 'img/favicon.ico',
 
   // Future flags, see https://docusaurus.io/docs/api/docusaurus-config#future
@@ -15,15 +15,15 @@ const config: Config = {
   },
 
   // Set the production url of your site here
-  url: 'https://example.com',
+  url: 'https://eventinel.com',
   // Set the /<baseUrl>/ pathname under which your site is served
   // For GitHub pages deployment, it is often '/<projectName>/'
   baseUrl: '/',
 
   // GitHub pages deployment config.
   // If you aren't using GitHub pages, you don't need these.
-  organizationName: 'your-org', // Usually your GitHub org/user name.
-  projectName: 'eventinel-mobile-docs', // Usually your repo name.
+  organizationName: 'EmmanuelAlmonte', // Usually your GitHub org/user name.
+  projectName: 'Eventinel-mobile', // Usually your repo name.
 
   onBrokenLinks: 'throw',
 
@@ -58,9 +58,9 @@ const config: Config = {
       respectPrefersColorScheme: true,
     },
     navbar: {
-      title: 'Eventinel Mobile',
+      title: 'Eventinel',
       logo: {
-        alt: 'Eventinel Mobile Logo',
+        alt: 'Eventinel Logo',
         src: 'img/logo.svg',
       },
       items: [
@@ -71,7 +71,12 @@ const config: Config = {
           label: 'Docs',
         },
         {
-          href: 'https://github.com/your-org/eventinel-mobile',
+          href: 'https://github.com/EmmanuelAlmonte/Eventinel-mobile/releases',
+          label: 'Download',
+          position: 'right',
+        },
+        {
+          href: 'https://github.com/EmmanuelAlmonte/Eventinel-mobile',
           label: 'GitHub',
           position: 'right',
         },
@@ -90,16 +95,33 @@ const config: Config = {
           ],
         },
         {
-          title: 'Repository',
+          title: 'Download',
+          items: [
+            {
+              label: 'Android Releases',
+              href: 'https://github.com/EmmanuelAlmonte/Eventinel-mobile/releases',
+            },
+            {
+              label: 'Request iOS Access',
+              href: 'mailto:eventsentinel@gmail.com?subject=Eventinel%20iOS%20Access',
+            },
+          ],
+        },
+        {
+          title: 'Community',
           items: [
             {
               label: 'GitHub',
-              href: 'https://github.com/your-org/eventinel-mobile',
+              href: 'https://github.com/EmmanuelAlmonte/Eventinel-mobile',
+            },
+            {
+              label: 'Contact',
+              href: 'mailto:eventsentinel@gmail.com',
             },
           ],
         },
       ],
-      copyright: `Copyright © ${new Date().getFullYear()} Eventinel Mobile.`,
+      copyright: `Copyright © ${new Date().getFullYear()} Eventinel.`,
     },
     prism: {
       theme: prismThemes.github,
