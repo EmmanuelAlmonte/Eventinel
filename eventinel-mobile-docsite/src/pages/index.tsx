@@ -1,5 +1,3 @@
-import useDocusaurusContext from '@docusaurus/useDocusaurusContext';
-import Layout from '@theme/Layout';
 import styles from './index.module.css';
 
 const featureItems = [
@@ -182,7 +180,7 @@ function DownloadSection() {
           Request iOS Access
         </a>
         <a href="https://github.com/EmmanuelAlmonte/Eventinel-mobile">Source Code</a>
-        <a href="/docs/installation">Installation Guide</a>
+        <a href="https://github.com/EmmanuelAlmonte/Eventinel-mobile#readme">Getting Started</a>
       </div>
     </section>
   );
@@ -202,13 +200,8 @@ function SiteFooter() {
 }
 
 export default function Home() {
-  const {siteConfig} = useDocusaurusContext();
-  const SiteLayout = Layout as any;
   return (
-    <SiteLayout
-      title={siteConfig.title}
-      description="Eventinel is a Nostr-native mobile public safety app with real-time incident alerts and configurable preferences."
-      noFooter>
+    <>
       <main className={styles.page}>
         <TopBar />
         <Hero />
@@ -217,6 +210,6 @@ export default function Home() {
         <DownloadSection />
         <SiteFooter />
       </main>
-    </SiteLayout>
+    </>
   );
 }

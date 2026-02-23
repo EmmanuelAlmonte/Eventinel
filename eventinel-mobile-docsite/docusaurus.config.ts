@@ -39,10 +39,7 @@ const config: Config = {
     [
       'classic',
       {
-        docs: {
-          routeBasePath: 'docs',
-          sidebarPath: './sidebars.ts',
-        },
+        docs: false,
         blog: false,
         theme: {
           customCss: './src/css/custom.css',
@@ -65,12 +62,6 @@ const config: Config = {
       },
       items: [
         {
-          type: 'docSidebar',
-          sidebarId: 'docsSidebar',
-          position: 'left',
-          label: 'Docs',
-        },
-        {
           href: 'https://github.com/EmmanuelAlmonte/Eventinel-mobile/releases',
           label: 'Download',
           position: 'right',
@@ -85,15 +76,6 @@ const config: Config = {
     footer: {
       style: 'dark',
       links: [
-        {
-          title: 'Docs',
-          items: [
-            {
-              label: 'Installation',
-              to: '/docs/installation',
-            },
-          ],
-        },
         {
           title: 'Download',
           items: [
