@@ -59,6 +59,9 @@ const allIncidentTypes: IncidentType[] = [
   'fire',
   'medical',
   'traffic',
+  'transit',
+  'weather',
+  'public_health',
   'violent_crime',
   'property_crime',
   'disturbance',
@@ -162,6 +165,24 @@ describe('IncidentHeader', () => {
       const props = createDefaultProps({ type: 'traffic' });
       const { getByText } = render(<IncidentHeader {...props} />);
       expect(getByText('TRAFFIC')).toBeTruthy();
+    });
+
+    it('displays TRANSIT label for transit type', () => {
+      const props = createDefaultProps({ type: 'transit' });
+      const { getByText } = render(<IncidentHeader {...props} />);
+      expect(getByText('TRANSIT')).toBeTruthy();
+    });
+
+    it('displays WEATHER label for weather type', () => {
+      const props = createDefaultProps({ type: 'weather' });
+      const { getByText } = render(<IncidentHeader {...props} />);
+      expect(getByText('WEATHER')).toBeTruthy();
+    });
+
+    it('displays PUBLIC HEALTH label for public_health type', () => {
+      const props = createDefaultProps({ type: 'public_health' });
+      const { getByText } = render(<IncidentHeader {...props} />);
+      expect(getByText('PUBLIC HEALTH')).toBeTruthy();
     });
 
     it('displays CRIME label for violent_crime type', () => {
@@ -523,6 +544,18 @@ describe('IncidentHeader', () => {
 
     it('traffic type has traffic icon', () => {
       expect(TYPE_CONFIG.traffic.icon).toBe('traffic');
+    });
+
+    it('transit type has directions-transit icon', () => {
+      expect(TYPE_CONFIG.transit.icon).toBe('directions-transit');
+    });
+
+    it('weather type has wb-sunny icon', () => {
+      expect(TYPE_CONFIG.weather.icon).toBe('wb-sunny');
+    });
+
+    it('public_health type has local-hospital icon', () => {
+      expect(TYPE_CONFIG.public_health.icon).toBe('local-hospital');
     });
 
     it('violent_crime type has warning icon', () => {

@@ -306,6 +306,9 @@ export function isIncidentType(value: unknown): value is IncidentType {
     'fire',
     'medical',
     'traffic',
+    'transit',
+    'weather',
+    'public_health',
     'disturbance',
     'suspicious',
     'other',
@@ -324,7 +327,14 @@ export function isSeverity(value: unknown): value is Severity {
  * Type guard to check if a value is a valid DataSource
  */
 export function isDataSource(value: unknown): value is DataSource {
-  const validSources = ['crimeometer', 'opendataphilly', 'radio', 'community'];
+  const validSources = [
+    'crimeometer',
+    'opendataphilly',
+    'radio',
+    'community',
+    'nj_transit_rss',
+    'nj_511_rss',
+  ];
   return typeof value === 'string' && validSources.includes(value);
 }
 

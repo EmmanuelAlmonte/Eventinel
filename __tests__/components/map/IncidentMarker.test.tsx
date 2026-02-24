@@ -494,6 +494,9 @@ describe('IncidentMarker', () => {
       'fire',
       'medical',
       'traffic',
+      'transit',
+      'weather',
+      'public_health',
       'violent_crime',
       'property_crime',
       'disturbance',
@@ -538,6 +541,8 @@ describe('IncidentMarker', () => {
       'opendataphilly',
       'radio',
       'community',
+      'nj_transit_rss',
+      'nj_511_rss',
     ];
 
     it.each(dataSources)('renders incident from %s source', (source) => {

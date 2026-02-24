@@ -264,6 +264,9 @@ describe('parseIncidentEvent', () => {
       'fire',
       'medical',
       'traffic',
+      'transit',
+      'weather',
+      'public_health',
       'violent_crime',
       'property_crime',
       'disturbance',
@@ -277,6 +280,32 @@ describe('parseIncidentEvent', () => {
         const result = parseIncidentEvent(event);
         expect(result?.type).toBe(type);
       });
+    });
+  });
+
+  describe('nj compatibility parsing', () => {
+    it('parses transit incident from nj_transit_rss source', () => {
+      const event = createMockIncidentEvent({
+        type: 'transit',
+        source: 'nj_transit_rss',
+      });
+      const result = parseIncidentEvent(event);
+
+      expect(result).not.toBeNull();
+      expect(result?.type).toBe('transit');
+      expect(result?.source).toBe('nj_transit_rss');
+    });
+
+    it('parses weather incident from nj_511_rss source', () => {
+      const event = createMockIncidentEvent({
+        type: 'weather',
+        source: 'nj_511_rss',
+      });
+      const result = parseIncidentEvent(event);
+
+      expect(result).not.toBeNull();
+      expect(result?.type).toBe('weather');
+      expect(result?.source).toBe('nj_511_rss');
     });
   });
 
@@ -935,6 +964,9 @@ describe('Type Guards', () => {
       expect(isIncidentType('fire')).toBe(true);
       expect(isIncidentType('medical')).toBe(true);
       expect(isIncidentType('traffic')).toBe(true);
+      expect(isIncidentType('transit')).toBe(true);
+      expect(isIncidentType('weather')).toBe(true);
+      expect(isIncidentType('public_health')).toBe(true);
       expect(isIncidentType('violent_crime')).toBe(true);
       expect(isIncidentType('property_crime')).toBe(true);
       expect(isIncidentType('disturbance')).toBe(true);
@@ -988,6 +1020,8 @@ describe('Type Guards', () => {
       expect(isDataSource('opendataphilly')).toBe(true);
       expect(isDataSource('radio')).toBe(true);
       expect(isDataSource('community')).toBe(true);
+      expect(isDataSource('nj_transit_rss')).toBe(true);
+      expect(isDataSource('nj_511_rss')).toBe(true);
     });
 
     it('returns false for invalid data sources', () => {

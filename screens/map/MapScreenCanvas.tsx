@@ -112,12 +112,6 @@ export function MapScreenCanvas({
               animationDuration={camera.animationDuration}
             />
 
-            {userLocation ? (
-              <mapbox.PointAnnotation id="user-location" coordinate={userLocation}>
-                <View style={styles.userMarker} />
-              </mapbox.PointAnnotation>
-            ) : null}
-
             <mapbox.Images images={incidentIconImages} />
 
             <mapbox.ShapeSource
@@ -151,6 +145,12 @@ export function MapScreenCanvas({
                 style={incidentIconStyle}
               />
             </mapbox.ShapeSource>
+
+            {userLocation ? (
+              <mapbox.MarkerView coordinate={userLocation} allowOverlap>
+                <View style={styles.userMarker} />
+              </mapbox.MarkerView>
+            ) : null}
           </mapbox.MapView>
         ) : (
           <MapPlaceholder />

@@ -34,6 +34,7 @@ export type MapboxModule = {
   MapView: ComponentType<Record<string, unknown>>;
   Camera: ComponentType<Record<string, unknown>>;
   Images: ComponentType<Record<string, unknown>>;
+  MarkerView: ComponentType<Record<string, unknown>>;
   PointAnnotation: ComponentType<Record<string, unknown>>;
   ShapeSource: ComponentType<Record<string, unknown>>;
   CircleLayer: ComponentType<Record<string, unknown>>;
@@ -107,6 +108,9 @@ const INCIDENT_TYPE_ICON_KEYS: Record<IncidentType, string> = {
   fire: 'incident-icon-fire',
   medical: 'incident-icon-medical',
   traffic: 'incident-icon-traffic',
+  transit: 'incident-icon-transit',
+  weather: 'incident-icon-weather',
+  public_health: 'incident-icon-public-health',
   violent_crime: 'incident-icon-violent-crime',
   property_crime: 'incident-icon-property-crime',
   disturbance: 'incident-icon-disturbance',
@@ -118,6 +122,9 @@ export const incidentIconImages = {
   [INCIDENT_TYPE_ICON_KEYS.fire]: incidentTypeIconAssetByType.fire,
   [INCIDENT_TYPE_ICON_KEYS.medical]: incidentTypeIconAssetByType.medical,
   [INCIDENT_TYPE_ICON_KEYS.traffic]: incidentTypeIconAssetByType.traffic,
+  [INCIDENT_TYPE_ICON_KEYS.transit]: incidentTypeIconAssetByType.transit,
+  [INCIDENT_TYPE_ICON_KEYS.weather]: incidentTypeIconAssetByType.weather,
+  [INCIDENT_TYPE_ICON_KEYS.public_health]: incidentTypeIconAssetByType.public_health,
   [INCIDENT_TYPE_ICON_KEYS.violent_crime]: incidentTypeIconAssetByType.violent_crime,
   [INCIDENT_TYPE_ICON_KEYS.property_crime]: incidentTypeIconAssetByType.property_crime,
   [INCIDENT_TYPE_ICON_KEYS.disturbance]: incidentTypeIconAssetByType.disturbance,
@@ -135,6 +142,12 @@ export const incidentIconStyle = {
     INCIDENT_TYPE_ICON_KEYS.medical,
     'traffic',
     INCIDENT_TYPE_ICON_KEYS.traffic,
+    'transit',
+    INCIDENT_TYPE_ICON_KEYS.transit,
+    'weather',
+    INCIDENT_TYPE_ICON_KEYS.weather,
+    'public_health',
+    INCIDENT_TYPE_ICON_KEYS.public_health,
     'violent_crime',
     INCIDENT_TYPE_ICON_KEYS.violent_crime,
     'property_crime',

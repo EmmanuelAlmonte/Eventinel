@@ -115,6 +115,9 @@ export const INCIDENT_TYPES = {
   FIRE: 'fire',
   MEDICAL: 'medical',
   TRAFFIC: 'traffic',
+  TRANSIT: 'transit',
+  WEATHER: 'weather',
+  PUBLIC_HEALTH: 'public_health',
   DISTURBANCE: 'disturbance',
   SUSPICIOUS: 'suspicious',
   OTHER: 'other',
@@ -140,6 +143,8 @@ export const DATA_SOURCES = {
   OPENDATAPHILLY: 'opendataphilly',
   RADIO: 'radio',
   COMMUNITY: 'community',
+  NJ_TRANSIT_RSS: 'nj_transit_rss',
+  NJ_511_RSS: 'nj_511_rss',
 } as const;
 
 export type DataSource = (typeof DATA_SOURCES)[keyof typeof DATA_SOURCES];
@@ -259,6 +264,27 @@ export const TYPE_CONFIG: Record<
     color: '#F97316',
     gradient: ['#F97316', '#EAB308'],
     label: 'Traffic',
+  },
+  transit: {
+    icon: 'directions-transit',
+    glyph: '🚆',
+    color: '#2563EB',
+    gradient: ['#2563EB', '#3B82F6'],
+    label: 'Transit',
+  },
+  weather: {
+    icon: 'wb-sunny',
+    glyph: '🌦',
+    color: '#0284C7',
+    gradient: ['#0284C7', '#0EA5E9'],
+    label: 'Weather',
+  },
+  public_health: {
+    icon: 'local-hospital',
+    glyph: '🩺',
+    color: '#0D9488',
+    gradient: ['#0D9488', '#14B8A6'],
+    label: 'Public Health',
   },
   violent_crime: {
     icon: 'warning',
