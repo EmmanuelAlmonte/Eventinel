@@ -88,7 +88,6 @@ function TopBar() {
       <nav className={styles.navLinks} aria-label="Primary">
         <a href="#features">Features</a>
         <a href="#timeline">Timeline</a>
-        {/* <a href="#how-it-works">How It Works</a> */}
         <a href="https://github.com/EmmanuelAlmonte/Eventinel">GitHub</a>
       </nav>
 
