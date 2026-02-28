@@ -1,0 +1,131 @@
+/**
+ * Jest Setup File for Eventinel Mobile
+ *
+ * This file runs before each test file and sets up:
+ * - Global mocks for React Native modules
+ * - NDK hook mocks with controllable state
+ * - Platform-specific configurations
+ */
+
+import 'react-native-gesture-handler/jestSetup';
+import '@testing-library/react-native';
+
+// Silence console warnings during tests (optional)
+// console.warn = jest.fn();
+// console.error = jest.fn();
+
+// Mock React Native's Alert - use spyOn approach after import
+import { Alert } from 'react-native';
+
+// Override Alert.alert to track calls
+const originalAlert = Alert.alert;
+Alert.alert = jest.fn((title, message, buttons) => {
+  // Store the last alert for assertions
+  global.__lastAlert = { title, message, buttons };
+});
+
+// Mock StatusBar
+jest.mock('expo-status-bar', () => ({
+  StatusBar: 'StatusBar',
+}));
+
+jest.mock('expo-clipboard');
+jest.mock('expo-secure-store');
+jest.mock('expo-image-picker');
+
+// Mock SafeAreaProvider
+jest.mock('react-native-safe-area-context', () => {
+  const insets = { top: 0, right: 0, bottom: 0, left: 0 };
+  return {
+    SafeAreaProvider: ({ children }) => children,
+    SafeAreaView: ({ children }) => children,
+    useSafeAreaInsets: () => insets,
+    useSafeAreaFrame: () => ({ x: 0, y: 0, width: 390, height: 844 }),
+  };
+});
+
+// Mock Mapbox (heavy native module)
+// MarkerView needs to be a functional component that renders children
+const MockMarkerView = ({ children, coordinate, allowOverlap }) => {
+  const { View } = require('react-native');
+  return (
+    <View testID="marker-view" data-coordinate={JSON.stringify(coordinate)} data-allow-overlap={allowOverlap}>
+      {children}
+    </View>
+  );
+};
+
+jest.mock('@rnmapbox/maps', () => ({
+  default: {
+    MarkerView: MockMarkerView,
+    MapView: 'MapView',
+    Camera: 'Camera',
+    Images: 'Images',
+  },
+  MapView: 'MapView',
+  Camera: 'Camera',
+  Images: 'Images',
+  MarkerView: MockMarkerView,
+  PointAnnotation: 'PointAnnotation',
+  ShapeSource: 'ShapeSource',
+  SymbolLayer: 'SymbolLayer',
+  CircleLayer: 'CircleLayer',
+  setAccessToken: jest.fn(),
+}));
+
+// FlashList relies on native layout measurement; use FlatList in tests.
+jest.mock('@shopify/flash-list', () => {
+  const { FlatList } = require('react-native');
+  return { FlashList: FlatList };
+});
+
+// Mock NavigationContainer
+jest.mock('@react-navigation/native', () => {
+  const actual = jest.requireActual('@react-navigation/native');
+  return {
+    ...actual,
+    NavigationContainer: ({ children }) => children,
+  };
+});
+
+// Mock Material Top Tabs (virtual module - doesn't need to exist in node_modules)
+jest.mock('@react-navigation/material-top-tabs', () => ({
+  createMaterialTopTabNavigator: () => ({
+    Navigator: ({ children }) => children,
+    Screen: ({ children }) => children,
+  }),
+}), { virtual: true });
+
+// Global test utilities
+global.mockNDKUser = (pubkey, profile = {}) => ({
+  pubkey,
+  profile: {
+    displayName: profile.displayName || 'Test User',
+    name: profile.name || 'testuser',
+    about: profile.about || 'Test bio',
+    ...profile,
+  },
+});
+
+// Helper to simulate pressing alert buttons
+global.pressAlertButton = (buttonText) => {
+  if (global.__lastAlert?.buttons) {
+    const button = global.__lastAlert.buttons.find(
+      (b) => b.text === buttonText || b.style === buttonText
+    );
+    if (button?.onPress) {
+      button.onPress();
+    }
+  }
+};
+
+// Reset all mocks before each test
+beforeEach(() => {
+  jest.clearAllMocks();
+  global.__lastAlert = null;
+});
+
+// Clean up after each test
+afterEach(() => {
+  jest.restoreAllMocks();
+});

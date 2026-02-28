@@ -1,0 +1,16 @@
+{
+  "goals": {},
+  "plans": {},
+  "session": {
+    "currentGoal": null,
+    "currentPlan": null,
+    "sessionStartTime": "2026-02-15T02:36:12.725Z",
+    "lastActivity": "2026-02-15T02:36:12.725Z",
+    "isActive": false
+  },
+  "metadata": {
+    "version": "1.0.0",
+    "lastBackup": "2026-02-15T02:36:12.725Z",
+    "totalSessions": 0
+  }
+}

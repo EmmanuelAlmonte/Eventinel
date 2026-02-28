@@ -4,7 +4,7 @@
  * @module types/relay
  */
 
-import type { NDKRelay } from '@nostr-dev-kit/ndk';
+import type { NDKRelay } from '@nostr-dev-kit/mobile';
 
 /**
  * Relay status as human-readable string.

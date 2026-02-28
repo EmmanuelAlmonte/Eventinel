@@ -8,6 +8,7 @@ node_modules/
 dist/
 web-build/
 expo-env.d.ts
+coverage/
 
 # Native
 .kotlin/
@@ -17,6 +18,15 @@ expo-env.d.ts
 *.p12
 *.key
 *.mobileprovision
+
+# Firebase / push credentials
+google-services.json
+**/google-services.json
+GoogleService-Info.plist
+*-firebase-adminsdk-*.json
+service-account*.json
+eventinel-*.json
+AuthKey_*.p8
 
 # Metro
 .metro-health-check*
@@ -31,7 +41,10 @@ yarn-error.*
 *.pem
 
 # local env files
+.env
 .env*.local
+scripts/cashu/.env.nutshell
+scripts/cashu/.mini-wallet-state.json
 
 # typescript
 *.tsbuildinfo
@@ -43,3 +56,22 @@ yarn-error.*
 # Claude Code configuration (local only)
 .claude/
 /os
+/do
+/agent-outputs
+/docs/archive
+/_branch-diff-fundamental-nostr-features
+/react-native-elements-docs
+/react-native-elements-docs
+package-lock.json
+package-lock.json
+ .env.local
+/MObileDOCS
+/docs/tasks
+/docs/tasks
+ndk-metro-release-bug.md
+
+.codex/.env
+
+.codex/memory/.semantic/
+
+.codex/memory/

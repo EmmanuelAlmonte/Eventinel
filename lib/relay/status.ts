@@ -6,7 +6,7 @@
  * @module lib/relay/status
  */
 
-import { NDKRelayStatus, type NDKRelay } from '@nostr-dev-kit/ndk-mobile';
+import { NDKRelayStatus, type NDKRelay } from '@nostr-dev-kit/mobile';
 import type { RelayStatusString, RelayInfo } from '../../types/relay';
 
 /**
@@ -106,15 +106,16 @@ export function relayToInfo(relay: NDKRelay): RelayInfo {
   const rawStatus = relay.status;
   const statusString = getStatusString(rawStatus);
 
+  // TODO: Re-enable NIP-11 info after upgrading NDK (0.8.x has no relay.info)
+  // name: relay.info?.name,
+  // description: relay.info?.description,
+  // supportedNips: relay.info?.supported_nips,
+
   return {
     url: relay.url,
     status: statusString,
     rawStatus,
     isConnected: isConnected(rawStatus),
-    // NIP-11 info (may be undefined if not fetched)
-    name: relay.info?.name,
-    description: relay.info?.description,
-    supportedNips: relay.info?.supported_nips,
   };
 }
 

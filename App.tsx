@@ -1,119 +1,151 @@
 import 'react-native-get-random-values'; // MUST be first import!
 import { useEffect, useState } from 'react';
+
 import { StatusBar } from 'expo-status-bar';
-import { NavigationContainer } from '@react-navigation/native';
-import { createMaterialTopTabNavigator } from '@react-navigation/material-top-tabs';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
 
-import MenuScreen from './screens/MenuScreen';
-import MapScreen from './screens/MapScreen';
-import ProfileScreen from './screens/ProfileScreen';
-import RelayConnectScreen from './screens/RelayConnectScreen';
-import PrivateKeyScreen from './screens/PrivateKeyScreen';
+import LoginScreen from './screens/LoginScreen';
+import { AppStartupScreen } from './components/AppStartupScreen';
+import { MainNavigation } from './AppNavigation';
+import { useAppRelayBootstrap } from './hooks/useAppRelayBootstrap';
 import { ndk } from './lib/ndk';
-import { loadRelays } from './lib/relay/storage';
+import { theme } from './lib/theme';
+import { useAppTheme } from '@hooks';
+import {
+  loadSessionsFromStorage,
+  migrateLegacyLogin,
+  NDKSessionExpoSecureStore,
+  useNDKCurrentPubkey,
+  useNDKInit,
+  useSessionMonitor,
+} from '@nostr-dev-kit/mobile';
+import { IncidentCacheProvider, LocationProvider, IncidentSubscriptionProvider, RelayStatusProvider } from '@contexts';
+import { ToastProvider, ErrorBoundary } from '@components/ui';
+import { ThemeProvider } from '@rneui/themed';
 
-const Tab = createMaterialTopTabNavigator();
+const AUTH_RESTORE_TIMEOUT_MS = __DEV__ ? 3500 : 2000;
 
-/**
- * Eventinel Mobile App
- *
- * Loads saved relays on startup and connects to them.
- */
-export default function App() {
-  const [isReady, setIsReady] = useState(false);
-
-  useEffect(() => {
-    async function initializeRelays() {
-      try {
-        console.log('🚀 [App] Initializing relay connections...');
-
-        // Load saved relays from storage
-        const savedRelays = await loadRelays();
-        console.log('📥 [App] Loaded', savedRelays.length, 'saved relays:', savedRelays);
-
-        if (savedRelays.length === 0) {
-          console.warn('⚠️ [App] No saved relays found. Add relays in the Relays tab.');
-        }
-
-        // Add them to NDK pool
-        for (const url of savedRelays) {
-          console.log('➕ [App] Adding relay to pool:', url);
-          ndk.addExplicitRelay(url);
-        }
-
-        // Start connecting (don't wait - let it happen in background)
-        ndk.connect().catch((err) => console.warn('⚠️ [App] Relay connection warning:', err));
-        console.log('🔄 [App] Started relay connections in background');
-
-        // Don't wait for connections - show UI immediately
-        setIsReady(true);
-        console.log('✅ [App] UI ready, relays connecting...');
-      } catch (error) {
-        console.error('❌ [App] Failed to initialize relays:', error);
-        setIsReady(true); // Continue anyway
-      }
-    }
-
-    initializeRelays();
-  }, []);
-
-  if (!isReady) {
-    // You can add a loading spinner here
-    return null;
-  }
+function LoginWrapper() {
+  const { isDark } = useAppTheme();
 
   return (
-    <NavigationContainer>
-      <StatusBar style="auto" />
-      <Tab.Navigator
-        initialRouteName="Menu"
-        tabBarPosition="bottom"
-        screenOptions={{
-          tabBarActiveTintColor: '#2563eb',
-          tabBarInactiveTintColor: '#6b7280',
-          tabBarLabelStyle: { fontSize: 12, fontWeight: '600' },
-          tabBarStyle: {
-            backgroundColor: '#fff',
-            height: 60,
-            paddingBottom: 8,
-            paddingTop: 8,
-            borderTopWidth: 1,
-            borderTopColor: '#e5e7eb',
-          },
-          tabBarIndicatorStyle: {
-            backgroundColor: '#2563eb',
-            height: 3,
-            top: 0,
-          },
-          swipeEnabled: false, // Disable swipe, force tap navigation
-        }}
-      >
-        <Tab.Screen
-          name="Menu"
-          component={MenuScreen}
-          options={{ tabBarLabel: '🏠 Home' }}
-        />
-        <Tab.Screen
-          name="Relays"
-          component={RelayConnectScreen}
-          options={{ tabBarLabel: '🌐 Relays' }}
-        />
-        <Tab.Screen
-          name="Key"
-          component={PrivateKeyScreen}
-          options={{ tabBarLabel: '🔑 Key' }}
-        />
-        <Tab.Screen
-          name="Map"
-          component={MapScreen}
-          options={{ tabBarLabel: '🗺️ Map' }}
-        />
-        <Tab.Screen
-          name="Profile"
-          component={ProfileScreen}
-          options={{ tabBarLabel: '👤 Profile' }}
-        />
-      </Tab.Navigator>
-    </NavigationContainer>
+    <>
+      <StatusBar style={isDark ? 'light' : 'dark'} />
+      <LoginScreen />
+    </>
+  );
+}
+
+function useAuthRestoreGate() {
+  const currentPubkey = useNDKCurrentPubkey();
+  const [hasStoredSession, setHasStoredSession] = useState<boolean | null>(null);
+  const [didRestoreTimeout, setDidRestoreTimeout] = useState(false);
+
+  // Detect if this device has a persisted NDK session before deciding whether
+  // we should hold startup while session restoration finishes.
+  useEffect(() => {
+    let isCancelled = false;
+
+    const detectStoredSession = async () => {
+      try {
+        const storageAdapter = new NDKSessionExpoSecureStore();
+        await migrateLegacyLogin(storageAdapter);
+        const sessions = loadSessionsFromStorage(storageAdapter);
+        if (!isCancelled) {
+          setHasStoredSession(sessions.length > 0);
+        }
+      } catch (error) {
+        if (__DEV__) {
+          console.warn('[App] Failed to inspect stored NDK sessions:', error);
+        }
+        if (!isCancelled) {
+          setHasStoredSession(false);
+        }
+      }
+    };
+
+    void detectStoredSession();
+
+    return () => {
+      isCancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (hasStoredSession !== true || currentPubkey || didRestoreTimeout) {
+      return;
+    }
+
+    const timeoutId = setTimeout(() => {
+      setDidRestoreTimeout(true);
+      console.warn(
+        `[App] Session restore timeout after ${AUTH_RESTORE_TIMEOUT_MS}ms; showing Login fallback.`
+      );
+    }, AUTH_RESTORE_TIMEOUT_MS);
+
+    return () => {
+      clearTimeout(timeoutId);
+    };
+  }, [currentPubkey, didRestoreTimeout, hasStoredSession]);
+
+  const isAuthRestoreResolved =
+    hasStoredSession === false || Boolean(currentPubkey) || didRestoreTimeout;
+
+  return { currentPubkey, isAuthRestoreResolved };
+}
+
+function AppContent() {
+  const isReady = useAppRelayBootstrap();
+  const initializeNDK = useNDKInit(); // Initialize all 4 stores (NDK, sessions, profiles, mutes)
+  const { currentPubkey, isAuthRestoreResolved } = useAuthRestoreGate();
+
+  // Initialize NDK and all dependent stores (sessions, profiles, mutes)
+  // This MUST run before useSessionMonitor can work properly
+  useEffect(() => {
+    console.log('🔧 [App] Initializing NDK and all stores...');
+    initializeNDK(ndk);
+    console.log('✅ [App] NDK and stores initialized');
+  }, [initializeNDK]);
+
+  // Enable automatic session persistence to SecureStore
+  // This hook:
+  // - Loads saved sessions from SecureStore on startup
+  // - Restores signers via ndkSignerFromPayload
+  // - Persists new sessions when added via initSession/login
+  // - Handles legacy nsec1 migration automatically
+  // NOTE: Safely handles null NDK on first render, processes after initialization
+  useSessionMonitor({
+    profile: true, // Auto-fetch profiles for restored sessions
+  });
+
+  const { isDark, colors } = useAppTheme();
+
+  return !isReady || !isAuthRestoreResolved ? (
+    <AppStartupScreen colors={colors} isDark={isDark} />
+  ) : !currentPubkey ? (
+    <LoginWrapper />
+  ) : (
+    <LocationProvider>
+      <RelayStatusProvider>
+        <IncidentCacheProvider>
+          <IncidentSubscriptionProvider>
+            <MainNavigation />
+          </IncidentSubscriptionProvider>
+        </IncidentCacheProvider>
+      </RelayStatusProvider>
+    </LocationProvider>
+  );
+}
+
+export default function App() {
+  return (
+    <SafeAreaProvider>
+      <ThemeProvider theme={theme}>
+        <ErrorBoundary>
+          <AppContent />
+        </ErrorBoundary>
+        <ToastProvider />
+      </ThemeProvider>
+    </SafeAreaProvider>
   );
 }

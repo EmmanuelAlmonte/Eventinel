@@ -5,7 +5,7 @@
  * specifically the custom kind:30911 incident events.
  */
 
-import type { NDKEvent } from '@nostr-dev-kit/ndk';
+import type { NDKEvent } from '@nostr-dev-kit/mobile';
 import type { IncidentType, Severity, DataSource } from '../config';
 
 // =============================================================================
@@ -45,7 +45,7 @@ export interface UnsignedEvent {
  * Required tags:
  * - ['d', '<incident-id>'] - Unique identifier
  * - ['g', '<geohash>'] - Geohash for filtering (NIP-52 standard)
- * - ['l', '<lat>,<lng>'] - Precise geolocation
+ * - ['location', '<place>'] - Human-readable location (NIP-52 compatible)
  * - ['type', '<type>'] - Incident classification
  * - ['severity', '<1-5>'] - Severity level
  * - ['source', '<source>'] - Data source
@@ -55,7 +55,7 @@ export interface UnsignedEvent {
 export type IncidentEventTags = [
   ['d', string], // Unique incident ID
   ['g', string], // Geohash (NIP-52 standard, filterable)
-  ['l', string], // "lat,lng" precise coordinates
+  ['location', string], // Human-readable location
   ['type', IncidentType],
   ['severity', string], // "1" - "5"
   ['source', DataSource],
@@ -306,6 +306,9 @@ export function isIncidentType(value: unknown): value is IncidentType {
     'fire',
     'medical',
     'traffic',
+    'transit',
+    'weather',
+    'public_health',
     'disturbance',
     'suspicious',
     'other',
@@ -324,7 +327,14 @@ export function isSeverity(value: unknown): value is Severity {
  * Type guard to check if a value is a valid DataSource
  */
 export function isDataSource(value: unknown): value is DataSource {
-  const validSources = ['crimeometer', 'opendataphilly', 'radio', 'community'];
+  const validSources = [
+    'crimeometer',
+    'opendataphilly',
+    'radio',
+    'community',
+    'nj_transit_rss',
+    'nj_511_rss',
+  ];
   return typeof value === 'string' && validSources.includes(value);
 }
 

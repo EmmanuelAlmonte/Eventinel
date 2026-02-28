@@ -1,18 +1,23 @@
 /**
  * Eventinel NDK Client
  *
- * Singleton NDK instance with browser-only Dexie caching.
- * Handles relay configuration from environment variables.
+ * NDK access helpers for React Native.
+ * Uses the shared singleton from lib/ndk.ts.
+ *
+ * NOTE: This module intentionally does not create additional NDK instances.
+ * It proxies access to the app-level singleton so connection/session state
+ * remains centralized.
  *
  * @see https://github.com/nostr-dev-kit/ndk
  */
 
-import NDK from '@nostr-dev-kit/ndk';
-import type { NDKCacheAdapter } from '@nostr-dev-kit/ndk';
+import type NDK from '@nostr-dev-kit/mobile';
+import { type NDKCacheAdapter } from '@nostr-dev-kit/mobile';
 import { getRelayUrls } from './config';
+import { ndk as sharedNDK } from '../ndk';
 
 // Singleton instance
-let ndkInstance: NDK | null = null;
+let ndkInstance: NDK | null = sharedNDK;
 
 /**
  * Options for creating an NDK instance
@@ -20,54 +25,26 @@ let ndkInstance: NDK | null = null;
 export interface CreateNDKOptions {
   /** Custom relay URLs (overrides environment config) */
   relayUrls?: string[];
-  /** Enable caching (default: true in browser, false on server) */
-  enableCache?: boolean;
-  /** Custom cache adapter */
+  /** Custom cache adapter (e.g., NDKCacheAdapterSqlite from NDK mobile) */
   cacheAdapter?: NDKCacheAdapter;
   /** Auto-connect after creation (default: false) */
   autoConnect?: boolean;
 }
 
 /**
- * Detects if code is running in a browser environment
- */
-function isBrowser(): boolean {
-  return typeof window !== 'undefined' && typeof document !== 'undefined';
-}
-
-/**
- * Creates the Dexie cache adapter (browser-only)
- * Dynamically imports to avoid SSR issues
- *
- * Uses IndexedDB via Dexie for persistent event caching.
- * Requires @nostr-dev-kit/cache-dexie 2.7.8-beta.66 for
- * compatibility with NDK 3.0.0-beta.66
- */
-async function createDexieCache(): Promise<NDKCacheAdapter | undefined> {
-  if (!isBrowser()) {
-    return undefined;
-  }
-
-  try {
-    // Dynamic import for browser-only Dexie
-    const { default: NDKCacheAdapterDexie } = await import(
-      '@nostr-dev-kit/cache-dexie'
-    );
-    return new NDKCacheAdapterDexie({
-      dbName: 'eventinel-cache',
-    }) as unknown as NDKCacheAdapter;
-  } catch (error) {
-    console.warn('[NDK] Failed to initialize Dexie cache:', error);
-    return undefined;
-  }
-}
-
-/**
- * Creates a new NDK instance with Eventinel configuration
+ * Returns the shared NDK instance with optional connect behavior
  *
  * @example
  * ```typescript
- * const ndk = await createNDK({ autoConnect: true });
+ * import { NDKCacheAdapterSqlite } from '@nostr-dev-kit/mobile';
+ *
+ * const cacheAdapter = new NDKCacheAdapterSqlite('my-app.db');
+ * await cacheAdapter.initialize();
+ *
+ * const ndk = await createNDK({
+ *   cacheAdapter,
+ *   autoConnect: true
+ * });
  * ```
  */
 export async function createNDK(
@@ -75,28 +52,24 @@ export async function createNDK(
 ): Promise<NDK> {
   const {
     relayUrls,
-    // DISABLED: Dexie cache causes memory bloat - events accumulate without eviction
-    // Re-enable once proper cache eviction is implemented
-    // See: https://github.com/nostr-dev-kit/ndk/issues/XXX
-    enableCache = false, // Was: isBrowser()
     cacheAdapter,
     autoConnect = false,
   } = options;
 
-  // Get relay URLs from options or environment
-  const explicitRelayUrls = relayUrls || getRelayUrls();
-
-  // Set up cache adapter
-  let cache: NDKCacheAdapter | undefined = cacheAdapter;
-  if (!cache && enableCache) {
-    cache = await createDexieCache();
+  if (relayUrls || cacheAdapter) {
+    const configuredRelays = getRelayUrls();
+    console.warn(
+      '[nostr/client] createNDK relayUrls/cacheAdapter overrides are ignored; using shared singleton from lib/ndk.ts',
+      {
+        relayUrlsProvided: Boolean(relayUrls),
+        cacheAdapterProvided: Boolean(cacheAdapter),
+        configuredRelayCount: configuredRelays.length,
+      }
+    );
   }
 
-  // Create NDK instance
-  const ndk = new NDK({
-    explicitRelayUrls,
-    cacheAdapter: cache,
-  });
+  const ndk = ndkInstance ?? sharedNDK;
+  ndkInstance = ndk;
 
   // Auto-connect if requested
   if (autoConnect) {
@@ -118,10 +91,9 @@ export async function createNDK(
  * ```
  */
 export async function getSharedNDK(): Promise<NDK> {
-  if (!ndkInstance) {
-    ndkInstance = await createNDK();
-  }
-  return ndkInstance;
+  const ndk = ndkInstance ?? sharedNDK;
+  ndkInstance = ndk;
+  return ndk;
 }
 
 /**
@@ -130,32 +102,32 @@ export async function getSharedNDK(): Promise<NDK> {
  * @throws Error if NDK hasn't been initialized yet
  */
 export function getSharedNDKSync(): NDK {
-  if (!ndkInstance) {
-    throw new Error(
-      'NDK not initialized. Call getSharedNDK() first or use NDKProvider.'
-    );
-  }
-  return ndkInstance;
+  return ndkInstance ?? sharedNDK;
 }
 
 /**
  * Sets the shared NDK instance (for testing or custom initialization)
  */
 export function setSharedNDK(ndk: NDK): void {
-  ndkInstance = ndk;
+  if (ndk !== sharedNDK) {
+    console.warn(
+      '[nostr/client] setSharedNDK ignored; app uses singleton from lib/ndk.ts'
+    );
+    return;
+  }
+  ndkInstance = sharedNDK;
 }
 
 /**
  * Resets the shared NDK instance (for testing)
  */
 export function resetSharedNDK(): void {
-  if (ndkInstance) {
-    // Disconnect all relays before resetting
-    for (const relay of ndkInstance.pool.relays.values()) {
-      relay.disconnect();
-    }
+  // Keep the singleton identity stable; only disconnect active relays.
+  const activeNdk = ndkInstance ?? sharedNDK;
+  for (const relay of activeNdk.pool.relays.values()) {
+    relay.disconnect();
   }
-  ndkInstance = null;
+  ndkInstance = sharedNDK;
 }
 
 /**

@@ -1,0 +1,58 @@
+diff --git a/node_modules/@nostr-dev-kit/mobile/dist/module/cache-adapter/sqlite/index.js b/node_modules/@nostr-dev-kit/mobile/dist/module/cache-adapter/sqlite/index.js
+index 85cf7cd..c1a1576 100644
+--- a/node_modules/@nostr-dev-kit/mobile/dist/module/cache-adapter/sqlite/index.js
++++ b/node_modules/@nostr-dev-kit/mobile/dist/module/cache-adapter/sqlite/index.js
+@@ -216,7 +216,7 @@ export class NDKCacheAdapterSqlite {
+     const filterTags = event.tags.filter(tag => tag[0].length === 1).map(tag => [tag[0], tag[1]]);
+     if (filterTags.length < 10) {
+       for (const tag of filterTags) {
+-        this.bufferWrite("INSERT INTO event_tags (event_id, tag, value) VALUES (?, ?, ?);", [event.id, tag[0], tag[1]]);
++        this.bufferWrite("INSERT INTO event_tags (event_id, tag, value) VALUES (?, ?, ?);", [referenceId, tag[0], tag[1]]);
+       }
+     }
+     if (event.kind === NDKKind.EventDeletion) {
+diff --git a/node_modules/@nostr-dev-kit/mobile/dist/module/index.js b/node_modules/@nostr-dev-kit/mobile/dist/module/index.js
+index 18f39d1..a52b4dc 100644
+--- a/node_modules/@nostr-dev-kit/mobile/dist/module/index.js
++++ b/node_modules/@nostr-dev-kit/mobile/dist/module/index.js
+@@ -1,6 +1,7 @@
+ "use strict";
+ 
+ export * from "@nostr-dev-kit/react";
++export * from "@nostr-dev-kit/wallet";
+ export * from "./cache-adapter/sqlite/index.js";
+ export * from "./components/index.js";
+ export * from "./hooks/index.js";
+diff --git a/node_modules/@nostr-dev-kit/mobile/dist/typescript/index.d.ts b/node_modules/@nostr-dev-kit/mobile/dist/typescript/index.d.ts
+index cfda0df..a595408 100644
+--- a/node_modules/@nostr-dev-kit/mobile/dist/typescript/index.d.ts
++++ b/node_modules/@nostr-dev-kit/mobile/dist/typescript/index.d.ts
+@@ -1,4 +1,5 @@
+ export * from "@nostr-dev-kit/react";
++export * from "@nostr-dev-kit/wallet";
+ export * from "./cache-adapter/sqlite/index.js";
+ export * from "./components/index.js";
+ export * from "./hooks/index.js";
+diff --git a/node_modules/@nostr-dev-kit/mobile/src/cache-adapter/sqlite/index.ts b/node_modules/@nostr-dev-kit/mobile/src/cache-adapter/sqlite/index.ts
+index fe2064a..2bfb033 100644
+--- a/node_modules/@nostr-dev-kit/mobile/src/cache-adapter/sqlite/index.ts
++++ b/node_modules/@nostr-dev-kit/mobile/src/cache-adapter/sqlite/index.ts
+@@ -309,7 +309,7 @@ export class NDKCacheAdapterSqlite implements NDKCacheAdapter {
+         if (filterTags.length < 10) {
+             for (const tag of filterTags) {
+                 this.bufferWrite("INSERT INTO event_tags (event_id, tag, value) VALUES (?, ?, ?);", [
+-                    event.id,
++                    referenceId,
+                     tag[0],
+                     tag[1],
+                 ]);
+diff --git a/node_modules/@nostr-dev-kit/mobile/src/index.ts b/node_modules/@nostr-dev-kit/mobile/src/index.ts
+index 47ac4ec..5fde18f 100644
+--- a/node_modules/@nostr-dev-kit/mobile/src/index.ts
++++ b/node_modules/@nostr-dev-kit/mobile/src/index.ts
+@@ -1,4 +1,5 @@
+ export * from "@nostr-dev-kit/react";
++export * from "@nostr-dev-kit/wallet";
+ export * from "./cache-adapter/sqlite/index.js";
+ export * from "./components/index.js";
+ export * from "./hooks/index.js";

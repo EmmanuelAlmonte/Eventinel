@@ -1,0 +1,204 @@
+.carouselSection {
+  margin-top: 0.95rem;
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  border-radius: 14px;
+  padding: 0.75rem;
+  background:
+    radial-gradient(circle at 15% 0%, rgba(111, 82, 255, 0.1), transparent 42%),
+    linear-gradient(180deg, rgba(11, 14, 26, 0.92), rgba(6, 9, 18, 0.96));
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.03),
+    0 14px 28px rgba(2, 4, 11, 0.28);
+}
+
+.carouselTopRow {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.7rem;
+}
+
+.carouselTitleBlock {
+  min-width: 0;
+}
+
+.carouselTitle {
+  margin: 0;
+  color: #bcc4e8;
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.045em;
+  text-transform: uppercase;
+}
+
+.carouselControls {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.statusPill {
+  border-radius: 999px;
+  padding: 0.25rem 0.55rem;
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  border: 1px solid transparent;
+}
+
+.statusAuto {
+  color: #b9d8ff;
+  border-color: rgba(122, 180, 255, 0.4);
+  background: rgba(28, 64, 118, 0.35);
+}
+
+.statusPaused {
+  color: #f7cb8f;
+  border-color: rgba(255, 191, 107, 0.45);
+  background: rgba(112, 72, 22, 0.34);
+}
+
+.navButton {
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(10, 14, 27, 0.95);
+  color: #dce2fb;
+  border-radius: 8px;
+  padding: 0.32rem 0.56rem;
+  font-size: 0.73rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition:
+    border-color 0.2s ease,
+    background-color 0.2s ease,
+    transform 0.2s ease;
+}
+
+.navButton:hover {
+  border-color: rgba(140, 114, 255, 0.45);
+  background: rgba(22, 28, 48, 0.95);
+}
+
+.navButton:focus-visible,
+.stepButton:focus-visible {
+  outline: 2px solid rgba(140, 114, 255, 0.55);
+  outline-offset: 2px;
+}
+
+.activeMeta {
+  margin: 0.62rem 0 0.48rem;
+}
+
+.activeLabel {
+  margin: 0;
+  color: #edf0ff;
+  font-size: 1.05rem;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+.activeCopy {
+  margin: 0.28rem 0 0;
+  color: #9eabd1;
+  font-size: 0.79rem;
+  line-height: 1.5;
+  max-width: 76ch;
+}
+
+.videoViewport {
+  border-radius: 11px;
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  overflow: hidden;
+  background:
+    radial-gradient(circle at 30% 12%, rgba(111, 82, 255, 0.12), transparent 54%),
+    rgba(3, 6, 14, 0.9);
+  aspect-ratio: 16 / 9;
+  display: grid;
+  place-items: center;
+}
+
+.video {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  display: block;
+}
+
+.progressTrack {
+  margin-top: 0.46rem;
+  height: 4px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.1);
+  overflow: hidden;
+}
+
+.progressFill {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #7f63ff 0%, #58a5ff 100%);
+  transition: width 0.25s ease;
+}
+
+.stepRail {
+  margin-top: 0.62rem;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.36rem;
+}
+
+.stepButton {
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(9, 13, 25, 0.9);
+  color: #b6c0e3;
+  border-radius: 999px;
+  padding: 0.3rem 0.64rem;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  line-height: 1.1;
+  text-align: center;
+  cursor: pointer;
+  transition:
+    border-color 0.2s ease,
+    color 0.2s ease,
+    background-color 0.2s ease;
+}
+
+.stepButton:hover {
+  border-color: rgba(140, 114, 255, 0.42);
+  color: #e4e9ff;
+}
+
+.stepButtonActive {
+  border-color: rgba(140, 114, 255, 0.7);
+  background: linear-gradient(180deg, rgba(95, 70, 205, 0.45), rgba(72, 50, 162, 0.4));
+  color: #f2efff;
+}
+
+@media (max-width: 900px) {
+  .activeCopy {
+    max-width: 100%;
+  }
+}
+
+@media (max-width: 640px) {
+  .carouselSection {
+    padding: 0.62rem;
+  }
+
+  .carouselTopRow {
+    gap: 0.52rem;
+    flex-wrap: wrap;
+  }
+
+  .carouselControls {
+    width: 100%;
+    justify-content: flex-start;
+  }
+
+  .activeLabel {
+    font-size: 0.96rem;
+  }
+}

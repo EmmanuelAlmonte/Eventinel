@@ -7,31 +7,24 @@
  */
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { DEFAULT_RELAYS, LOCAL_RELAYS, normalizeRelayUrl } from './config';
+
+export { DEFAULT_RELAYS, LOCAL_RELAYS };
 
 const RELAY_STORAGE_KEY = 'eventinel:saved-relays';
-
-/**
- * Default relays to use if no saved relays exist.
- * These are reliable, well-maintained relays.
- */
-export const DEFAULT_RELAYS = [
-  'wss://relay.damus.io',
-  'wss://relay.primal.net',
-  'wss://nos.lol',
-];
 
 /**
  * Save relay URLs to persistent storage.
  *
  * @example
  * ```typescript
- * await saveRelays(['wss://relay.damus.io', 'wss://nos.lol']);
+ * await saveRelays(['wss://relay.eventinel.com']);
  * ```
  */
 export async function saveRelays(urls: string[]): Promise<void> {
   try {
     // Normalize and deduplicate
-    const normalized = [...new Set(urls.map(normalizeUrl))];
+    const normalized = [...new Set(urls.map(normalizeRelayUrl))];
     await AsyncStorage.setItem(RELAY_STORAGE_KEY, JSON.stringify(normalized));
     console.log('[Relay Storage] Saved', normalized.length, 'relays');
   } catch (error) {
@@ -47,7 +40,7 @@ export async function saveRelays(urls: string[]): Promise<void> {
  * @example
  * ```typescript
  * const relays = await loadRelays();
- * // Returns: ['wss://relay.damus.io', ...]
+ * // Returns: ['wss://relay.eventinel.com', ...]
  * ```
  */
 export async function loadRelays(): Promise<string[]> {
@@ -56,8 +49,9 @@ export async function loadRelays(): Promise<string[]> {
 
     if (stored) {
       const parsed = JSON.parse(stored) as string[];
-      console.log('[Relay Storage] Loaded', parsed.length, 'saved relays');
-      return parsed;
+      const normalized = [...new Set(parsed.map(normalizeRelayUrl))];
+      console.log('[Relay Storage] Loaded', normalized.length, 'saved relays');
+      return normalized;
     }
 
     console.log('[Relay Storage] No saved relays, using defaults');
@@ -78,7 +72,7 @@ export async function loadRelays(): Promise<string[]> {
  */
 export async function addRelayToStorage(url: string): Promise<void> {
   const current = await loadRelays();
-  const normalized = normalizeUrl(url);
+  const normalized = normalizeRelayUrl(url);
 
   // Don't add duplicates
   if (current.includes(normalized)) {
@@ -99,7 +93,7 @@ export async function addRelayToStorage(url: string): Promise<void> {
  */
 export async function removeRelayFromStorage(url: string): Promise<void> {
   const current = await loadRelays();
-  const normalized = normalizeUrl(url);
+  const normalized = normalizeRelayUrl(url);
   const updated = current.filter((r) => r !== normalized);
 
   if (updated.length < current.length) {
@@ -114,14 +108,4 @@ export async function removeRelayFromStorage(url: string): Promise<void> {
 export async function clearRelayStorage(): Promise<void> {
   await AsyncStorage.removeItem(RELAY_STORAGE_KEY);
   console.log('[Relay Storage] Cleared all saved relays');
-}
-
-/**
- * Normalize relay URL for consistent comparison.
- * - Trims whitespace
- * - Converts to lowercase
- * - Removes trailing slash
- */
-function normalizeUrl(url: string): string {
-  return url.trim().toLowerCase().replace(/\/$/, '');
 }

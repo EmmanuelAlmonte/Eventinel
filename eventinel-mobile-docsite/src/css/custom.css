@@ -1,0 +1,77 @@
+/* Eventinel Mobile docs theme mapped from app brand tokens. */
+:root {
+  --eventinel-primary: #9333ea;
+  --eventinel-primary-dark: #7c3aed;
+  --eventinel-primary-light: #a855f7;
+  --eventinel-info: #3b82f6;
+  --eventinel-warning: #f59e0b;
+  --eventinel-bg: #ffffff;
+  --eventinel-surface: #f4f4f5;
+  --eventinel-text: #18181b;
+  --eventinel-muted: #52525b;
+
+  --ifm-color-primary: var(--eventinel-primary);
+  --ifm-color-primary-dark: #8825e7;
+  --ifm-color-primary-darker: #7c22d6;
+  --ifm-color-primary-darkest: #651ba9;
+  --ifm-color-primary-light: #9f4cef;
+  --ifm-color-primary-lighter: #a95cf1;
+  --ifm-color-primary-lightest: #be83f5;
+
+  --ifm-background-color: var(--eventinel-bg);
+  --ifm-background-surface-color: var(--eventinel-surface);
+  --ifm-font-color-base: var(--eventinel-text);
+  --ifm-heading-color: var(--eventinel-text);
+  --ifm-navbar-background-color: var(--eventinel-bg);
+  --ifm-code-font-size: 95%;
+
+  --ifm-footer-background-color: #18181b;
+  --ifm-footer-color: #e4e4e7;
+  --ifm-footer-title-color: #fafafa;
+  --ifm-footer-link-color: var(--eventinel-primary-light);
+
+  --docusaurus-highlighted-code-line-bg: rgba(147, 51, 234, 0.12);
+}
+
+.hero--primary {
+  background: linear-gradient(135deg, #9333ea 0%, #7c3aed 52%, #3b82f6 100%);
+}
+
+.hero--primary .button--secondary {
+  background: #fafafa;
+  border-color: rgba(250, 250, 250, 0.95);
+  color: #18181b;
+}
+
+.hero--primary .button--secondary:hover {
+  background: #f4f4f5;
+}
+
+[data-theme='dark'] {
+  --eventinel-bg: #09090b;
+  --eventinel-surface: #18181b;
+  --eventinel-text: #fafafa;
+  --eventinel-muted: #a1a1aa;
+
+  --ifm-color-primary: var(--eventinel-primary-light);
+  --ifm-color-primary-dark: #9d46f2;
+  --ifm-color-primary-darker: #923be9;
+  --ifm-color-primary-darkest: #782bc2;
+  --ifm-color-primary-light: #b067f8;
+  --ifm-color-primary-lighter: #b777f9;
+  --ifm-color-primary-lightest: #ca9bfd;
+
+  --ifm-background-color: var(--eventinel-bg);
+  --ifm-background-surface-color: var(--eventinel-surface);
+  --ifm-navbar-background-color: var(--eventinel-bg);
+  --ifm-font-color-base: var(--eventinel-text);
+  --ifm-heading-color: var(--eventinel-text);
+  --ifm-footer-background-color: #09090b;
+  --ifm-footer-link-color: var(--eventinel-primary-light);
+
+  --docusaurus-highlighted-code-line-bg: rgba(168, 85, 247, 0.2);
+}
+
+[data-theme='dark'] .hero--primary {
+  background: linear-gradient(135deg, #7c3aed 0%, #9333ea 52%, #3b82f6 100%);
+}

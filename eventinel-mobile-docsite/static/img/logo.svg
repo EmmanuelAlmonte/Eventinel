@@ -1,0 +1,22 @@
+<svg
+  xmlns="http://www.w3.org/2000/svg"
+  width="128"
+  height="128"
+  viewBox="0 0 128 128"
+  role="img"
+  aria-label="Eventinel Mobile Logo"
+>
+  <defs>
+    <linearGradient id="eventinelGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#9333EA" />
+      <stop offset="100%" stop-color="#7C3AED" />
+    </linearGradient>
+  </defs>
+  <circle cx="64" cy="64" r="56" fill="url(#eventinelGradient)" />
+  <path
+    d="M64 26c-15.464 0-28 12.536-28 28 0 20.568 28 48 28 48s28-27.432 28-48c0-15.464-12.536-28-28-28z"
+    fill="#FAFAFA"
+  />
+  <circle cx="64" cy="54" r="12" fill="#9333EA" />
+  <circle cx="92" cy="36" r="10" fill="#F59E0B" stroke="#FAFAFA" stroke-width="4" />
+</svg>

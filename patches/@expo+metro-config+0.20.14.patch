@@ -1,0 +1,78 @@
+diff --git a/node_modules/@expo/metro-config/build/serializer/fork/js.js b/node_modules/@expo/metro-config/build/serializer/fork/js.js
+index 77268e3..0194fd9 100644
+--- a/node_modules/@expo/metro-config/build/serializer/fork/js.js
++++ b/node_modules/@expo/metro-config/build/serializer/fork/js.js
+@@ -52,6 +52,11 @@ function getModuleParams(module, options) {
+         // is created. This is required for production bundle splitting.
+         // options.includeAsyncPaths &&
+         dependency.data.data.asyncType != null) {
++            const dependencyPath = dependency.absolutePath;
++            if (!dependencyPath) {
++                // Skip unresolved optional/virtual async deps to avoid path.relative crashes.
++                return id;
++            }
+             if (options.includeAsyncPaths) {
+                 if (options.sourceUrl) {
+                     hasPaths = true;
+@@ -69,7 +74,7 @@ function getModuleParams(module, options) {
+                         searchParams.set('modulesOnly', 'true');
+                         searchParams.set('runModule', 'false');
+                     }
+-                    const bundlePath = path_1.default.relative(options.serverRoot, dependency.absolutePath);
++                    const bundlePath = path_1.default.relative(options.serverRoot, dependencyPath);
+                     paths[id] =
+                         '/' +
+                             path_1.default.join(path_1.default.dirname(bundlePath), 
+@@ -82,7 +87,7 @@ function getModuleParams(module, options) {
+             else if (options.splitChunks && options.computedAsyncModulePaths != null) {
+                 hasPaths = true;
+                 // A template string that we'll match and replace later when we know the content hash for a given path.
+-                paths[id] = options.computedAsyncModulePaths[dependency.absolutePath];
++                paths[id] = options.computedAsyncModulePaths[dependencyPath];
+             }
+         }
+         return id;
+@@ -99,7 +104,10 @@ function getModuleParams(module, options) {
+     if (options.dev) {
+         // Add the relative path of the module to make debugging easier.
+         // This is mapped to `module.verboseName` in `require.js`.
+-        params.push(path_1.default.relative(options.projectRoot, module.path));
++        // Some virtual modules can end up without a path; avoid crashing in that case.
++        params.push(typeof module.path === 'string'
++            ? path_1.default.relative(options.projectRoot, module.path)
++            : '');
+     }
+     return { params, paths };
+ }
+diff --git a/node_modules/@expo/metro-config/build/serializer/serializeChunks.js b/node_modules/@expo/metro-config/build/serializer/serializeChunks.js
+index fa62130..de45d1b 100644
+--- a/node_modules/@expo/metro-config/build/serializer/serializeChunks.js
++++ b/node_modules/@expo/metro-config/build/serializer/serializeChunks.js
+@@ -220,15 +220,24 @@ class Chunk {
+         this.deps.forEach((module) => {
+             module.dependencies.forEach((dependency) => {
+                 if (dependency.data.data.asyncType) {
+-                    const chunkContainingModule = chunks.find((chunk) => chunk.hasAbsolutePath(dependency.absolutePath));
+-                    (0, assert_1.default)(chunkContainingModule, 'Chunk containing module not found: ' + dependency.absolutePath);
++                    const dependencyPath = dependency.absolutePath;
++                    if (!dependencyPath) {
++                        // Skip unresolved optional/virtual async dependencies.
++                        return;
++                    }
++                    const chunkContainingModule = chunks.find((chunk) => chunk.hasAbsolutePath(dependencyPath));
++                    if (!chunkContainingModule) {
++                        // If the async dependency couldn't be resolved, avoid crashing the bundle.
++                        return;
++                    }
++                    (0, assert_1.default)(chunkContainingModule, 'Chunk containing module not found: ' + dependencyPath);
+                     // NOTE(kitten): We shouldn't have any async imports on non-async chunks
+                     // However, due to how chunks merge, some async imports may now be pointing
+                     // at entrypoint (or vendor) chunks. We omit the path so that the async import
+                     // helper doesn't reload and reevaluate the entrypoint.
+                     if (chunkContainingModule.isAsync) {
+                         const moduleIdName = chunkContainingModule.getFilenameForConfig(serializerConfig);
+-                        computedAsyncModulePaths[dependency.absolutePath] = (baseUrl ?? '/') + moduleIdName;
++                        computedAsyncModulePaths[dependencyPath] = (baseUrl ?? '/') + moduleIdName;
+                     }
+                 }
+             });

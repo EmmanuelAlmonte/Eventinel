@@ -1,3 +1,11 @@
+/**
+ * HomeScreen
+ *
+ * NOTE: This screen is currently NOT used in the app.
+ * MenuScreen serves as the main home/dashboard.
+ * Map is the default initial screen.
+ */
+
 import { StyleSheet, Text, View } from 'react-native';
 
 export default function HomeScreen() {

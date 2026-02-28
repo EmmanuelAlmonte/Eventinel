@@ -86,4 +86,4 @@ export {
 } from './events';
 
 // Re-export NDK types for convenience
-export type { NDKEvent, NDKFilter, NDKSubscription } from '@nostr-dev-kit/ndk';
+export type { NDKEvent, NDKFilter, NDKSubscription } from '@nostr-dev-kit/mobile';

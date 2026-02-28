@@ -1,0 +1,60 @@
+{
+  "expo": {
+    "name": "Eventinel",
+    "slug": "eventinel",
+    "version": "1.0.0",
+    "scheme": "eventinel",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "automatic",
+    "jsEngine": "hermes",
+    "developmentClient": {
+      "silentLaunch": true
+    },
+    "newArchEnabled": true,
+    "plugins": [
+      "expo-secure-store",
+      "@rnmapbox/maps",
+      "expo-sqlite",
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "gradleVersion": "8.10",
+            "kotlinVersion": "2.0.21"
+          }
+        }
+      ],
+      "expo-asset"
+    ],
+    "splash": {
+      "image": "./assets/splash-icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#ffffff"
+    },
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "com.eventinel.app",
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false,
+        "NSLocationWhenInUseUsageDescription": "Eventinel needs your location to show nearby safety incidents on the map.",
+        "NSLocationAlwaysAndWhenInUseUsageDescription": "Eventinel can track your location in the background to provide real-time incident alerts and continuous map updates even when the app is closed."
+      }
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#ffffff"
+      },
+      "package": "com.eventinel.app"
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "extra": {
+      "eas": {
+        "projectId": "095741fd-0726-4560-9b50-528a8e167252"
+      }
+    }
+  }
+}
