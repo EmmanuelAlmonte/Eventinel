@@ -203,33 +203,6 @@
   text-align: left;
 }
 
-.windowDots {
-  height: 34px;
-  border-bottom: 1px solid var(--line);
-  display: flex;
-  gap: 0.4rem;
-  align-items: center;
-  padding: 0 0.9rem;
-}
-
-.windowDots span {
-  width: 9px;
-  height: 9px;
-  border-radius: 999px;
-}
-
-.windowDots span:nth-child(1) {
-  background: #ff5f57;
-}
-
-.windowDots span:nth-child(2) {
-  background: #ffbd2f;
-}
-
-.windowDots span:nth-child(3) {
-  background: #28c840;
-}
-
 .mockBody {
   display: grid;
   grid-template-columns: 1fr 1.8fr;
@@ -306,6 +279,53 @@
   display: grid;
   place-items: center;
   font-size: 0.95rem;
+}
+
+.videoPreviewWrap {
+  border-top: 1px solid var(--line);
+  padding: 0.95rem;
+}
+
+.videoPreviewHeader {
+  margin: 0 0 0.55rem;
+  color: #aeb7df;
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.videoStack {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.videoCard {
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 12px;
+  padding: 0.45rem;
+  background:
+    radial-gradient(circle at 22% 20%, rgba(111, 82, 255, 0.14), transparent 54%),
+    rgba(10, 13, 23, 0.6);
+}
+
+.videoLabel {
+  margin: 0 0 0.45rem;
+  color: #c2c9eb;
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+
+.videoPreview {
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  object-fit: cover;
+  max-height: none;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  background: #060914;
+  display: block;
+  overflow: hidden;
 }
 
 .section {

@@ -1,3 +1,6 @@
+import TimelineVideoCarousel, {
+  type TimelineVideoItem,
+} from '../components/TimelineVideoCarousel';
 import styles from './index.module.css';
 
 const featureItems = [
@@ -24,37 +27,51 @@ const howItWorks = [
   'Receive nearby incident alerts and monitor map/feed views.',
 ];
 
-const incidentRows = [
+const timelineCarouselItems: TimelineVideoItem[] = [
   {
-    title: 'Structure Fire',
-    location: '1200 Market St',
-    eta: '0.3 mi',
-    time: '2 min ago',
-    tone: 'danger',
+    title: 'Timeline Deck',
+    purpose: '9-Month Delivery Roadmap',
+    copy: '',
+    src: '/media/implementation-timeline-carousel.mp4',
+    preload: 'auto',
   },
   {
-    title: 'Vehicle Accident',
-    location: 'Broad & Walnut',
-    eta: '0.7 mi',
-    time: '8 min ago',
-    tone: 'warning',
+    title: 'Deliverable D1',
+    purpose: 'Data + Ingestion Foundation',
+    copy: 'Foundation delivery: data model, ingestion pipeline, and baseline mobile reliability guardrails.',
+    src: '/media/implementation-timeline-d1.mp4',
   },
   {
-    title: 'Medical Response',
-    location: '2000 Chestnut St',
-    eta: '1.2 mi',
-    time: '15 min ago',
-    tone: 'success',
+    title: 'Deliverable D2',
+    purpose: 'Incident Alert UX Flows',
+    copy: 'User-facing alert and incident workflows, tuned for clear actionability under time pressure.',
+    src: '/media/implementation-timeline-d2.mp4',
+  },
+  {
+    title: 'Deliverable D3',
+    purpose: 'Map Context + Media Clarity',
+    copy: 'Map and contextual media improvements that increase trust and reduce ambiguous incident signals.',
+    src: '/media/implementation-timeline-d3.mp4',
+  },
+  {
+    title: 'Deliverable D4',
+    purpose: 'Protocol Reliability + Interop',
+    copy: 'Nostr protocol integration milestones for resilient distribution and open ecosystem interoperability.',
+    src: '/media/implementation-timeline-d4.mp4',
+  },
+  {
+    title: 'Deliverable D5',
+    purpose: 'Personalized Safety Controls',
+    copy: 'Personalization and source controls, including safer family-oriented alert configuration paths.',
+    src: '/media/implementation-timeline-d5.mp4',
+  },
+  {
+    title: 'Deliverable D6',
+    purpose: 'Production Hardening + QA',
+    copy: 'Production polish, QA, and release readiness with measurable performance and stability targets.',
+    src: '/media/implementation-timeline-d6.mp4',
   },
 ];
-
-type Tone = 'danger' | 'warning' | 'success';
-
-function toneClass(tone: Tone) {
-  if (tone === 'danger') return styles.toneDanger;
-  if (tone === 'warning') return styles.toneWarning;
-  return styles.toneSuccess;
-}
 
 function TopBar() {
   return (
@@ -70,8 +87,9 @@ function TopBar() {
 
       <nav className={styles.navLinks} aria-label="Primary">
         <a href="#features">Features</a>
-        <a href="#how-it-works">How It Works</a>
-        <a href="https://github.com/EmmanuelAlmonte/Eventinel-mobile">GitHub</a>
+        <a href="#timeline">Timeline</a>
+        {/* <a href="#how-it-works">How It Works</a> */}
+        <a href="https://github.com/EmmanuelAlmonte/Eventinel">GitHub</a>
       </nav>
 
       <a
@@ -108,32 +126,7 @@ function Hero() {
       </div>
       <p className={styles.helperText}>Join the waitlist. No spam, ever.</p>
 
-      <div className={styles.mockFrame}>
-        <div className={styles.windowDots} aria-hidden="true">
-          <span />
-          <span />
-          <span />
-        </div>
-        <div className={styles.mockBody}>
-          <div className={styles.incidentList}>
-            {incidentRows.map((row) => (
-              <article className={styles.incidentCard} key={row.title}>
-                <div className={styles.incidentTop}>
-                  <div className={styles.incidentName}>
-                    <span className={`${styles.toneDot} ${toneClass(row.tone as Tone)}`} />
-                    {row.title}
-                  </div>
-                  <span className={styles.time}>{row.time}</span>
-                </div>
-                <p className={styles.incidentMeta}>
-                  {row.location} - {row.eta}
-                </p>
-              </article>
-            ))}
-          </div>
-          <div className={styles.mapPanel}>Interactive Map View</div>
-        </div>
-      </div>
+      <TimelineVideoCarousel items={timelineCarouselItems} />
     </section>
   );
 }
@@ -175,12 +168,12 @@ function DownloadSection() {
     <section className={styles.section}>
       <h2>Download + Access</h2>
       <div className={styles.downloadRow}>
-        <a href="https://github.com/EmmanuelAlmonte/Eventinel-mobile/releases">Android Builds</a>
-        <a href="mailto:eventsentinel@gmail.com?subject=Eventinel%20iOS%20Access">
+        {/* <a href="https://github.com/EmmanuelAlmonte/Eventinel/releases">Android Builds</a> */}
+        {/* <a href="mailto:eventsentinel@gmail.com?subject=Eventinel%20iOS%20Access">
           Request iOS Access
-        </a>
-        <a href="https://github.com/EmmanuelAlmonte/Eventinel-mobile">Source Code</a>
-        <a href="https://github.com/EmmanuelAlmonte/Eventinel-mobile#readme">Getting Started</a>
+        </a> */}
+        <a href="https://github.com/EmmanuelAlmonte/Eventinel">Source Code</a>
+        <a href="https://github.com/EmmanuelAlmonte/Eventinel#readme">Getting Started</a>
       </div>
     </section>
   );
@@ -206,7 +199,7 @@ export default function Home() {
         <TopBar />
         <Hero />
         <FeatureSection />
-        <HowItWorksSection />
+        {/* <HowItWorksSection /> */}
         <DownloadSection />
         <SiteFooter />
       </main>

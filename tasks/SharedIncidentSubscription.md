@@ -20,7 +20,7 @@ Create a shared subscription provider to eliminate duplicate NDK subscriptions b
 
 ### Feature Path
 
-**App/Package**: `Eventinel-mobile`
+**App/Package**: `Eventinel`
 **Feature Area**: `contexts`, `hooks`, `screens`
 **Route/Endpoint**: N/A
 

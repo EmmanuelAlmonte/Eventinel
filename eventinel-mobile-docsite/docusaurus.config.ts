@@ -23,7 +23,7 @@ const config: Config = {
   // GitHub pages deployment config.
   // If you aren't using GitHub pages, you don't need these.
   organizationName: 'EmmanuelAlmonte', // Usually your GitHub org/user name.
-  projectName: 'Eventinel-mobile', // Usually your repo name.
+  projectName: 'Eventinel', // Usually your repo name.
 
   onBrokenLinks: 'throw',
 
@@ -62,12 +62,12 @@ const config: Config = {
       },
       items: [
         {
-          href: 'https://github.com/EmmanuelAlmonte/Eventinel-mobile/releases',
+          href: 'https://github.com/EmmanuelAlmonte/Eventinel/releases',
           label: 'Download',
           position: 'right',
         },
         {
-          href: 'https://github.com/EmmanuelAlmonte/Eventinel-mobile',
+          href: 'https://github.com/EmmanuelAlmonte/Eventinel',
           label: 'GitHub',
           position: 'right',
         },
@@ -81,7 +81,7 @@ const config: Config = {
           items: [
             {
               label: 'Android Releases',
-              href: 'https://github.com/EmmanuelAlmonte/Eventinel-mobile/releases',
+              href: 'https://github.com/EmmanuelAlmonte/Eventinel/releases',
             },
             {
               label: 'Request iOS Access',
@@ -94,7 +94,7 @@ const config: Config = {
           items: [
             {
               label: 'GitHub',
-              href: 'https://github.com/EmmanuelAlmonte/Eventinel-mobile',
+              href: 'https://github.com/EmmanuelAlmonte/Eventinel',
             },
             {
               label: 'Contact',
