@@ -71,6 +71,12 @@ const timelineCarouselItems: TimelineVideoItem[] = [
     copy: 'Production polish, QA, and release readiness with measurable performance and stability targets.',
     src: '/media/implementation-timeline-d6.mp4',
   },
+  {
+    title: 'Deliverable D7',
+    purpose: 'Reporter Support Payments (Final)',
+    copy: 'Enable direct viewer support for reporters during live incident coverage with hardened payout reliability.',
+    src: '/media/implementation-timeline-d7.mp4',
+  },
 ];
 
 function TopBar() {
@@ -124,8 +130,6 @@ function Hero() {
         </a>
       </div>
       <p className={styles.helperText}>Join the waitlist. No spam, ever.</p>
-
-      <TimelineVideoCarousel items={timelineCarouselItems} />
     </section>
   );
 }
@@ -198,6 +202,9 @@ export default function Home() {
         <TopBar />
         <Hero />
         <FeatureSection />
+        <section className={styles.section}>
+          <TimelineVideoCarousel items={timelineCarouselItems} />
+        </section>
         {/* <HowItWorksSection /> */}
         <DownloadSection />
         <SiteFooter />
