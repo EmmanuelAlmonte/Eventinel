@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" role="img" aria-label="Eventinel favicon">
+  <defs>
+    <linearGradient id="eventinelFaviconGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#5f43ef" />
+      <stop offset="100%" stop-color="#8d76ff" />
+    </linearGradient>
+  </defs>
+  <rect x="0" y="0" width="24" height="24" rx="6" fill="url(#eventinelFaviconGradient)" />
+  <path
+    d="M12 2 4 5v6c0 5.4 3.4 10.4 8 11 4.6-.6 8-5.6 8-11V5l-8-3Zm0 5.5a3 3 0 1 1 0 6 3 3 0 0 1 0-6Zm0 12.2c-2.2-.5-4-3.2-4-5.6 0-1 .8-1.8 1.8-1.8h4.4c1 0 1.8.8 1.8 1.8 0 2.4-1.8 5.1-4 5.6Z"
+    fill="#fff"
+  />
+</svg>
