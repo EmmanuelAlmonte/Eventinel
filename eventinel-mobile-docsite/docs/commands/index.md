@@ -1,6 +1,6 @@
 ---
 title: Commands
-description: Command and workflow reference for Eventinel Mobile.
+description: Command and workflow reference for Eventinel.
 ---
 
 Use this section as the source of truth for local scripts and release workflows.

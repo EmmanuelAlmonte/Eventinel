@@ -1,8 +1,8 @@
-# Authentication Testing Strategy for Eventinel Mobile
+# Authentication Testing Strategy for Eventinel
 
 ## Executive Summary
 
-This document outlines a comprehensive testing strategy for the authentication implementation in Eventinel Mobile. The strategy balances thoroughness with practicality, focusing on tests that provide the most value for auth reliability.
+This document outlines a comprehensive testing strategy for the authentication implementation in Eventinel. The strategy balances thoroughness with practicality, focusing on tests that provide the most value for auth reliability.
 
 ## Test Infrastructure Overview
 

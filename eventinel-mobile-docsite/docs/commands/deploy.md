@@ -1,6 +1,6 @@
 ---
 title: deploy
-description: Build and release Eventinel Mobile artifacts.
+description: Build and release Eventinel artifacts.
 ---
 
 This repository does not define a single `npm run deploy` script, so release

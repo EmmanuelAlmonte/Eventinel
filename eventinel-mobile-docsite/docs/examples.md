@@ -1,6 +1,6 @@
 ---
 title: Examples
-description: Practical command sequences for Eventinel Mobile workflows.
+description: Practical command sequences for Eventinel workflows.
 ---
 
 ## Local development cycle

@@ -1,6 +1,6 @@
 ---
 title: init
-description: Bootstrap the Eventinel Mobile workspace.
+description: Bootstrap the Eventinel workspace.
 ---
 
 Use this workflow when setting up the project for the first time.

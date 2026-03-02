@@ -1,5 +1,5 @@
 /**
- * Jest Configuration for Eventinel Mobile
+ * Jest Configuration for Eventinel
  *
  * Configured for Expo 53 + React Native 0.79 with TypeScript
  */

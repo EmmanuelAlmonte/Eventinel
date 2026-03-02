@@ -12,7 +12,7 @@ const FeatureList: FeatureItem[] = [
     title: 'Fast Local Setup',
     Svg: require('@site/static/img/undraw_docusaurus_mountain.svg').default,
     description:
-      'Bootstrap the Eventinel Mobile workspace with npm, configure environment values, and run Expo in minutes.',
+      'Bootstrap the Eventinel workspace with npm, configure environment values, and run Expo in minutes.',
   },
   {
     title: 'Operator-Focused Workflows',

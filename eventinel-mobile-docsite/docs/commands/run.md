@@ -1,6 +1,6 @@
 ---
 title: run
-description: Run Eventinel Mobile on local targets.
+description: Run Eventinel on local targets.
 ---
 
 Use these scripts during day-to-day development.
