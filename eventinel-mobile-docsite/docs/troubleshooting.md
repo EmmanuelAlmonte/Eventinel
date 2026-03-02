@@ -1,6 +1,6 @@
 ---
 title: Troubleshooting
-description: Common Eventinel Mobile setup and runtime issues.
+description: Common Eventinel setup and runtime issues.
 ---
 
 ## `expo` or `npm` command not found

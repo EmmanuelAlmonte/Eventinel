@@ -1,9 +1,9 @@
 ---
 title: Configuration
-description: Configure Eventinel Mobile environment and runtime behavior.
+description: Configure Eventinel environment and runtime behavior.
 ---
 
-Eventinel Mobile reads configuration through environment files and Expo config.
+Eventinel reads configuration through environment files and Expo config.
 
 ## Resolution order
 

@@ -1,7 +1,7 @@
 {
   "name": "eventinel-mobile",
   "version": "0.1.0",
-  "description": "Eventinel mobile app - Nostr-native public safety monitoring",
+  "description": "Eventinel app - Nostr-native public safety monitoring",
   "main": "index.ts",
   "scripts": {
     "start": "expo start",

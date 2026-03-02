@@ -1,5 +1,5 @@
 /**
- * Jest Setup File for Eventinel Mobile
+ * Jest Setup File for Eventinel
  *
  * This file runs before each test file and sets up:
  * - Global mocks for React Native modules

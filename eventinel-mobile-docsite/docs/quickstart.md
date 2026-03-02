@@ -1,6 +1,6 @@
 ---
 title: Quickstart
-description: Install, configure, and run Eventinel Mobile quickly.
+description: Install, configure, and run Eventinel quickly.
 ---
 
 This walkthrough gets the app running on local targets quickly.

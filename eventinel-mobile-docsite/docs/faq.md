@@ -1,11 +1,11 @@
 ---
 title: FAQ
-description: Frequently asked questions about Eventinel Mobile.
+description: Frequently asked questions about Eventinel.
 ---
 
 ## What Node.js versions are supported?
 
-Eventinel Mobile is tested on active LTS releases. Use Node.js 18+.
+Eventinel is tested on active LTS releases. Use Node.js 18+.
 
 ## Which commands do I run most often?
 

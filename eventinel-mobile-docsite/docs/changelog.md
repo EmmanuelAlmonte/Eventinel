@@ -1,6 +1,6 @@
 ---
 title: Changelog
-description: Release notes and documentation changes for Eventinel Mobile docs.
+description: Release notes and documentation changes for Eventinel docs.
 ---
 
 This changelog follows semantic versioning.
@@ -9,7 +9,7 @@ This changelog follows semantic versioning.
 
 ### Added
 
-- Eventinel Mobile branding and project-focused content.
+- Eventinel branding and project-focused content.
 - Installation, quickstart, commands, configuration, and troubleshooting guides.
 - Docs maintenance workflow and one-command impact pipeline (`npm run docs:impact`).
 - New architecture docs for Incident Detail modules, map overlays/viewport subscription, and incident subscription API surface.

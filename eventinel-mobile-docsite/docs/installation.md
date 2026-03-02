@@ -1,6 +1,6 @@
 ---
 title: Installation
-description: Set up a local Eventinel Mobile development environment.
+description: Set up a local Eventinel development environment.
 ---
 
 Use this guide to install dependencies and prepare the app for local development.

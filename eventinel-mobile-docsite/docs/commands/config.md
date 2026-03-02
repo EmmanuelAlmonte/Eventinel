@@ -3,7 +3,7 @@ title: config
 description: Manage environment and app configuration values.
 ---
 
-Eventinel Mobile uses environment files and `app.config.js` to resolve runtime
+Eventinel uses environment files and `app.config.js` to resolve runtime
 settings.
 
 ## Usage
