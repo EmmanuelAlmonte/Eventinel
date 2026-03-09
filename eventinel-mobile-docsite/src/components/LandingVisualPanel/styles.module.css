@@ -1,0 +1,341 @@
+.shell {
+  display: grid;
+  grid-template-columns: minmax(0, 1.45fr) minmax(320px, 0.95fr);
+  gap: 1rem;
+  align-items: stretch;
+}
+
+.mapPanel,
+.phoneFrame,
+.signalCard {
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.04),
+    0 18px 40px rgba(5, 10, 24, 0.28);
+}
+
+.mapPanel {
+  border-radius: 26px;
+  background:
+    linear-gradient(160deg, rgba(16, 28, 46, 0.92), rgba(8, 14, 28, 0.96)),
+    radial-gradient(circle at 12% 12%, rgba(147, 51, 234, 0.24), transparent 32%);
+  padding: 1rem;
+}
+
+.panelHeader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.85rem;
+}
+
+.eyebrow {
+  margin: 0;
+  color: #b89adf;
+  font-size: 0.76rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.title {
+  margin: 0.4rem 0 0;
+  max-width: 22ch;
+  font-size: clamp(1.45rem, 2.7vw, 2.3rem);
+  line-height: 1;
+  letter-spacing: -0.03em;
+}
+
+.modePill {
+  border-radius: 999px;
+  padding: 0.44rem 0.8rem;
+  background: rgba(168, 85, 247, 0.14);
+  border: 1px solid rgba(192, 132, 252, 0.34);
+  color: #ead4ff;
+  font-size: 0.76rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.mapCanvas {
+  position: relative;
+  margin-top: 1rem;
+  min-height: 360px;
+  border-radius: 22px;
+  overflow: hidden;
+  background:
+    linear-gradient(rgba(183, 150, 221, 0.1) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(183, 150, 221, 0.08) 1px, transparent 1px),
+    radial-gradient(circle at 78% 18%, rgba(199, 113, 255, 0.16), transparent 20%),
+    radial-gradient(circle at 24% 72%, rgba(147, 51, 234, 0.14), transparent 24%),
+    linear-gradient(160deg, rgba(5, 12, 24, 0.88), rgba(10, 20, 38, 0.96));
+  background-size:
+    58px 58px,
+    58px 58px,
+    auto,
+    auto,
+    auto;
+}
+
+.mapCanvas::before,
+.mapCanvas::after {
+  content: '';
+  position: absolute;
+  border-radius: 999px;
+  opacity: 0.58;
+}
+
+.mapCanvas::before {
+  inset: 18% auto auto 18%;
+  width: 46%;
+  height: 2px;
+  background: linear-gradient(90deg, rgba(168, 85, 247, 0), rgba(168, 85, 247, 0.95));
+  transform: rotate(18deg);
+}
+
+.mapCanvas::after {
+  inset: auto 15% 25% auto;
+  width: 38%;
+  height: 2px;
+  background: linear-gradient(90deg, rgba(139, 92, 246, 0), rgba(139, 92, 246, 0.88));
+  transform: rotate(-24deg);
+}
+
+.crosshair,
+.focusRing,
+.focusPulse {
+  position: absolute;
+  border-radius: 999px;
+  inset: 50% auto auto 50%;
+  transform: translate(-50%, -50%);
+}
+
+.crosshair {
+  width: 12px;
+  height: 12px;
+  background: #a855f7;
+  box-shadow: 0 0 0 8px rgba(168, 85, 247, 0.12);
+}
+
+.focusRing {
+  width: 220px;
+  height: 220px;
+  border: 1px solid rgba(168, 85, 247, 0.2);
+}
+
+.focusPulse {
+  width: 320px;
+  height: 320px;
+  border: 1px solid rgba(147, 51, 234, 0.18);
+}
+
+.zoneLabel {
+  position: absolute;
+  top: 14%;
+  left: 50%;
+  transform: translateX(-50%);
+  border-radius: 999px;
+  padding: 0.42rem 0.78rem;
+  background: rgba(7, 16, 31, 0.88);
+  border: 1px solid rgba(183, 150, 221, 0.24);
+  color: #eadcff;
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+
+.marker {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  border-radius: 999px;
+  padding: 0.36rem 0.62rem;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  backdrop-filter: blur(8px);
+}
+
+.markerDanger {
+  background: rgba(255, 107, 87, 0.18);
+  border: 1px solid rgba(255, 107, 87, 0.42);
+  color: #ffd3cd;
+}
+
+.markerInfo {
+  background: rgba(147, 51, 234, 0.16);
+  border: 1px solid rgba(168, 85, 247, 0.4);
+  color: #eadcff;
+}
+
+.markerWarning {
+  background: rgba(242, 179, 93, 0.16);
+  border: 1px solid rgba(242, 179, 93, 0.36);
+  color: #ffe1ae;
+}
+
+.markerNeutral {
+  background: rgba(150, 162, 189, 0.15);
+  border: 1px solid rgba(150, 162, 189, 0.28);
+  color: #e5ebff;
+}
+
+.routeCard {
+  position: absolute;
+  right: 1rem;
+  bottom: 1rem;
+  max-width: 240px;
+  border-radius: 18px;
+  padding: 0.85rem 0.95rem;
+  background: rgba(7, 14, 27, 0.92);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.routeLabel,
+.surfaceLabel,
+.overlayLabel {
+  display: block;
+  color: #b89adf;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.routeCard strong,
+.surfaceCard strong,
+.phoneOverlay strong {
+  display: block;
+  margin-top: 0.35rem;
+  font-size: 0.92rem;
+  line-height: 1.4;
+  color: #eef7ff;
+}
+
+.surfaceStrip {
+  margin-top: 0.9rem;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.7rem;
+}
+
+.surfaceCard {
+  border-radius: 18px;
+  padding: 0.82rem 0.86rem;
+  background: rgba(7, 14, 27, 0.78);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.sideColumn {
+  display: grid;
+  gap: 0.9rem;
+}
+
+.phoneFrame {
+  position: relative;
+  border-radius: 30px;
+  background: linear-gradient(180deg, #111b30 0%, #0b1326 100%);
+  padding: 0.9rem;
+}
+
+.phoneTopBar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0.75rem;
+  color: #eadcff;
+}
+
+.phoneStatus {
+  color: #d8b4fe;
+  font-size: 0.74rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.phoneVideo {
+  display: block;
+  width: 100%;
+  aspect-ratio: 9 / 16;
+  object-fit: cover;
+  border-radius: 22px;
+  background: #070d19;
+}
+
+.phoneOverlay {
+  position: absolute;
+  inset: auto 1.1rem 1.1rem;
+  border-radius: 18px;
+  padding: 0.85rem;
+  background: rgba(8, 15, 28, 0.92);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.signalRail {
+  display: grid;
+  gap: 0.7rem;
+}
+
+.signalCard {
+  border-radius: 20px;
+  padding: 0.9rem 1rem;
+  background: rgba(8, 14, 28, 0.82);
+}
+
+.signalCard h4 {
+  margin: 0;
+  font-size: 1rem;
+  color: #eef7ff;
+}
+
+.signalCard p {
+  margin: 0.42rem 0 0;
+  color: #bda8d9;
+  font-size: 0.9rem;
+  line-height: 1.55;
+}
+
+@media (max-width: 1080px) {
+  .shell {
+    grid-template-columns: 1fr;
+  }
+
+  .surfaceStrip {
+    grid-template-columns: 1fr;
+  }
+
+  .title {
+    max-width: none;
+  }
+}
+
+@media (max-width: 720px) {
+  .panelHeader {
+    flex-wrap: wrap;
+  }
+
+  .mapPanel,
+  .phoneFrame,
+  .signalCard {
+    border-radius: 22px;
+  }
+
+  .mapCanvas {
+    min-height: 300px;
+  }
+
+  .focusRing {
+    width: 170px;
+    height: 170px;
+  }
+
+  .focusPulse {
+    width: 250px;
+    height: 250px;
+  }
+
+  .routeCard {
+    position: static;
+    margin: 1rem;
+    max-width: none;
+  }
+}
