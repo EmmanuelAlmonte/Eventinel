@@ -1,13 +1,13 @@
 .shell {
   display: grid;
-  grid-template-columns: minmax(0, 1.45fr) minmax(320px, 0.95fr);
+  grid-template-columns: minmax(0, 1.45fr) minmax(320px, 0.92fr);
   gap: 1rem;
   align-items: stretch;
 }
 
 .mapPanel,
 .phoneFrame,
-.signalCard {
+.feedRow {
   border: 1px solid rgba(255, 255, 255, 0.08);
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.04),
@@ -15,11 +15,12 @@
 }
 
 .mapPanel {
-  border-radius: 26px;
+  border-radius: 28px;
+  padding: 1rem;
   background:
     linear-gradient(160deg, rgba(16, 28, 46, 0.92), rgba(8, 14, 28, 0.96)),
     radial-gradient(circle at 12% 12%, rgba(147, 51, 234, 0.24), transparent 32%);
-  padding: 1rem;
+  animation: riseIn 0.8s ease forwards;
 }
 
 .panelHeader {
@@ -40,7 +41,7 @@
 
 .title {
   margin: 0.4rem 0 0;
-  max-width: 22ch;
+  max-width: 23ch;
   font-size: clamp(1.45rem, 2.7vw, 2.3rem);
   line-height: 1;
   letter-spacing: -0.03em;
@@ -60,8 +61,8 @@
 .mapCanvas {
   position: relative;
   margin-top: 1rem;
-  min-height: 360px;
-  border-radius: 22px;
+  min-height: 380px;
+  border-radius: 24px;
   overflow: hidden;
   background:
     linear-gradient(rgba(183, 150, 221, 0.1) 1px, transparent 1px),
@@ -115,82 +116,63 @@
   height: 12px;
   background: #a855f7;
   box-shadow: 0 0 0 8px rgba(168, 85, 247, 0.12);
+  animation: crosshairPulse 2.8s ease-in-out infinite;
 }
 
 .focusRing {
   width: 220px;
   height: 220px;
   border: 1px solid rgba(168, 85, 247, 0.2);
+  animation: ringPulse 3.4s ease-in-out infinite;
 }
 
 .focusPulse {
   width: 320px;
   height: 320px;
   border: 1px solid rgba(147, 51, 234, 0.18);
-}
-
-.zoneLabel {
-  position: absolute;
-  top: 14%;
-  left: 50%;
-  transform: translateX(-50%);
-  border-radius: 999px;
-  padding: 0.42rem 0.78rem;
-  background: rgba(7, 16, 31, 0.88);
-  border: 1px solid rgba(183, 150, 221, 0.24);
-  color: #eadcff;
-  font-size: 0.75rem;
-  font-weight: 700;
+  animation: ringPulse 3.4s ease-in-out infinite 0.25s;
 }
 
 .marker {
   position: absolute;
   transform: translate(-50%, -50%);
+  width: 14px;
+  height: 14px;
   border-radius: 999px;
-  padding: 0.36rem 0.62rem;
-  font-size: 0.72rem;
-  font-weight: 700;
-  letter-spacing: 0.01em;
-  backdrop-filter: blur(8px);
+  border: 2px solid rgba(8, 15, 27, 0.9);
+  box-shadow: 0 0 0 8px rgba(255, 255, 255, 0.03);
+  animation: markerBob 4.5s ease-in-out infinite;
 }
 
 .markerDanger {
-  background: rgba(255, 107, 87, 0.18);
-  border: 1px solid rgba(255, 107, 87, 0.42);
-  color: #ffd3cd;
+  background: #ff6b57;
 }
 
 .markerInfo {
-  background: rgba(147, 51, 234, 0.16);
-  border: 1px solid rgba(168, 85, 247, 0.4);
-  color: #eadcff;
+  background: #a855f7;
 }
 
 .markerWarning {
-  background: rgba(242, 179, 93, 0.16);
-  border: 1px solid rgba(242, 179, 93, 0.36);
-  color: #ffe1ae;
+  background: #f2b35d;
 }
 
 .markerNeutral {
-  background: rgba(150, 162, 189, 0.15);
-  border: 1px solid rgba(150, 162, 189, 0.28);
-  color: #e5ebff;
+  background: #96a2bd;
 }
 
-.routeCard {
+.selectedIncident {
   position: absolute;
-  right: 1rem;
+  left: 1rem;
   bottom: 1rem;
-  max-width: 240px;
-  border-radius: 18px;
-  padding: 0.85rem 0.95rem;
+  max-width: 260px;
+  border-radius: 20px;
+  padding: 0.95rem 1rem;
   background: rgba(7, 14, 27, 0.92);
   border: 1px solid rgba(255, 255, 255, 0.08);
+  backdrop-filter: blur(10px);
 }
 
-.routeLabel,
-.surfaceLabel,
+.selectedType,
 .overlayLabel {
   display: block;
   color: #b89adf;
@@ -200,28 +182,50 @@
   text-transform: uppercase;
 }
 
-.routeCard strong,
-.surfaceCard strong,
-.phoneOverlay strong {
+.selectedIncident strong,
+.phoneOverlay strong,
+.evidenceCard strong {
   display: block;
   margin-top: 0.35rem;
-  font-size: 0.92rem;
-  line-height: 1.4;
+  font-size: 0.98rem;
+  line-height: 1.35;
   color: #eef7ff;
 }
 
-.surfaceStrip {
+.selectedIncident p {
+  margin: 0.45rem 0 0;
+  color: #bda8d9;
+  font-size: 0.82rem;
+  line-height: 1.5;
+}
+
+.evidenceRail {
   margin-top: 0.9rem;
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 0.7rem;
 }
 
-.surfaceCard {
+.evidenceCard {
   border-radius: 18px;
-  padding: 0.82rem 0.86rem;
+  padding: 0.92rem 0.95rem;
   background: rgba(7, 14, 27, 0.78);
   border: 1px solid rgba(255, 255, 255, 0.06);
+  transform: translateY(18px);
+  opacity: 0;
+  animation: riseIn 0.7s ease forwards;
+}
+
+.evidenceCard:nth-child(1) {
+  animation-delay: 0.12s;
+}
+
+.evidenceCard:nth-child(2) {
+  animation-delay: 0.2s;
+}
+
+.evidenceCard:nth-child(3) {
+  animation-delay: 0.28s;
 }
 
 .sideColumn {
@@ -231,25 +235,15 @@
 
 .phoneFrame {
   position: relative;
-  border-radius: 30px;
+  overflow: hidden;
+  border-radius: 32px;
   background: linear-gradient(180deg, #111b30 0%, #0b1326 100%);
-  padding: 0.9rem;
-}
-
-.phoneTopBar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 0.75rem;
-  color: #eadcff;
-}
-
-.phoneStatus {
-  color: #d8b4fe;
-  font-size: 0.74rem;
-  font-weight: 700;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
+  padding: 0.95rem;
+  animation:
+    riseIn 0.8s ease 0.18s forwards,
+    deviceFloat 5s ease-in-out 1.1s infinite;
+  transform: translateY(22px);
+  opacity: 0;
 }
 
 .phoneVideo {
@@ -257,41 +251,138 @@
   width: 100%;
   aspect-ratio: 9 / 16;
   object-fit: cover;
-  border-radius: 22px;
+  border-radius: 24px;
   background: #070d19;
 }
 
 .phoneOverlay {
   position: absolute;
-  inset: auto 1.1rem 1.1rem;
+  inset: auto 1.15rem 1.15rem;
   border-radius: 18px;
-  padding: 0.85rem;
+  padding: 0.9rem;
   background: rgba(8, 15, 28, 0.92);
   border: 1px solid rgba(255, 255, 255, 0.08);
+  backdrop-filter: blur(10px);
 }
 
-.signalRail {
+.feedStack {
   display: grid;
   gap: 0.7rem;
 }
 
-.signalCard {
+.feedRow {
+  display: grid;
+  grid-template-columns: 12px 1fr;
+  gap: 0.8rem;
+  align-items: start;
   border-radius: 20px;
   padding: 0.9rem 1rem;
   background: rgba(8, 14, 28, 0.82);
+  transform: translateY(18px);
+  opacity: 0;
+  animation: riseIn 0.7s ease forwards;
 }
 
-.signalCard h4 {
+.feedRow:nth-child(1) {
+  animation-delay: 0.24s;
+}
+
+.feedRow:nth-child(2) {
+  animation-delay: 0.32s;
+}
+
+.feedRow:nth-child(3) {
+  animation-delay: 0.4s;
+}
+
+.feedDot {
+  width: 10px;
+  height: 10px;
+  margin-top: 0.35rem;
+  border-radius: 999px;
+}
+
+.feedDotInfo {
+  background: #a855f7;
+}
+
+.feedDotWarning {
+  background: #f2b35d;
+}
+
+.feedDotNeutral {
+  background: #96a2bd;
+}
+
+.feedRow h4 {
   margin: 0;
-  font-size: 1rem;
+  font-size: 0.98rem;
   color: #eef7ff;
 }
 
-.signalCard p {
-  margin: 0.42rem 0 0;
+.feedRow p {
+  margin: 0.35rem 0 0;
   color: #bda8d9;
-  font-size: 0.9rem;
-  line-height: 1.55;
+  font-size: 0.84rem;
+  line-height: 1.5;
+}
+
+@keyframes riseIn {
+  from {
+    opacity: 0;
+    transform: translateY(18px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes ringPulse {
+  0%,
+  100% {
+    transform: translate(-50%, -50%) scale(1);
+    opacity: 0.9;
+  }
+
+  50% {
+    transform: translate(-50%, -50%) scale(1.04);
+    opacity: 0.6;
+  }
+}
+
+@keyframes crosshairPulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 8px rgba(168, 85, 247, 0.12);
+  }
+
+  50% {
+    box-shadow: 0 0 0 14px rgba(168, 85, 247, 0.04);
+  }
+}
+
+@keyframes markerBob {
+  0%,
+  100% {
+    transform: translate(-50%, -50%);
+  }
+
+  50% {
+    transform: translate(-50%, calc(-50% - 4px));
+  }
+}
+
+@keyframes deviceFloat {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+
+  50% {
+    transform: translateY(-6px);
+  }
 }
 
 @media (max-width: 1080px) {
@@ -299,7 +390,7 @@
     grid-template-columns: 1fr;
   }
 
-  .surfaceStrip {
+  .evidenceRail {
     grid-template-columns: 1fr;
   }
 
@@ -315,12 +406,12 @@
 
   .mapPanel,
   .phoneFrame,
-  .signalCard {
-    border-radius: 22px;
+  .feedRow {
+    border-radius: 24px;
   }
 
   .mapCanvas {
-    min-height: 300px;
+    min-height: 320px;
   }
 
   .focusRing {
@@ -332,10 +423,22 @@
     width: 250px;
     height: 250px;
   }
+}
 
-  .routeCard {
-    position: static;
-    margin: 1rem;
-    max-width: none;
+@media (prefers-reduced-motion: reduce) {
+  .mapPanel,
+  .phoneFrame,
+  .evidenceCard,
+  .feedRow {
+    animation: none;
+    opacity: 1;
+    transform: none;
+  }
+
+  .crosshair,
+  .focusRing,
+  .focusPulse,
+  .marker {
+    animation: none;
   }
 }

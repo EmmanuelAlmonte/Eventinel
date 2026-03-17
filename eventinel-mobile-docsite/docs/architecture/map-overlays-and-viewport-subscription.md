@@ -3,13 +3,20 @@ title: Map Overlays And Viewport Subscription
 description: How map overlays and viewport subscription state are organized.
 ---
 
-As of `2026-02-16`, map responsibilities are split between screen orchestration,
-overlay UI, and viewport subscription logic.
+As of `2026-03-17`, map responsibilities are split between screen
+orchestration, state composition, canvas rendering, camera control, overlay UI,
+and viewport subscription logic.
 
 ## Components and hooks
 
 - `screens/MapScreen.tsx`
-  - Owns map composition, marker source/layers, and navigation actions.
+  - Entry point that selects loading, empty, unavailable, or live-map branches.
+- `screens/map/useMapScreenState.ts`
+  - Composes shared location, relay, incident, and navigation state.
+- `screens/map/MapScreenCanvas.tsx`
+  - Owns Mapbox composition, incident `ShapeSource`, cluster layers, point layers, and user marker.
+- `screens/map/useMapCamera.ts`
+  - Owns follow-mode, cluster expansion, animation lifecycle, and auto-resume timers.
 - `screens/map/MapOverlays.tsx`
   - Owns overlay UI: relay banner, location button, debug panels, viewport hint, empty state.
 - `screens/map/useMapViewportSubscription.ts`
@@ -28,11 +35,17 @@ overlay UI, and viewport subscription logic.
 1. `onMapIdle` reads center, bounds, and zoom from map camera state.
 2. Hook computes coverage using geohash precision and center-grid radius.
 3. Soft coverage thresholds allow minor gaps before marking viewport as uncovered.
-4. Debounced updates emit `setMapSubscriptionViewport` and `setMapSubscriptionAnchor`.
-5. Focus changes clear viewport/anchor and reset local coverage flags.
+4. If coverage is insufficient, the hook keeps the previous subscription anchor in place and exposes the uncovered state to the overlay layer.
+5. Debounced updates emit `setMapSubscriptionViewport` and `setMapSubscriptionAnchor`.
+6. Focus changes clear viewport/anchor and reset local coverage flags.
 
 ## Integration boundaries
 
+- `useMapScreenState.ts` is the integration seam between shared incident
+  subscription state and map rendering.
+- The live incident map is rendered from a GeoJSON feature collection feeding a
+  clustered `ShapeSource`; it does not mount one React marker component per
+  incident.
 - This layer coordinates map-visible subscription state only.
 - Core subscription internals remain in the incident subscription subsystem and are documented separately.
 

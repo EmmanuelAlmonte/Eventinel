@@ -1,49 +1,58 @@
 import styles from './styles.module.css';
 
-const awarenessSteps = [
+const proofCards = [
   {
-    title: 'Locate what matters nearby',
-    copy: 'Eventinel starts with place, not noise. The map creates immediate local relevance.',
+    title: 'See incidents near you.',
+    copy: 'The map starts with local context, using clustering and nearby coverage so the user sees what matters in the area first.',
+    proofs: ['Nearby map context', 'Clustering', 'Viewport-aware activity'],
   },
   {
-    title: 'Prioritize with readable summaries',
-    copy: 'The feed turns incoming signals into a scannable sequence instead of an overwhelming stream.',
+    title: 'Understand them faster.',
+    copy: 'The feed keeps severity, time, and location together, with distance-first ordering that reduces scanning time.',
+    proofs: ['Distance first', 'Severity at a glance', 'Relative time + place'],
   },
   {
-    title: 'Open detail only when attention is earned',
-    copy: 'Users move into a single incident context when they need follow-through, not before.',
+    title: 'Follow one incident clearly.',
+    copy: 'Incident detail opens one event with its mini-map, metadata, comments, directions, and share actions in one flow.',
+    proofs: ['Mini-map', 'Comments', 'Directions + share'],
   },
 ];
 
 export default function AwarenessLoopSection() {
   return (
-    <section id="awareness-loop" className={styles.section}>
-      <div className={styles.workflowGrid}>
-        <div className={styles.workflowVisual} aria-hidden="true">
-          <div className={styles.workflowRing} />
-          <div className={`${styles.workflowNode} ${styles.workflowNodePrimary}`}>Map intake</div>
-          <div className={styles.workflowNodeSecondary}>Priority feed</div>
-          <div className={styles.workflowNodeTertiary}>Incident detail</div>
-          <div className={styles.workflowPathPrimary} />
-          <div className={styles.workflowPathSecondary} />
-          <div className={styles.workflowLabel}>Signal becomes understanding through place first.</div>
-        </div>
+    <section id="how-it-helps" className={styles.section}>
+      <div className={styles.header}>
+        <p className={styles.sectionKicker}>How It Helps</p>
+        <h2>See incidents near you. Understand them faster. Follow one incident clearly.</h2>
+        <p className={styles.sectionCopy}>
+          These are the product outcomes the interface is trying to deliver, grounded in the actual
+          map, feed, and detail behaviors documented across the app.
+        </p>
+      </div>
 
-        <div className={styles.workflowSteps}>
-          <p className={styles.sectionKicker}>Awareness Loop</p>
-          <h2>From incoming signal to calmer understanding.</h2>
-          <div className={styles.stepStack}>
-            {awarenessSteps.map((step, index) => (
-              <article className={styles.workflowStep} key={step.title}>
-                <span>{index + 1}</span>
-                <div>
-                  <h3>{step.title}</h3>
-                  <p>{step.copy}</p>
-                </div>
-              </article>
-            ))}
-          </div>
-        </div>
+      <div className={styles.proofGrid}>
+        {proofCards.map((card, index) => (
+          <article className={styles.proofCard} key={card.title}>
+            <span className={styles.cardNumber}>{`0${index + 1}`}</span>
+            <h3>{card.title}</h3>
+            <p>{card.copy}</p>
+            <div className={styles.proofTags}>
+              {card.proofs.map((proof) => (
+                <span className={styles.proofTag} key={proof}>
+                  {proof}
+                </span>
+              ))}
+            </div>
+          </article>
+        ))}
+      </div>
+
+      <div className={styles.proofNote}>
+        <div className={styles.proofNoteLine} aria-hidden="true" />
+        <p>
+          Map and feed are backed by the same incident stream, while incident detail stays focused on
+          one event with comments and native actions when a user needs follow-through.
+        </p>
       </div>
     </section>
   );

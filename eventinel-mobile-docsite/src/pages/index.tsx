@@ -5,45 +5,21 @@ import TimelineVideoCarousel, {
 } from '../components/TimelineVideoCarousel';
 import styles from './index.module.css';
 
-const productCards = [
+const storyCards = [
   {
-    title: 'Map Surface',
-    tag: 'Spatial understanding',
-    copy: 'The first screen explains where nearby activity is happening and what deserves attention.',
-    bullets: ['Watch radius', 'Category markers', 'Hotspot awareness'],
+    label: 'Map',
+    title: 'See the area first',
+    copy: 'The map gives nearby incident context first, with clustering and location-aware visibility before a user opens one event.',
   },
   {
-    title: 'Incident Feed',
-    tag: 'Fast scanning',
-    copy: 'A structured feed gives chronological movement without losing location, category, or severity.',
-    bullets: ['Recent changes', 'Readable summaries', 'Priority cues'],
+    label: 'Feed',
+    title: 'Scan what changed',
+    copy: 'The incident feed keeps type, severity, time, and place together so activity can be read quickly instead of pieced together.',
   },
   {
-    title: 'Incident Detail',
-    tag: 'Follow-through context',
-    copy: 'When something matters, the detail surface gives the user a deeper, calmer understanding.',
-    bullets: ['Contextual drill-down', 'Status follow-up', 'Single-incident focus'],
-  },
-  {
-    title: 'User Controls',
-    tag: 'Relevance tuning',
-    copy: 'The experience stays useful because users can shape radius, categories, and source behavior.',
-    bullets: ['Personal radius', 'Category filters', 'Relay-aware setup'],
-  },
-];
-
-const platformPillars = [
-  {
-    title: 'Location comes first',
-    copy: 'Nearby incidents are easier to understand when place, distance, and watch radius lead the experience.',
-  },
-  {
-    title: 'Open protocol foundation',
-    copy: 'Eventinel is built as an open-source, Nostr-native system with transparent infrastructure and distribution.',
-  },
-  {
-    title: 'Focused mobile workflow',
-    copy: 'Map, feed, and incident detail work together as one flow for fast understanding on mobile.',
+    label: 'Detail',
+    title: 'Stay with one incident',
+    copy: 'Incident detail holds the mini-map, metadata, comments, directions, and share actions in one focused view.',
   },
 ];
 
@@ -113,7 +89,7 @@ function TopBar() {
 
       <nav className={styles.navLinks} aria-label="Primary">
         <a href="#product">Product</a>
-        <a href="#awareness-loop">Awareness Loop</a>
+        <a href="#how-it-helps">How It Helps</a>
         <a href="#timeline">Roadmap</a>
         <a href="https://github.com/EmmanuelAlmonte/Eventinel">GitHub</a>
       </nav>
@@ -131,16 +107,15 @@ function Hero() {
   return (
     <section className={styles.hero}>
       <div className={styles.heroCopy}>
-        <h1 className={styles.heroTitle}>Understand what is happening nearby.</h1>
+        <h1 className={styles.heroTitle}>Events detected. Stay protected.</h1>
         <p className={styles.heroSubtitle}>
-          Eventinel is a Nostr-native mobile product that brings map context, incident summaries,
-          and follow-through detail into one clearer experience for understanding what is happening
-          nearby.
+          Eventinel is a Nostr-native incident awareness app built around a nearby map, a faster
+          feed, and one clear incident detail flow when something needs closer attention.
         </p>
 
         <div className={styles.ctaRow}>
           <a className={styles.primaryAction} href="#product">
-            Explore Product Story
+            See the Product
           </a>
           <a className={styles.secondaryAction} href="#timeline">
             View Roadmap
@@ -148,13 +123,11 @@ function Hero() {
         </div>
 
         <div className={styles.heroSignals}>
-          <span>Map-first interface</span>
-          <span>Configurable local relevance</span>
-          <span>Open-source + Nostr-native</span>
+          <span>Nearby incident map</span>
+          <span>Distance-aware feed</span>
+          <span>Detail with comments and directions</span>
         </div>
       </div>
-
-      <LandingVisualPanel />
     </section>
   );
 }
@@ -162,51 +135,46 @@ function Hero() {
 function ProductSection() {
   return (
     <section id="product" className={styles.section}>
-      <div className={styles.sectionHeader}>
-        <p className={styles.sectionKicker}>How It Works</p>
-        <h2>See the core product in one view.</h2>
-        <p>
-          Eventinel brings nearby incident activity into a map-led mobile experience with a feed for
-          scanning, detail for context, and controls for relevance.
-        </p>
-      </div>
+      <div className={styles.storyGrid}>
+        <div className={styles.storyLead}>
+          <p className={styles.sectionKicker}>What Eventinel Is</p>
+          <h2>A location-aware incident map, feed, and detail view built to work together.</h2>
+          <p>
+            The same incident stream powers the map, the feed, and the detail screen, so users can
+            move from nearby activity to one incident without losing local context.
+          </p>
+          <p className={styles.storyLeadNote}>
+            The product stays grounded in place first, then makes time, severity, and follow-through
+            easier to read.
+          </p>
+        </div>
 
-      <div className={styles.productGrid}>
-        {productCards.map((card) => (
-          <article className={styles.productCard} key={card.title}>
-            <span className={styles.productTag}>{card.tag}</span>
-            <h3>{card.title}</h3>
-            <p>{card.copy}</p>
-            <ul className={styles.productList}>
-              {card.bullets.map((bullet) => (
-                <li className={styles.productListItem} key={bullet}>
-                  {bullet}
-                </li>
-              ))}
-            </ul>
-          </article>
-        ))}
+        <div className={styles.storyRail}>
+          {storyCards.map((card) => (
+            <article className={styles.storyCard} key={card.title}>
+              <span className={styles.storyCardLabel}>{card.label}</span>
+              <h3>{card.title}</h3>
+              <p>{card.copy}</p>
+            </article>
+          ))}
+        </div>
       </div>
     </section>
   );
 }
 
-function PlatformSection() {
+function EvidenceSection() {
   return (
     <section className={styles.section}>
       <div className={styles.sectionHeader}>
-        <p className={styles.sectionKicker}>Why Eventinel</p>
-        <h2>Built for local awareness, not generic alert noise.</h2>
+        <p className={styles.sectionKicker}>Product Evidence</p>
+        <h2>What the product looks like when nearby activity starts moving.</h2>
+        <p>
+          The map, feed, and detail view share one flow, so users can move from overview to one
+          incident without losing context.
+        </p>
       </div>
-
-      <div className={styles.pillarGrid}>
-        {platformPillars.map((pillar) => (
-          <article className={styles.pillarCard} key={pillar.title}>
-            <h3>{pillar.title}</h3>
-            <p>{pillar.copy}</p>
-          </article>
-        ))}
-      </div>
+      <LandingVisualPanel />
     </section>
   );
 }
@@ -246,7 +214,7 @@ export default function Home() {
       <Hero />
       <ProductSection />
       <AwarenessLoopSection />
-      <PlatformSection />
+      <EvidenceSection />
       <RoadmapSection />
       <SiteFooter />
     </main>
