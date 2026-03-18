@@ -26,6 +26,9 @@ As of `2026-02-16`, public incident subscription access is intentionally narrow.
   - `severityCounts`
   - `updatedIncidents`
   - loading/history metadata
+- `incidents` is the primary render input for map/feed consumers.
+- `updatedIncidents` is delta-oriented and is typically used for cache sync or
+  side effects rather than direct list rendering.
 - Consumers should avoid coupling to internal queueing, reconcile, and planner details.
 
 ## Internal-only modules

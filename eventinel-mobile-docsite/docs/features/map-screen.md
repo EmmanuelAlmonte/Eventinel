@@ -3,11 +3,23 @@ title: Map Screen
 description: User-facing guide for map interactions and visual states.
 ---
 
-`MapScreen` is documented here at the UX level only.
+`MapScreen` is documented here at the UX level first, with a light
+implementation note where current ownership is useful for maintenance.
 
-As of `2026-02-16`, map UI and viewport subscription responsibilities are split
-into `screens/MapScreen.tsx`, `screens/map/MapOverlays.tsx`, and
-`screens/map/useMapViewportSubscription.ts`.
+As of `2026-03-17`, current map responsibilities are split across:
+
+- `screens/MapScreen.tsx`
+  - Entry point that chooses loading, location-required, unavailable, or live-map rendering.
+- `screens/map/useMapScreenState.ts`
+  - Composes shared incident, location, relay, and navigation state for the screen.
+- `screens/map/MapScreenCanvas.tsx`
+  - Renders the Mapbox map, incident `ShapeSource`, cluster layers, point layers, and user marker.
+- `screens/map/useMapCamera.ts`
+  - Owns follow-mode, fly-to-user, cluster expansion camera movement, and auto-resume timing.
+- `screens/map/MapOverlays.tsx`
+  - Owns overlay UI: relay banner, location button, debug panels, viewport hint, and empty state.
+- `screens/map/useMapViewportSubscription.ts`
+  - Owns viewport coverage evaluation and debounced subscription anchor updates.
 
 ## Entry point
 
@@ -17,6 +29,9 @@ into `screens/MapScreen.tsx`, `screens/map/MapOverlays.tsx`, and
 
 - `MapScreen` is one consumer of the shared incident subscription context
   (`useSharedIncidents`). It does not manage subscription state itself.
+- Shared incident updates cause the map to rebuild a GeoJSON feature collection
+  for rendering; cache synchronization is handled separately by the shared
+  incident subscription provider.
 
 ## Location-first render
 
@@ -26,18 +41,23 @@ into `screens/MapScreen.tsx`, `screens/map/MapOverlays.tsx`, and
 
 ## Incident rendering
 
-- Incidents are shown as map points with clustering.
+- Incidents are shown as clustered map points backed by a GeoJSON feature
+  collection and Mapbox `ShapeSource` layers.
+- The live map does not render one React marker component per incident.
 - Cluster selection zooms into that area.
 - Selecting a single incident marker opens Incident Detail.
 
 ## Camera controls
 
 - Includes a **fly to my location** floating action button.
-- Follow mode pauses when users pan/zoom; resume happens when the control is used.
+- Follow mode pauses when users pan/zoom.
+- Follow mode can be resumed immediately with the location control.
+- Follow mode also auto-resumes after the current idle timeout in
+  `screens/map/useMapCamera.ts`.
 - Cluster tap behavior:
   - calls Mapbox cluster expansion zoom,
   - animates camera to that zoom level and center,
-  - then resumes follow handling.
+  - then schedules follow handling to resume.
 
 ## Relay awareness
 
@@ -50,6 +70,8 @@ into `screens/MapScreen.tsx`, `screens/map/MapOverlays.tsx`, and
 
 - `onMapIdle` events are funneled through `useMapViewportSubscription`.
 - Off-grid viewports show **"Zoom in to load incidents for this area"**.
+- Off-grid viewports do not advance the subscription anchor until coverage is
+  acceptable again.
 - Focus changes clear viewport anchor and subscription viewport state.
 
 ## Developer overlays
