@@ -1,6 +1,15 @@
-import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
+import React, {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 
 import {
+  createIncidentHistoryWindowSaveCoordinator,
   DEFAULT_INCIDENT_HISTORY_WINDOW_DAYS,
   loadIncidentHistoryWindowDays,
   saveIncidentHistoryWindowDays,
@@ -19,6 +28,9 @@ export function IncidentHistoryWindowProvider({ children }: { children: React.Re
     DEFAULT_INCIDENT_HISTORY_WINDOW_DAYS
   );
   const [isReady, setIsReady] = useState(false);
+  const saveCoordinatorRef = useRef(
+    createIncidentHistoryWindowSaveCoordinator(saveIncidentHistoryWindowDays)
+  );
 
   useEffect(() => {
     let isMounted = true;
@@ -29,7 +41,7 @@ export function IncidentHistoryWindowProvider({ children }: { children: React.Re
         return;
       }
 
-      setHistoryWindowDaysState(loadedDays);
+      setHistoryWindowDaysState(saveCoordinatorRef.current.hydrate(loadedDays));
       setIsReady(true);
     };
 
@@ -42,8 +54,9 @@ export function IncidentHistoryWindowProvider({ children }: { children: React.Re
 
   const setHistoryWindowDays = useCallback(
     async (days: number) => {
-      const persisted = await saveIncidentHistoryWindowDays(days);
-      setHistoryWindowDaysState(persisted);
+      const { normalizedDays, pending } = saveCoordinatorRef.current.enqueue(days);
+      setHistoryWindowDaysState(normalizedDays);
+      await pending;
     },
     []
   );

@@ -8,7 +8,23 @@ const DEFAULT_FETCH_LIMIT = 400;
 const DEFAULT_TIMEOUT_MS = 10_000;
 
 function normalizeRelayUrl(url) {
-  return String(url).trim().toLowerCase().replace(/\/$/, '');
+  const trimmed = String(url).trim();
+
+  if (!trimmed) {
+    return trimmed;
+  }
+
+  try {
+    const parsed = new URL(trimmed);
+
+    if (parsed.pathname === '/') {
+      return `${parsed.origin}${parsed.search}${parsed.hash}`;
+    }
+
+    return parsed.toString();
+  } catch {
+    return trimmed.replace(/\/$/, '');
+  }
 }
 
 function parseArgs(argv) {

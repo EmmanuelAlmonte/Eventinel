@@ -35,6 +35,43 @@ export function calculateIncidentSinceUnixSeconds(
   return Math.max(0, Math.floor(nowMs / 1000) - normalizedDays * 86400);
 }
 
+export function createIncidentHistoryWindowSaveCoordinator(
+  saveDays: (days: number) => Promise<number>,
+  initialDays: number = DEFAULT_INCIDENT_HISTORY_WINDOW_DAYS
+) {
+  let lastRequestedDays = normalizeIncidentHistoryWindowDays(initialDays);
+  let lastPersistedDays = lastRequestedDays;
+  let queue = Promise.resolve();
+
+  return {
+    hydrate(days: number): number {
+      const normalized = normalizeIncidentHistoryWindowDays(days);
+      lastRequestedDays = normalized;
+      lastPersistedDays = normalized;
+      return normalized;
+    },
+    enqueue(days: number) {
+      const normalizedDays = normalizeIncidentHistoryWindowDays(days);
+      lastRequestedDays = normalizedDays;
+
+      const persistLatestSelection = async () => {
+        while (lastPersistedDays !== lastRequestedDays) {
+          const nextDays = lastRequestedDays;
+          const persisted = await saveDays(nextDays);
+          lastPersistedDays = persisted;
+        }
+      };
+
+      queue = queue.then(persistLatestSelection, persistLatestSelection);
+
+      return {
+        normalizedDays,
+        pending: queue,
+      };
+    },
+  };
+}
+
 export async function loadIncidentHistoryWindowDays(): Promise<number> {
   try {
     const stored = await AsyncStorage.getItem(INCIDENT_HISTORY_WINDOW_STORAGE_KEY);

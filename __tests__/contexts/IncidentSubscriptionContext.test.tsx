@@ -232,7 +232,7 @@ describe('IncidentSubscriptionContext', () => {
   beforeAll(() => {
     if (typeof global.setImmediate !== 'function') {
       global.setImmediate = ((callback: (...args: any[]) => void, ...args: any[]) =>
-        setTimeout(callback, 0, ...args)) as typeof setImmediate;
+        setTimeout(callback, 0, ...args)) as unknown as typeof setImmediate;
     }
 
     runAfterInteractionsSpy = jest
@@ -244,7 +244,7 @@ describe('IncidentSubscriptionContext', () => {
 
         return {
           cancel: jest.fn(),
-        } as ReturnType<typeof InteractionManager.runAfterInteractions>;
+        } as unknown as ReturnType<typeof InteractionManager.runAfterInteractions>;
       });
   });
 
