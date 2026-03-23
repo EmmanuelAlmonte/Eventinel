@@ -50,6 +50,7 @@ type MapScreenLayoutProps = {
   userLocation: [number, number] | null;
   incidentFeatureCollection: ReturnType<typeof incidentsToFeatureCollection>;
   hasReceivedHistory: boolean;
+  historyWindowDays: number;
   visibleIncidents: ProcessedIncident[];
   isLoadingLocation: boolean;
   isFocused: boolean;
@@ -80,6 +81,7 @@ export function MapScreenCanvas({
   userLocation,
   incidentFeatureCollection,
   hasReceivedHistory,
+  historyWindowDays,
   visibleIncidents,
   isLoadingLocation,
   isFocused,
@@ -167,6 +169,7 @@ export function MapScreenCanvas({
         onFlyToUser={onFlyToUser}
         visibleIncidents={visibleIncidents}
         hasReceivedHistory={hasReceivedHistory}
+        historyWindowDays={historyWindowDays}
         isLoadingLocation={isLoadingLocation}
         isFocused={isFocused}
         isViewportCoveredBySubscriptionGrid={isViewportCoveredBySubscriptionGrid}

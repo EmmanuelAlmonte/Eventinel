@@ -35,9 +35,14 @@ export function useIncidentSubscription({
   subscriptionViewport,
   enabled = true,
   maxIncidents = INCIDENT_LIMITS.MAX_VISIBLE,
+  sinceDays = INCIDENT_LIMITS.SINCE_DAYS,
 }: UseIncidentSubscriptionOptions): UseIncidentSubscriptionResult {
   const hasLocation = location !== null;
   const effectiveMaxIncidents = Math.min(maxIncidents, INCIDENT_LIMITS.MAX_VISIBLE);
+  const effectiveSinceDays =
+    Number.isFinite(sinceDays) && sinceDays > 0
+      ? Math.floor(sinceDays)
+      : INCIDENT_LIMITS.SINCE_DAYS;
   const {
     stableLocation,
     subscriptionPlan,
@@ -76,6 +81,7 @@ export function useIncidentSubscription({
     enabled,
     desiredSubscriptionCount: desiredCells.length,
     stableLocation,
+    sinceDays: effectiveSinceDays,
     effectiveMaxIncidents,
     incidentMapRef,
     pendingEventsRef,
@@ -143,12 +149,20 @@ export function useIncidentSubscription({
     if (previousMeta.truncated !== currentTruncated) {
       refreshTriggers.push('truncation-state');
     }
+    const historyWindowChanged = previousMeta.sinceDays !== effectiveSinceDays;
+    if (historyWindowChanged) {
+      refreshTriggers.push('history-window');
+    }
 
     const reconcilePlan = computeReconcilePlan({
       enabled,
       desiredCells,
       activeSubscriptionKeys: subscriptionRegistry.subscriptions.keys(),
     });
+    if (historyWindowChanged) {
+      reconcilePlan.toRemove = Array.from(subscriptionRegistry.subscriptions.keys());
+      reconcilePlan.toAdd = [...desiredCells];
+    }
 
     if (
       DEBUG_CACHE &&
@@ -174,7 +188,22 @@ export function useIncidentSubscription({
       filterKey: currentFilterKey,
       desiredCount: desiredCells.length,
       truncated: currentTruncated,
+      sinceDays: effectiveSinceDays,
     };
+
+    if (historyWindowChanged) {
+      clearQueuedEvents();
+      incidentMapRef.current.clear();
+      lastUpdatedRef.current = null;
+      lastTotalEventsRef.current = 0;
+      setState({
+        incidents: [],
+        severityCounts: EMPTY_SEVERITY_COUNTS,
+        updatedIncidents: [],
+        totalEventsReceived: 0,
+        hasReceivedHistory: false,
+      });
+    }
 
     for (const key of reconcilePlan.toRemove) {
       stopSubscription(key);
@@ -214,6 +243,7 @@ export function useIncidentSubscription({
     desiredCells,
     subscriptionFilterKey,
     subscriptionPlan?.truncated,
+    effectiveSinceDays,
     startSubscription,
     stopSubscription,
     recomputeVisibleState,
@@ -223,6 +253,10 @@ export function useIncidentSubscription({
     subscriptionRegistry,
     lastRefreshMetaRef,
     lastFilterKeyRef,
+    clearQueuedEvents,
+    incidentMapRef,
+    lastUpdatedRef,
+    lastTotalEventsRef,
   ]);
 
   // Resort existing incidents on location/max changes.

@@ -17,7 +17,6 @@ import { View } from 'react-native';
 
 // Import the component
 import MapScreen from '../../screens/MapScreen';
-import type { UseUserLocationResult } from '../../hooks/useUserLocation';
 
 // =============================================================================
 // MOCK SETUP
@@ -55,7 +54,7 @@ jest.mock('@hooks', () => ({
 
 // Mock shared location context
 const mockLocation: [number, number] = [-73.935242, 40.730610];
-const createLocationState = (overrides: Partial<UseUserLocationResult> = {}): UseUserLocationResult => ({
+const createLocationState = (overrides = {}) => ({
   location: mockLocation,
   permission: 'granted',
   source: 'fresh',
@@ -64,7 +63,7 @@ const createLocationState = (overrides: Partial<UseUserLocationResult> = {}): Us
   refresh: jest.fn(),
   ...overrides,
 });
-const mockUseSharedLocation = jest.fn<UseUserLocationResult, []>(() => createLocationState());
+const mockUseSharedLocation = jest.fn(() => createLocationState());
 
 // Mock shared incidents context
 const mockIncidents = [
@@ -90,10 +89,11 @@ const mockIncidents = [
   },
 ];
 
-const createMockSharedIncidents = (overrides: Record<string, unknown> = {}) => ({
+const createMockSharedIncidents = (overrides = {}) => ({
   incidents: mockIncidents,
   isInitialLoading: false,
   hasReceivedHistory: true,
+  historyWindowDays: 7,
   setMapFocused: jest.fn(),
   setMapSubscriptionAnchor: jest.fn(),
   setMapSubscriptionViewport: jest.fn(),

@@ -19,7 +19,13 @@ import {
   useNDKInit,
   useSessionMonitor,
 } from '@nostr-dev-kit/mobile';
-import { IncidentCacheProvider, LocationProvider, IncidentSubscriptionProvider, RelayStatusProvider } from '@contexts';
+import {
+  IncidentCacheProvider,
+  IncidentHistoryWindowProvider,
+  LocationProvider,
+  IncidentSubscriptionProvider,
+  RelayStatusProvider,
+} from '@contexts';
 import { ToastProvider, ErrorBoundary } from '@components/ui';
 import { ThemeProvider } from '@rneui/themed';
 
@@ -128,9 +134,11 @@ function AppContent() {
     <LocationProvider>
       <RelayStatusProvider>
         <IncidentCacheProvider>
-          <IncidentSubscriptionProvider>
-            <MainNavigation />
-          </IncidentSubscriptionProvider>
+          <IncidentHistoryWindowProvider>
+            <IncidentSubscriptionProvider>
+              <MainNavigation />
+            </IncidentSubscriptionProvider>
+          </IncidentHistoryWindowProvider>
         </IncidentCacheProvider>
       </RelayStatusProvider>
     </LocationProvider>

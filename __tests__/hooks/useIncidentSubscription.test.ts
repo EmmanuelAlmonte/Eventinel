@@ -282,6 +282,45 @@ describe('useIncidentSubscription', () => {
 
       expect(getSubscribeCalls().length).toBe(0);
     });
+
+    it('adds the default freshness window to live subscription filters', () => {
+      const fixedNowMs = 1_735_689_600_000;
+      const nowSpy = jest.spyOn(Date, 'now').mockReturnValue(fixedNowMs);
+
+      try {
+        renderHook(() =>
+          useIncidentSubscription({
+            location: [-75.1652, 39.9526],
+          })
+        );
+
+        const filters = getSubscribeCalls()[0][0];
+        expect(filters[0].since).toBe(
+          Math.floor(fixedNowMs / 1000) - INCIDENT_LIMITS.SINCE_DAYS * 86400
+        );
+      } finally {
+        nowSpy.mockRestore();
+      }
+    });
+
+    it('uses a custom sinceDays override when provided', () => {
+      const fixedNowMs = 1_735_689_600_000;
+      const nowSpy = jest.spyOn(Date, 'now').mockReturnValue(fixedNowMs);
+
+      try {
+        renderHook(() =>
+          useIncidentSubscription({
+            location: [-75.1652, 39.9526],
+            sinceDays: 3,
+          })
+        );
+
+        const filters = getSubscribeCalls()[0][0];
+        expect(filters[0].since).toBe(Math.floor(fixedNowMs / 1000) - 3 * 86400);
+      } finally {
+        nowSpy.mockRestore();
+      }
+    });
   });
 
   // =============================================================================
@@ -1044,31 +1083,73 @@ describe('useIncidentSubscription', () => {
     });
 
     it('handles location change without altering simple filter', () => {
-      const { rerender } = renderHook(
-        ({ location }) =>
-          useIncidentSubscription({
-            location,
-          }),
-        {
-          initialProps: { location: [-75.1652, 39.9526] as [number, number] },
-        }
-      );
+      const fixedNowMs = 1_735_689_600_000;
+      const nowSpy = jest.spyOn(Date, 'now').mockReturnValue(fixedNowMs);
 
-      rerender({ location: [-74.006, 40.7128] as [number, number] });
+      try {
+        const { rerender } = renderHook(
+          ({ location }) =>
+            useIncidentSubscription({
+              location,
+            }),
+          {
+            initialProps: { location: [-75.1652, 39.9526] as [number, number] },
+          }
+        );
 
-      const calls = getSubscribeCalls();
-      const globalFilterCall = calls.find(([filters]) => {
-        if (!Array.isArray(filters) || filters.length === 0) {
-          return false;
-        }
-        return Array.isArray(filters[0]?.kinds) && filters[0].kinds.includes(30911);
-      });
-      const filters = globalFilterCall?.[0];
+        rerender({ location: [-74.006, 40.7128] as [number, number] });
 
-      expect(filters).toBeDefined();
-      expect(filters[0].kinds).toEqual([30911]);
-      expect(filters[0].limit).toBe(INCIDENT_LIMITS.FETCH_LIMIT);
-      expect(filters[0].since).toBeUndefined();
+        const calls = getSubscribeCalls();
+        const globalFilterCall = calls.find(([filters]) => {
+          if (!Array.isArray(filters) || filters.length === 0) {
+            return false;
+          }
+          return Array.isArray(filters[0]?.kinds) && filters[0].kinds.includes(30911);
+        });
+        const filters = globalFilterCall?.[0];
+
+        expect(filters).toBeDefined();
+        expect(filters[0].kinds).toEqual([30911]);
+        expect(filters[0].limit).toBe(INCIDENT_LIMITS.FETCH_LIMIT);
+        expect(filters[0].since).toBe(
+          Math.floor(fixedNowMs / 1000) - INCIDENT_LIMITS.SINCE_DAYS * 86400
+        );
+      } finally {
+        nowSpy.mockRestore();
+      }
+    });
+
+    it('restarts live subscriptions when sinceDays changes', async () => {
+      const fixedNowMs = 1_735_689_600_000;
+      const nowSpy = jest.spyOn(Date, 'now').mockReturnValue(fixedNowMs);
+
+      try {
+        const { rerender } = renderHook(
+          ({ sinceDays }) =>
+            useIncidentSubscription({
+              location: [-75.1652, 39.9526],
+              sinceDays,
+            }),
+          {
+            initialProps: { sinceDays: 30 },
+          }
+        );
+
+        const initialCallCount = getSubscribeCalls().length;
+
+        rerender({ sinceDays: 1 });
+
+        await waitFor(() => {
+          expect(getSubscribeCalls().length).toBeGreaterThan(initialCallCount);
+        });
+
+        const latestFilters = getSubscribeCalls()[getSubscribeCalls().length - 1][0];
+        expect(latestFilters[0].since).toBe(
+          Math.floor(fixedNowMs / 1000) - 86400
+        );
+      } finally {
+        nowSpy.mockRestore();
+      }
     });
 
     it('handles rapid enabled toggling', () => {

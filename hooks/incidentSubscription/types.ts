@@ -41,6 +41,8 @@ export interface UseIncidentSubscriptionOptions {
   enabled?: boolean;
   /** Maximum incidents to return */
   maxIncidents?: number;
+  /** How many days back relay subscriptions should request history for. */
+  sinceDays?: number;
 }
 
 export interface ProcessedIncident extends ParsedIncident {

@@ -3,7 +3,6 @@ import { Button, Icon } from '@rneui/themed';
 import { Text } from 'react-native';
 import type { EdgeInsets } from 'react-native-safe-area-context';
 
-import { INCIDENT_LIMITS } from '@lib/map/constants';
 import type { ProcessedIncident } from '@hooks';
 
 import type { RelayBannerStatus } from './helpers';
@@ -28,6 +27,7 @@ type MapOverlaysProps = {
   onFlyToUser: () => void;
   visibleIncidents: ProcessedIncident[];
   hasReceivedHistory: boolean;
+  historyWindowDays: number;
   isLoadingLocation: boolean;
   isFocused: boolean;
   isViewportCoveredBySubscriptionGrid: boolean;
@@ -197,11 +197,13 @@ function ViewportHint({
 function EmptyIncidentsState({
   insets,
   hasReceivedHistory,
+  historyWindowDays,
   visibleIncidents,
   isLoadingLocation,
 }: {
   insets: EdgeInsets;
   hasReceivedHistory: boolean;
+  historyWindowDays: number;
   visibleIncidents: ProcessedIncident[];
   isLoadingLocation: boolean;
 }) {
@@ -213,7 +215,7 @@ function EmptyIncidentsState({
     <View style={[styles.emptyState, { bottom: 40 + insets.bottom }]}>
       <Text style={styles.emptyStateText}>No incidents found</Text>
       <Text style={styles.emptyStateSubtext}>
-        Incidents from the last {INCIDENT_LIMITS.SINCE_DAYS} days will appear here
+        Incidents from the last {historyWindowDays} days will appear here
       </Text>
     </View>
   );
@@ -229,6 +231,7 @@ export function MapOverlays({
   onFlyToUser,
   visibleIncidents,
   hasReceivedHistory,
+  historyWindowDays,
   isLoadingLocation,
   isFocused,
   isViewportCoveredBySubscriptionGrid,
@@ -270,6 +273,7 @@ export function MapOverlays({
       <EmptyIncidentsState
         insets={insets}
         hasReceivedHistory={hasReceivedHistory}
+        historyWindowDays={historyWindowDays}
         visibleIncidents={visibleIncidents}
         isLoadingLocation={isLoadingLocation}
       />
