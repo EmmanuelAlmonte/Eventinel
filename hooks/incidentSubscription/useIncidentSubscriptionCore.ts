@@ -220,7 +220,11 @@ export function useIncidentSubscription({
       }
     }
 
-    if (reconcilePlan.toAdd.length > 0 || reconcilePlan.toRemove.length > 0) {
+    if (
+      historyWindowChanged ||
+      reconcilePlan.toAdd.length > 0 ||
+      reconcilePlan.toRemove.length > 0
+    ) {
       const afterCount = subscriptionRegistry.subscriptions.size;
       if (DEBUG_CACHE) {
         console.log(`🔁 [IncidentSub] Live subscriptions after refresh: ${afterCount}`);

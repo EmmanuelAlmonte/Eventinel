@@ -1003,6 +1003,28 @@ describe('useIncidentSubscription', () => {
       expect(result.current.hasReceivedHistory).toBe(true);
       expect(result.current.isInitialLoading).toBe(false);
     });
+
+    it('keeps history complete when sinceDays changes with no desired cells', () => {
+      const { result, rerender } = renderHook(
+        ({ sinceDays }) =>
+          useIncidentSubscription({
+            location: null,
+            sinceDays,
+          }),
+        {
+          initialProps: { sinceDays: 30 },
+        }
+      );
+
+      expect(result.current.hasReceivedHistory).toBe(true);
+      expect(result.current.isInitialLoading).toBe(false);
+
+      rerender({ sinceDays: 1 });
+
+      expect(result.current.hasReceivedHistory).toBe(true);
+      expect(result.current.isInitialLoading).toBe(false);
+      expect(getSubscribeCalls().length).toBe(0);
+    });
   });
 
   // =============================================================================

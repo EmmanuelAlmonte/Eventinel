@@ -38,7 +38,12 @@ function parseArgs(argv) {
       continue;
     }
 
-    const [flag, inlineValue] = token.slice(2).split('=');
+    const tokenBody = token.slice(2);
+    const separatorIndex = tokenBody.indexOf('=');
+    const flag =
+      separatorIndex === -1 ? tokenBody : tokenBody.slice(0, separatorIndex);
+    const inlineValue =
+      separatorIndex === -1 ? undefined : tokenBody.slice(separatorIndex + 1);
     const nextToken = argv[index + 1];
     const value =
       inlineValue !== undefined
