@@ -175,7 +175,6 @@ function useLiveIncidentToasts(
   const previousHistoryWindowDaysRef = useRef(historyWindowDays);
   const refreshPendingRef = useRef(false);
   const refreshSawLoadingRef = useRef(false);
-  const refreshStartedAtMsRef = useRef<number | null>(null);
 
   useEffect(() => {
     if (previousHistoryWindowDaysRef.current === historyWindowDays) {
@@ -185,10 +184,6 @@ function useLiveIncidentToasts(
     previousHistoryWindowDaysRef.current = historyWindowDays;
     refreshPendingRef.current = true;
     refreshSawLoadingRef.current = false;
-    refreshStartedAtMsRef.current = Date.now();
-    seenIncidentIdsRef.current = new Set(
-      incidents.map((incident) => incident.incidentId)
-    );
   }, [historyWindowDays, incidents]);
 
   useEffect(() => {
@@ -199,27 +194,22 @@ function useLiveIncidentToasts(
         return;
       }
 
-      const refreshStartedAtMs = refreshStartedAtMsRef.current ?? 0;
-      const candidates = incidents.filter(
+      const arrivedDuringRefresh = incidents.filter(
         (incident) => !seenIncidentIdsRef.current.has(incident.incidentId)
       );
-      const liveDuringRefresh = candidates.filter(
-        (incident) => incident.createdAtMs >= refreshStartedAtMs
-      );
 
-      candidates.forEach((incident) => {
+      incidents.forEach((incident) => {
         seenIncidentIdsRef.current.add(incident.incidentId);
       });
 
       refreshPendingRef.current = false;
       refreshSawLoadingRef.current = false;
-      refreshStartedAtMsRef.current = null;
 
-      if (appStateRef.current !== 'active' || liveDuringRefresh.length === 0) {
+      if (appStateRef.current !== 'active' || arrivedDuringRefresh.length === 0) {
         return;
       }
 
-      liveDuringRefresh.forEach((incident) => {
+      arrivedDuringRefresh.forEach((incident) => {
         showToast.show({
           type: 'info',
           text1: incident.title,

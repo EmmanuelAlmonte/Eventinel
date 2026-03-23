@@ -122,6 +122,13 @@ describe('IncidentNotificationBridge', () => {
     const { rerender } = render(<IncidentNotificationBridge />);
 
     mockUseSharedIncidents.mockReturnValue({
+      incidents: [createIncident('a')],
+      hasReceivedHistory: false,
+      historyWindowDays: 30,
+    });
+    rerender(<IncidentNotificationBridge />);
+
+    mockUseSharedIncidents.mockReturnValue({
       incidents: [],
       hasReceivedHistory: false,
       historyWindowDays: 30,
@@ -135,12 +142,25 @@ describe('IncidentNotificationBridge', () => {
     });
     rerender(<IncidentNotificationBridge />);
 
-    expect(mockShowToastShow).not.toHaveBeenCalled();
+    expect(mockShowToastShow).toHaveBeenCalledTimes(1);
+    expect(mockShowToastShow).toHaveBeenCalledWith(
+      expect.objectContaining({
+        text1: 'Incident older',
+        text2: 'Address older',
+      })
+    );
   });
 
   it('still toasts live incidents that arrive during the refresh window', async () => {
     const nowSpy = jest.spyOn(Date, 'now').mockReturnValue(1_000_000);
     const { rerender } = render(<IncidentNotificationBridge />);
+
+    mockUseSharedIncidents.mockReturnValue({
+      incidents: [createIncident('a')],
+      hasReceivedHistory: false,
+      historyWindowDays: 30,
+    });
+    rerender(<IncidentNotificationBridge />);
 
     mockUseSharedIncidents.mockReturnValue({
       incidents: [],
@@ -161,8 +181,16 @@ describe('IncidentNotificationBridge', () => {
     rerender(<IncidentNotificationBridge />);
 
     await waitFor(() => {
-      expect(mockShowToastShow).toHaveBeenCalledTimes(1);
-      expect(mockShowToastShow).toHaveBeenCalledWith(
+      expect(mockShowToastShow).toHaveBeenCalledTimes(2);
+      expect(mockShowToastShow).toHaveBeenNthCalledWith(
+        1,
+        expect.objectContaining({
+          text1: 'Incident backfill',
+          text2: 'Address backfill',
+        })
+      );
+      expect(mockShowToastShow).toHaveBeenNthCalledWith(
+        2,
         expect.objectContaining({
           text1: 'Incident live',
           text2: 'Address live',
