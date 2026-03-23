@@ -5,6 +5,7 @@ import {
   DEFAULT_INCIDENT_HISTORY_WINDOW_DAYS,
   INCIDENT_HISTORY_WINDOW_PRESETS,
   calculateIncidentSinceUnixSeconds,
+  loadIncidentHistoryWindowState,
   loadIncidentHistoryWindowDays,
   normalizeIncidentHistoryWindowDays,
   saveIncidentHistoryWindowDays,
@@ -30,6 +31,15 @@ describe('lib/incidentHistoryWindow', () => {
     await expect(loadIncidentHistoryWindowDays()).resolves.toBe(
       DEFAULT_INCIDENT_HISTORY_WINDOW_DAYS
     );
+  });
+
+  it('marks fallback default loads as not yet persisted', async () => {
+    mockedAsyncStorage.getItem.mockRejectedValueOnce(new Error('storage unavailable'));
+
+    await expect(loadIncidentHistoryWindowState()).resolves.toEqual({
+      days: DEFAULT_INCIDENT_HISTORY_WINDOW_DAYS,
+      persistedDays: null,
+    });
   });
 
   it('loads a valid stored preset', async () => {
@@ -105,6 +115,18 @@ describe('lib/incidentHistoryWindow', () => {
 
     resolveSecond(30);
     await Promise.all([firstRequest.pending, secondRequest.pending]);
+  });
+
+  it('persists an explicit default selection after a fallback load', async () => {
+    const saveDays = jest.fn<Promise<number>, [number]>().mockResolvedValue(30);
+    const coordinator = createIncidentHistoryWindowSaveCoordinator(saveDays, 30);
+
+    coordinator.hydrate(30, null);
+    const request = coordinator.enqueue(30);
+    await request.pending;
+
+    expect(saveDays).toHaveBeenCalledTimes(1);
+    expect(saveDays).toHaveBeenCalledWith(30);
   });
 
   it('falls back to the default when normalizing invalid values', () => {

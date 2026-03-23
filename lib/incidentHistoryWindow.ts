@@ -10,6 +10,11 @@ export type IncidentHistoryWindowPreset = (typeof INCIDENT_HISTORY_WINDOW_PRESET
 
 export const DEFAULT_INCIDENT_HISTORY_WINDOW_DAYS = INCIDENT_LIMITS.SINCE_DAYS;
 
+export interface IncidentHistoryWindowLoadResult {
+  days: number;
+  persistedDays: number | null;
+}
+
 export function isValidIncidentHistoryWindowPreset(
   value: number
 ): value is IncidentHistoryWindowPreset {
@@ -40,14 +45,15 @@ export function createIncidentHistoryWindowSaveCoordinator(
   initialDays: number = DEFAULT_INCIDENT_HISTORY_WINDOW_DAYS
 ) {
   let lastRequestedDays = normalizeIncidentHistoryWindowDays(initialDays);
-  let lastPersistedDays = lastRequestedDays;
-  let queue = Promise.resolve();
+  let lastPersistedDays: number | null = lastRequestedDays;
+  let queue: Promise<number> = Promise.resolve(lastRequestedDays);
 
   return {
-    hydrate(days: number): number {
+    hydrate(days: number, persistedDays: number | null = days): number {
       const normalized = normalizeIncidentHistoryWindowDays(days);
       lastRequestedDays = normalized;
-      lastPersistedDays = normalized;
+      lastPersistedDays =
+        persistedDays === null ? null : normalizeIncidentHistoryWindowDays(persistedDays);
       return normalized;
     },
     enqueue(days: number) {
@@ -60,6 +66,8 @@ export function createIncidentHistoryWindowSaveCoordinator(
           const persisted = await saveDays(nextDays);
           lastPersistedDays = persisted;
         }
+
+        return lastRequestedDays;
       };
 
       queue = queue.then(persistLatestSelection, persistLatestSelection);
@@ -72,18 +80,33 @@ export function createIncidentHistoryWindowSaveCoordinator(
   };
 }
 
-export async function loadIncidentHistoryWindowDays(): Promise<number> {
+export async function loadIncidentHistoryWindowState(): Promise<IncidentHistoryWindowLoadResult> {
   try {
     const stored = await AsyncStorage.getItem(INCIDENT_HISTORY_WINDOW_STORAGE_KEY);
     if (!stored) {
-      return DEFAULT_INCIDENT_HISTORY_WINDOW_DAYS;
+      return {
+        days: DEFAULT_INCIDENT_HISTORY_WINDOW_DAYS,
+        persistedDays: null,
+      };
     }
 
-    return normalizeIncidentHistoryWindowDays(JSON.parse(stored));
+    const normalized = normalizeIncidentHistoryWindowDays(JSON.parse(stored));
+    return {
+      days: normalized,
+      persistedDays: normalized,
+    };
   } catch (error) {
     console.warn('[IncidentHistoryWindow] Failed to load setting:', error);
-    return DEFAULT_INCIDENT_HISTORY_WINDOW_DAYS;
+    return {
+      days: DEFAULT_INCIDENT_HISTORY_WINDOW_DAYS,
+      persistedDays: null,
+    };
   }
+}
+
+export async function loadIncidentHistoryWindowDays(): Promise<number> {
+  const { days } = await loadIncidentHistoryWindowState();
+  return days;
 }
 
 export async function saveIncidentHistoryWindowDays(days: number): Promise<number> {
