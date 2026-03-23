@@ -27,7 +27,7 @@ const timelineCarouselItems: TimelineVideoItem[] = [
   {
     title: 'Timeline Deck',
     purpose: '9-Month Delivery Roadmap',
-    copy: '',
+    copy: 'A high-level roadmap view of the delivery sequence from core incident awareness to reliability, personalization, and ecosystem expansion.',
     src: '/media/implementation-timeline-carousel.mp4',
     preload: 'auto',
   },
