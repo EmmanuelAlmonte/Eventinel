@@ -6,6 +6,7 @@ export interface IncidentSubscriptionContextValue {
   incidents: ProcessedIncident[];
   isInitialLoading: boolean;
   hasReceivedHistory: boolean;
+  historyWindowDays: number;
   severityCounts: Record<Severity, number>;
   setMapFocused: (focused: boolean) => void;
   setMapSubscriptionAnchor: (anchor: [number, number] | null) => void;

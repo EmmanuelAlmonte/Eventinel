@@ -17,6 +17,7 @@ export default function MapScreen() {
     relayStatus,
     userLocation,
     hasReceivedHistory,
+    historyWindowDays,
     visibleIncidents,
     incidentFeatureCollection,
     isLoadingLocation,
@@ -55,6 +56,7 @@ export default function MapScreen() {
       userLocation={userLocation}
       incidentFeatureCollection={incidentFeatureCollection}
       hasReceivedHistory={hasReceivedHistory}
+      historyWindowDays={historyWindowDays}
       visibleIncidents={visibleIncidents}
       isLoadingLocation={isLoadingLocation}
       isFocused={isFocused}

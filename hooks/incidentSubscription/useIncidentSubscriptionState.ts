@@ -19,6 +19,7 @@ export interface IncidentSubscriptionCoreState {
     filterKey: string;
     desiredCount: number;
     truncated: boolean;
+    sinceDays: number;
   }>;
 }
 
@@ -34,6 +35,7 @@ export function useIncidentSubscriptionState(): IncidentSubscriptionCoreState {
     filterKey: 'disabled',
     desiredCount: 0,
     truncated: false,
+    sinceDays: 0,
   });
 
   const [state, setState] = useState<IncidentSubscriptionDisplayState>({

@@ -200,6 +200,71 @@ export function SettingsCard({
   );
 }
 
+type IncidentHistoryCardProps = {
+  colors: ThemeColors;
+  historyWindowDays: number;
+  isReady: boolean;
+  presets: readonly number[];
+  onSelectHistoryWindow: (days: number) => void;
+};
+
+function formatHistoryWindowLabel(days: number): string {
+  return days === 1 ? '1 day' : `${days} days`;
+}
+
+export function IncidentHistoryCard({
+  colors,
+  historyWindowDays,
+  isReady,
+  presets,
+  onSelectHistoryWindow,
+}: IncidentHistoryCardProps) {
+  return (
+    <Card containerStyle={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+      <View style={styles.cardHeader}>
+        <Icon name="history" type="material" size={20} color={colors.primary} />
+        <Text style={[styles.cardTitle, { color: colors.text }]}>Incident History</Text>
+      </View>
+
+      <Text style={[styles.settingDescription, { color: colors.textMuted }]}>
+        Choose how much recent incident history the map and feed request from relays.
+      </Text>
+
+      <View style={styles.historyWindowButtonRow}>
+        {presets.map((days) => {
+          const isActive = historyWindowDays === days;
+          return (
+            <Button
+              key={days}
+              title={formatHistoryWindowLabel(days)}
+              type={isActive ? 'solid' : 'outline'}
+              onPress={() => onSelectHistoryWindow(days)}
+              disabled={!isReady}
+              containerStyle={styles.historyWindowButtonContainer}
+              buttonStyle={[
+                styles.historyWindowButton,
+                isActive
+                  ? { backgroundColor: colors.primary }
+                  : { borderColor: colors.border, backgroundColor: 'transparent' },
+              ]}
+              titleStyle={[
+                styles.historyWindowButtonText,
+                { color: isActive ? '#FFFFFF' : colors.text },
+              ]}
+            />
+          );
+        })}
+      </View>
+
+      <Text style={[styles.pushTokenHint, { color: colors.textMuted }]}>
+        {isReady
+          ? `Current window: ${formatHistoryWindowLabel(historyWindowDays)}`
+          : 'Loading saved history window...'}
+      </Text>
+    </Card>
+  );
+}
+
 type PushTokenCardProps = {
   colors: ThemeColors;
   permissionLabel: string;

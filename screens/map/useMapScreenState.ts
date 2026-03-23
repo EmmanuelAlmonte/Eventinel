@@ -43,6 +43,7 @@ export type MapScreenState = {
   relayStatus: ReturnType<typeof buildRelayBannerStatus>;
   userLocation: [number, number] | null;
   hasReceivedHistory: boolean;
+  historyWindowDays: number;
   visibleIncidents: ProcessedIncident[];
   incidentFeatureCollection: ReturnType<typeof incidentsToFeatureCollection>;
   isLoadingLocation: boolean;
@@ -121,6 +122,7 @@ export function useMapScreenState(): MapScreenState {
   const {
     incidents,
     hasReceivedHistory,
+    historyWindowDays,
     setMapFocused,
     setMapSubscriptionAnchor,
     setMapSubscriptionViewport,
@@ -250,6 +252,7 @@ export function useMapScreenState(): MapScreenState {
     relayStatus,
     userLocation,
     hasReceivedHistory,
+    historyWindowDays,
     visibleIncidents,
     incidentFeatureCollection,
     isLoadingLocation,

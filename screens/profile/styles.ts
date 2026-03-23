@@ -174,4 +174,22 @@ export const profileScreenStyles = StyleSheet.create({
   pushActionButton: {
     flex: 1,
   },
+  historyWindowButtonRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginTop: 12,
+  },
+  historyWindowButtonContainer: {
+    minWidth: 92,
+  },
+  historyWindowButton: {
+    borderRadius: 999,
+    paddingHorizontal: 12,
+    minHeight: 40,
+  },
+  historyWindowButtonText: {
+    fontSize: 13,
+    fontWeight: '600',
+  },
 });

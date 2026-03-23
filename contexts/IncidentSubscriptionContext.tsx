@@ -8,6 +8,7 @@ import React, { createContext, useContext, useEffect, useMemo } from 'react';
 
 import { useIncidentSubscription } from '@hooks';
 import { useIncidentCacheApi } from './IncidentCacheContext';
+import { useIncidentHistoryWindow } from './IncidentHistoryWindowContext';
 
 import { useSubscriptionGate } from './incidentSubscription/useSubscriptionGate';
 import type { IncidentSubscriptionContextValue } from './incidentSubscription/types';
@@ -16,6 +17,7 @@ const IncidentSubscriptionContext = createContext<IncidentSubscriptionContextVal
 
 export function IncidentSubscriptionProvider({ children }: { children: React.ReactNode }) {
   const { upsertMany } = useIncidentCacheApi();
+  const { historyWindowDays, isReady } = useIncidentHistoryWindow();
   const {
     location,
     subscriptionLocation,
@@ -37,7 +39,8 @@ export function IncidentSubscriptionProvider({ children }: { children: React.Rea
     location,
     subscriptionLocation,
     subscriptionViewport: effectiveSubscriptionViewport,
-    enabled: isSubscriptionEnabled,
+    enabled: isSubscriptionEnabled && isReady,
+    sinceDays: historyWindowDays,
   });
 
   useEffect(() => {
@@ -51,6 +54,7 @@ export function IncidentSubscriptionProvider({ children }: { children: React.Rea
       incidents,
       isInitialLoading,
       hasReceivedHistory,
+      historyWindowDays,
       severityCounts,
       setMapFocused,
       setMapSubscriptionAnchor,
@@ -61,6 +65,7 @@ export function IncidentSubscriptionProvider({ children }: { children: React.Rea
       incidents,
       isInitialLoading,
       hasReceivedHistory,
+      historyWindowDays,
       severityCounts,
       setMapFocused,
       setMapSubscriptionAnchor,

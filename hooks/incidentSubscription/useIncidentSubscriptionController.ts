@@ -28,6 +28,7 @@ export interface SubscriptionControllerArgs {
   enabled: boolean;
   desiredSubscriptionCount: number;
   stableLocation: [number, number] | null;
+  sinceDays: number;
   effectiveMaxIncidents: number;
   incidentMapRef: MutableRefObject<Map<string, ProcessedIncident>>;
   pendingEventsRef: MutableRefObject<QueuedEvent[]>;
@@ -71,6 +72,7 @@ export function useIncidentSubscriptionController({
   enabled,
   desiredSubscriptionCount,
   stableLocation,
+  sinceDays,
   effectiveMaxIncidents,
   incidentMapRef,
   pendingEventsRef,
@@ -109,6 +111,7 @@ export function useIncidentSubscriptionController({
       hasReceivedHistory,
       setState,
       incidentMapRef,
+      sinceDays,
     });
 
   return {
