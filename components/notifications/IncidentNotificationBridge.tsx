@@ -169,15 +169,21 @@ function useLiveIncidentToasts(
   appStateRef: React.MutableRefObject<string>,
   handleIncidentNotification: (payload: IncidentNotificationPayload) => Promise<void>
 ) {
-  const { incidents, hasReceivedHistory } = useSharedIncidents();
+  const { incidents, hasReceivedHistory, historyWindowDays } = useSharedIncidents();
   const hasSeededRef = useRef(false);
   const seenIncidentIdsRef = useRef<Set<string>>(new Set());
+
+  useEffect(() => {
+    hasSeededRef.current = false;
+  }, [historyWindowDays]);
 
   useEffect(() => {
     if (!hasReceivedHistory) return;
 
     if (!hasSeededRef.current) {
-      incidents.forEach((incident) => seenIncidentIdsRef.current.add(incident.incidentId));
+      seenIncidentIdsRef.current = new Set(
+        incidents.map((incident) => incident.incidentId)
+      );
       hasSeededRef.current = true;
       return;
     }

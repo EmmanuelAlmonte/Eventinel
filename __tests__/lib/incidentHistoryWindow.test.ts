@@ -80,6 +80,12 @@ describe('lib/incidentHistoryWindow', () => {
     expect(calculateIncidentSinceUnixSeconds(3, fixedNowMs)).toBe(1735430400);
   });
 
+  it('preserves non-preset positive sinceDays values', () => {
+    const fixedNowMs = 1_735_689_600_000;
+
+    expect(calculateIncidentSinceUnixSeconds(14, fixedNowMs)).toBe(1734480000);
+  });
+
   it('serializes saves so the last requested window wins', async () => {
     let resolveFirst!: (value: number) => void;
     let resolveSecond!: (value: number) => void;

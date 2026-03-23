@@ -36,8 +36,12 @@ export function calculateIncidentSinceUnixSeconds(
   sinceDays: number,
   nowMs = Date.now()
 ): number {
-  const normalizedDays = normalizeIncidentHistoryWindowDays(sinceDays);
-  return Math.max(0, Math.floor(nowMs / 1000) - normalizedDays * 86400);
+  const effectiveDays =
+    typeof sinceDays === 'number' && Number.isFinite(sinceDays) && sinceDays > 0
+      ? Math.floor(sinceDays)
+      : DEFAULT_INCIDENT_HISTORY_WINDOW_DAYS;
+
+  return Math.max(0, Math.floor(nowMs / 1000) - effectiveDays * 86400);
 }
 
 export function createIncidentHistoryWindowSaveCoordinator(
