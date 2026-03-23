@@ -1174,6 +1174,35 @@ describe('useIncidentSubscription', () => {
       }
     });
 
+    it('preserves buffered live incidents when sinceDays changes before flush', async () => {
+      const bufferedEvent = createMockIncidentEvent({
+        incidentId: 'buffered-live',
+        title: 'Buffered Live',
+      });
+
+      const { result, rerender } = renderHook(
+        ({ sinceDays }) =>
+          useIncidentSubscription({
+            location: [-75.1652, 39.9526],
+            sinceDays,
+          }),
+        {
+          initialProps: { sinceDays: 30 },
+        }
+      );
+
+      mockSubscription.addEvent(bufferedEvent);
+      rerender({ sinceDays: 1 });
+
+      await waitFor(() => {
+        expect(
+          result.current.incidents.some(
+            (incident) => incident.incidentId === 'buffered-live'
+          )
+        ).toBe(true);
+      });
+    });
+
     it('handles rapid enabled toggling', () => {
       const { rerender } = renderHook(
         ({ enabled }) =>

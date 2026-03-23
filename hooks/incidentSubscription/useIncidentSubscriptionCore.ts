@@ -72,6 +72,7 @@ export function useIncidentSubscription({
   const {
     hasReceivedHistory,
     recomputeVisibleState,
+    flushQueuedEvents,
     startSubscription,
     stopSubscription,
     stopAllSubscriptions,
@@ -191,6 +192,10 @@ export function useIncidentSubscription({
       sinceDays: effectiveSinceDays,
     };
 
+    const bufferedQueuedEvents = historyWindowChanged
+      ? [...pendingEventsRef.current]
+      : [];
+
     if (historyWindowChanged) {
       clearQueuedEvents();
       incidentMapRef.current.clear();
@@ -211,6 +216,11 @@ export function useIncidentSubscription({
 
     for (const key of reconcilePlan.toAdd) {
       startSubscription(key);
+    }
+
+    if (historyWindowChanged && bufferedQueuedEvents.length > 0) {
+      pendingEventsRef.current.push(...bufferedQueuedEvents);
+      flushQueuedEvents();
     }
 
     if (reconcilePlan.shouldPruneByCell) {
@@ -251,6 +261,7 @@ export function useIncidentSubscription({
     startSubscription,
     stopSubscription,
     recomputeVisibleState,
+    flushQueuedEvents,
     pruneToDesiredGeohashes,
     hasReceivedHistory,
     setState,
