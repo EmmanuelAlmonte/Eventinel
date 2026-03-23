@@ -68,6 +68,7 @@ function createIncident(incidentId: string) {
     incidentId,
     eventId: `event-${incidentId}`,
     title: `Incident ${incidentId}`,
+    createdAtMs: Date.now(),
     location: {
       address: `Address ${incidentId}`,
     },
@@ -135,5 +136,40 @@ describe('IncidentNotificationBridge', () => {
     rerender(<IncidentNotificationBridge />);
 
     expect(mockShowToastShow).not.toHaveBeenCalled();
+  });
+
+  it('still toasts live incidents that arrive during the refresh window', async () => {
+    const nowSpy = jest.spyOn(Date, 'now').mockReturnValue(1_000_000);
+    const { rerender } = render(<IncidentNotificationBridge />);
+
+    mockUseSharedIncidents.mockReturnValue({
+      incidents: [],
+      hasReceivedHistory: false,
+      historyWindowDays: 30,
+    });
+    rerender(<IncidentNotificationBridge />);
+
+    mockUseSharedIncidents.mockReturnValue({
+      incidents: [
+        createIncident('a'),
+        { ...createIncident('backfill'), createdAtMs: 900_000 },
+        { ...createIncident('live'), createdAtMs: 1_100_000 },
+      ],
+      hasReceivedHistory: true,
+      historyWindowDays: 30,
+    });
+    rerender(<IncidentNotificationBridge />);
+
+    await waitFor(() => {
+      expect(mockShowToastShow).toHaveBeenCalledTimes(1);
+      expect(mockShowToastShow).toHaveBeenCalledWith(
+        expect.objectContaining({
+          text1: 'Incident live',
+          text2: 'Address live',
+        })
+      );
+    });
+
+    nowSpy.mockRestore();
   });
 });

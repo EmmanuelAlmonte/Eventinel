@@ -172,13 +172,68 @@ function useLiveIncidentToasts(
   const { incidents, hasReceivedHistory, historyWindowDays } = useSharedIncidents();
   const hasSeededRef = useRef(false);
   const seenIncidentIdsRef = useRef<Set<string>>(new Set());
+  const previousHistoryWindowDaysRef = useRef(historyWindowDays);
+  const refreshPendingRef = useRef(false);
+  const refreshSawLoadingRef = useRef(false);
+  const refreshStartedAtMsRef = useRef<number | null>(null);
 
   useEffect(() => {
-    hasSeededRef.current = false;
-  }, [historyWindowDays]);
+    if (previousHistoryWindowDaysRef.current === historyWindowDays) {
+      return;
+    }
+
+    previousHistoryWindowDaysRef.current = historyWindowDays;
+    refreshPendingRef.current = true;
+    refreshSawLoadingRef.current = false;
+    refreshStartedAtMsRef.current = Date.now();
+    seenIncidentIdsRef.current = new Set(
+      incidents.map((incident) => incident.incidentId)
+    );
+  }, [historyWindowDays, incidents]);
 
   useEffect(() => {
     if (!hasReceivedHistory) return;
+
+    if (refreshPendingRef.current) {
+      if (!refreshSawLoadingRef.current) {
+        return;
+      }
+
+      const refreshStartedAtMs = refreshStartedAtMsRef.current ?? 0;
+      const candidates = incidents.filter(
+        (incident) => !seenIncidentIdsRef.current.has(incident.incidentId)
+      );
+      const liveDuringRefresh = candidates.filter(
+        (incident) => incident.createdAtMs >= refreshStartedAtMs
+      );
+
+      candidates.forEach((incident) => {
+        seenIncidentIdsRef.current.add(incident.incidentId);
+      });
+
+      refreshPendingRef.current = false;
+      refreshSawLoadingRef.current = false;
+      refreshStartedAtMsRef.current = null;
+
+      if (appStateRef.current !== 'active' || liveDuringRefresh.length === 0) {
+        return;
+      }
+
+      liveDuringRefresh.forEach((incident) => {
+        showToast.show({
+          type: 'info',
+          text1: incident.title,
+          text2: incident.location.address,
+          visibilityTime: 5000,
+          onPress: () =>
+            handleIncidentNotification({
+              incidentId: incident.incidentId,
+              eventId: incident.eventId,
+            }),
+        });
+      });
+      return;
+    }
 
     if (!hasSeededRef.current) {
       seenIncidentIdsRef.current = new Set(
@@ -210,6 +265,16 @@ function useLiveIncidentToasts(
       });
     });
   }, [appStateRef, handleIncidentNotification, hasReceivedHistory, incidents]);
+
+  useEffect(() => {
+    if (!refreshPendingRef.current) {
+      return;
+    }
+
+    if (!hasReceivedHistory) {
+      refreshSawLoadingRef.current = true;
+    }
+  }, [hasReceivedHistory]);
 }
 
 export default function IncidentNotificationBridge() {
