@@ -44,11 +44,12 @@ This repository follows a strict, repeatable task execution flow for agents.
   - Task-relevant Jest suites (`npm test -- <path>` or scoped scripts)
   - Manual verification notes for UI/lifecycle-sensitive flows (map, auth, notifications, navigation) when touched.
 - For the Eventinel Android dev-launch flow, use this verified recovery sequence when Expo opens an overlay before the app UI:
-  - Start the lifecycle session with `mcp__eventinel_android_app_mcp__open_powershell`.
+  - Start the lifecycle session with `mcp__eventinel__start`.
   - Wait for the Expo developer popup/menu to appear on the device.
   - Tap `Continue`.
   - Find the current tap target for the top-right close `X` from the live UI hierarchy and tap it.
   - Confirm the real Eventinel app opens cleanly with no error and that the screen is no longer inside the Expo dev application.
+  - Use `mcp__eventinel__inspect_session` or `mcp__eventinel__tail_session_log` when you need launch metadata or log evidence, and `mcp__eventinel__stop` when the lifecycle session should be ended explicitly.
 
 ### Commit Convention for MCP Tasks
 - Follow Conventional Commits (`feat:`, `fix:`, `refactor:`, `chore:`, `test:`).
