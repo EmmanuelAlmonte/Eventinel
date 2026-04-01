@@ -33,6 +33,37 @@ type IncidentNotificationBridgeResponse = {
   };
 };
 
+type ToastableIncident = {
+  incidentId: string;
+  eventId: string;
+  title: string;
+  createdAtMs: number;
+  location: {
+    address: string;
+  };
+};
+
+type RefreshPhase = 'idle' | 'awaiting-start' | 'active';
+
+function showIncidentToasts(
+  incidents: readonly ToastableIncident[],
+  handleIncidentNotification: (payload: IncidentNotificationPayload) => Promise<void>
+) {
+  incidents.forEach((incident) => {
+    showToast.show({
+      type: 'info',
+      text1: incident.title,
+      text2: incident.location.address,
+      visibilityTime: 5000,
+      onPress: () =>
+        handleIncidentNotification({
+          incidentId: incident.incidentId,
+          eventId: incident.eventId,
+        }),
+    });
+  });
+}
+
 function navigateToIncidentDetail(params: RootStackParamList['IncidentDetail']) {
   if (!navigationRef.isReady()) {
     console.warn('[Notifications] Navigation is not ready; skipping navigate');
@@ -173,8 +204,8 @@ function useLiveIncidentToasts(
   const hasSeededRef = useRef(false);
   const seenIncidentIdsRef = useRef<Set<string>>(new Set());
   const previousHistoryWindowDaysRef = useRef(historyWindowDays);
-  const refreshPendingRef = useRef(false);
-  const refreshSawLoadingRef = useRef(false);
+  const refreshPhaseRef = useRef<RefreshPhase>('idle');
+  const refreshStartedAtMsRef = useRef<number | null>(null);
 
   useEffect(() => {
     if (previousHistoryWindowDaysRef.current === historyWindowDays) {
@@ -182,46 +213,51 @@ function useLiveIncidentToasts(
     }
 
     previousHistoryWindowDaysRef.current = historyWindowDays;
-    refreshPendingRef.current = true;
-    refreshSawLoadingRef.current = false;
-  }, [historyWindowDays, incidents]);
+    refreshStartedAtMsRef.current = null;
+
+    if (!hasSeededRef.current) {
+      refreshPhaseRef.current = 'idle';
+      return;
+    }
+
+    if (hasReceivedHistory) {
+      refreshPhaseRef.current = 'awaiting-start';
+      return;
+    }
+
+    refreshPhaseRef.current = 'active';
+    refreshStartedAtMsRef.current = Date.now();
+  }, [hasReceivedHistory, historyWindowDays]);
 
   useEffect(() => {
     if (!hasReceivedHistory) return;
 
-    if (refreshPendingRef.current) {
-      if (!refreshSawLoadingRef.current) {
-        return;
-      }
+    if (refreshPhaseRef.current === 'active') {
+      const refreshStartedAtMs = refreshStartedAtMsRef.current;
+      const arrivedDuringRefresh = incidents.filter((incident) => {
+        if (seenIncidentIdsRef.current.has(incident.incidentId)) {
+          return false;
+        }
 
-      const arrivedDuringRefresh = incidents.filter(
-        (incident) => !seenIncidentIdsRef.current.has(incident.incidentId)
-      );
+        if (refreshStartedAtMs == null) {
+          return false;
+        }
+
+        return incident.createdAtMs >= refreshStartedAtMs;
+      });
 
       incidents.forEach((incident) => {
         seenIncidentIdsRef.current.add(incident.incidentId);
       });
 
-      refreshPendingRef.current = false;
-      refreshSawLoadingRef.current = false;
+      refreshPhaseRef.current = 'idle';
+      refreshStartedAtMsRef.current = null;
 
       if (appStateRef.current !== 'active' || arrivedDuringRefresh.length === 0) {
         return;
       }
 
-      arrivedDuringRefresh.forEach((incident) => {
-        showToast.show({
-          type: 'info',
-          text1: incident.title,
-          text2: incident.location.address,
-          visibilityTime: 5000,
-          onPress: () =>
-            handleIncidentNotification({
-              incidentId: incident.incidentId,
-              eventId: incident.eventId,
-            }),
-        });
-      });
+      showIncidentToasts(arrivedDuringRefresh, handleIncidentNotification);
       return;
     }
 
@@ -242,28 +278,17 @@ function useLiveIncidentToasts(
 
     newIncidents.forEach((incident) => {
       seenIncidentIdsRef.current.add(incident.incidentId);
-      showToast.show({
-        type: 'info',
-        text1: incident.title,
-        text2: incident.location.address,
-        visibilityTime: 5000,
-        onPress: () =>
-          handleIncidentNotification({
-            incidentId: incident.incidentId,
-            eventId: incident.eventId,
-          }),
-      });
     });
+    showIncidentToasts(newIncidents, handleIncidentNotification);
   }, [appStateRef, handleIncidentNotification, hasReceivedHistory, incidents]);
 
   useEffect(() => {
-    if (!refreshPendingRef.current) {
+    if (hasReceivedHistory || refreshPhaseRef.current !== 'awaiting-start') {
       return;
     }
 
-    if (!hasReceivedHistory) {
-      refreshSawLoadingRef.current = true;
-    }
+    refreshPhaseRef.current = 'active';
+    refreshStartedAtMsRef.current = Date.now();
   }, [hasReceivedHistory]);
 }
 

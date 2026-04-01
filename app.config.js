@@ -42,11 +42,14 @@ module.exports = {
     icon: './assets/icon.png',
     userInterfaceStyle: 'automatic',
     jsEngine: 'hermes',
-    developmentClient: {
-      silentLaunch: true,
-    },
     newArchEnabled: true,
     plugins: [
+      [
+        'expo-dev-client',
+        {
+          launchMode: 'most-recent',
+        },
+      ],
       'expo-secure-store',
       'expo-image-picker',
       [

@@ -63,12 +63,17 @@ jest.mock('@lib/notifications/pushRegistration', () => ({
 
 import IncidentNotificationBridge from '../../../components/notifications/IncidentNotificationBridge';
 
-function createIncident(incidentId: string) {
+function createIncident(
+  incidentId: string,
+  overrides: Partial<{
+    createdAtMs: number;
+  }> = {}
+) {
   return {
     incidentId,
     eventId: `event-${incidentId}`,
     title: `Incident ${incidentId}`,
-    createdAtMs: Date.now(),
+    createdAtMs: overrides.createdAtMs ?? Date.now(),
     location: {
       address: `Address ${incidentId}`,
     },
@@ -118,15 +123,14 @@ describe('IncidentNotificationBridge', () => {
     });
   });
 
-  it('does not toast historical backfill after a history-window change', () => {
-    const { rerender } = render(<IncidentNotificationBridge />);
-
+  it('does not toast backlog when the history window changes before initial seeding', () => {
     mockUseSharedIncidents.mockReturnValue({
-      incidents: [createIncident('a')],
+      incidents: [],
       hasReceivedHistory: false,
-      historyWindowDays: 30,
+      historyWindowDays: 7,
     });
-    rerender(<IncidentNotificationBridge />);
+
+    const { rerender } = render(<IncidentNotificationBridge />);
 
     mockUseSharedIncidents.mockReturnValue({
       incidents: [],
@@ -142,13 +146,35 @@ describe('IncidentNotificationBridge', () => {
     });
     rerender(<IncidentNotificationBridge />);
 
-    expect(mockShowToastShow).toHaveBeenCalledTimes(1);
-    expect(mockShowToastShow).toHaveBeenCalledWith(
-      expect.objectContaining({
-        text1: 'Incident older',
-        text2: 'Address older',
-      })
-    );
+    expect(mockShowToastShow).not.toHaveBeenCalled();
+  });
+
+  it('does not toast historical backfill after a history-window change', () => {
+    const nowSpy = jest.spyOn(Date, 'now').mockReturnValue(1_000_000);
+    const { rerender } = render(<IncidentNotificationBridge />);
+
+    try {
+      mockUseSharedIncidents.mockReturnValue({
+        incidents: [createIncident('a', { createdAtMs: 800_000 })],
+        hasReceivedHistory: false,
+        historyWindowDays: 30,
+      });
+      rerender(<IncidentNotificationBridge />);
+
+      mockUseSharedIncidents.mockReturnValue({
+        incidents: [
+          createIncident('a', { createdAtMs: 800_000 }),
+          createIncident('older', { createdAtMs: 900_000 }),
+        ],
+        hasReceivedHistory: true,
+        historyWindowDays: 30,
+      });
+      rerender(<IncidentNotificationBridge />);
+
+      expect(mockShowToastShow).not.toHaveBeenCalled();
+    } finally {
+      nowSpy.mockRestore();
+    }
   });
 
   it('still toasts live incidents that arrive during the refresh window', async () => {
@@ -171,9 +197,9 @@ describe('IncidentNotificationBridge', () => {
 
     mockUseSharedIncidents.mockReturnValue({
       incidents: [
-        createIncident('a'),
-        { ...createIncident('backfill'), createdAtMs: 900_000 },
-        { ...createIncident('live'), createdAtMs: 1_100_000 },
+        createIncident('a', { createdAtMs: 800_000 }),
+        createIncident('backfill', { createdAtMs: 900_000 }),
+        createIncident('live', { createdAtMs: 1_100_000 }),
       ],
       hasReceivedHistory: true,
       historyWindowDays: 30,
@@ -181,16 +207,8 @@ describe('IncidentNotificationBridge', () => {
     rerender(<IncidentNotificationBridge />);
 
     await waitFor(() => {
-      expect(mockShowToastShow).toHaveBeenCalledTimes(2);
-      expect(mockShowToastShow).toHaveBeenNthCalledWith(
-        1,
-        expect.objectContaining({
-          text1: 'Incident backfill',
-          text2: 'Address backfill',
-        })
-      );
-      expect(mockShowToastShow).toHaveBeenNthCalledWith(
-        2,
+      expect(mockShowToastShow).toHaveBeenCalledTimes(1);
+      expect(mockShowToastShow).toHaveBeenCalledWith(
         expect.objectContaining({
           text1: 'Incident live',
           text2: 'Address live',

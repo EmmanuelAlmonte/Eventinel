@@ -6,6 +6,7 @@
 
 import { useEffect } from 'react';
 
+import { calculateIncidentSinceUnixSeconds } from '@lib/incidentHistoryWindow';
 import { INCIDENT_LIMITS } from '@lib/map/constants';
 import { computeReconcilePlan } from './reconcile';
 import { EMPTY_SEVERITY_COUNTS, toProcessedIncident } from './sorting';
@@ -192,9 +193,20 @@ export function useIncidentSubscription({
       sinceDays: effectiveSinceDays,
     };
 
-    const bufferedQueuedEvents = historyWindowChanged
-      ? [...pendingEventsRef.current]
-      : [];
+    const replayCutoff = historyWindowChanged
+      ? calculateIncidentSinceUnixSeconds(effectiveSinceDays)
+      : null;
+    const bufferedQueuedEvents =
+      historyWindowChanged && replayCutoff != null
+        ? pendingEventsRef.current.filter(({ event }) => {
+            const createdAt = event.created_at;
+            return (
+              typeof createdAt === 'number' &&
+              Number.isFinite(createdAt) &&
+              createdAt >= replayCutoff
+            );
+          })
+        : [];
 
     if (historyWindowChanged) {
       clearQueuedEvents();
@@ -220,6 +232,9 @@ export function useIncidentSubscription({
 
     if (historyWindowChanged && bufferedQueuedEvents.length > 0) {
       pendingEventsRef.current.push(...bufferedQueuedEvents);
+    }
+
+    if (historyWindowChanged && pendingEventsRef.current.length > 0) {
       flushQueuedEvents();
     }
 

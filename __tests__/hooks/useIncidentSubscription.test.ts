@@ -1175,32 +1175,84 @@ describe('useIncidentSubscription', () => {
     });
 
     it('preserves buffered live incidents when sinceDays changes before flush', async () => {
-      const bufferedEvent = createMockIncidentEvent({
-        incidentId: 'buffered-live',
-        title: 'Buffered Live',
-      });
+      const fixedNowMs = 1_735_689_600_000;
+      const nowSpy = jest.spyOn(Date, 'now').mockReturnValue(fixedNowMs);
 
-      const { result, rerender } = renderHook(
-        ({ sinceDays }) =>
-          useIncidentSubscription({
-            location: [-75.1652, 39.9526],
-            sinceDays,
-          }),
-        {
-          initialProps: { sinceDays: 30 },
-        }
-      );
+      try {
+        const bufferedEvent = createMockIncidentEvent({
+          incidentId: 'buffered-live',
+          title: 'Buffered Live',
+          created_at: Math.floor(fixedNowMs / 1000) - 3600,
+        });
 
-      mockSubscription.addEvent(bufferedEvent);
-      rerender({ sinceDays: 1 });
+        const { result, rerender } = renderHook(
+          ({ sinceDays }) =>
+            useIncidentSubscription({
+              location: [-75.1652, 39.9526],
+              sinceDays,
+            }),
+          {
+            initialProps: { sinceDays: 30 },
+          }
+        );
 
-      await waitFor(() => {
+        mockSubscription.addEvent(bufferedEvent);
+        mockSubscription.setEvents([]);
+        rerender({ sinceDays: 1 });
+
+        await waitFor(() => {
+          expect(
+            result.current.incidents.some(
+              (incident) => incident.incidentId === 'buffered-live'
+            )
+          ).toBe(true);
+        });
+      } finally {
+        nowSpy.mockRestore();
+      }
+    });
+
+    it('drops buffered incidents older than the narrowed sinceDays before flush', async () => {
+      const fixedNowMs = 1_735_689_600_000;
+      const nowSpy = jest.spyOn(Date, 'now').mockReturnValue(fixedNowMs);
+
+      try {
+        const bufferedEvent = createMockIncidentEvent({
+          incidentId: 'stale-buffered',
+          title: 'Stale Buffered',
+          created_at: Math.floor(fixedNowMs / 1000) - 5 * 86400,
+        });
+
+        const { result, rerender } = renderHook(
+          ({ sinceDays }) =>
+            useIncidentSubscription({
+              location: [-75.1652, 39.9526],
+              sinceDays,
+            }),
+          {
+            initialProps: { sinceDays: 30 },
+          }
+        );
+
+        const initialCallCount = getSubscribeCalls().length;
+
+        mockSubscription.addEvent(bufferedEvent);
+        mockSubscription.setEvents([]);
+        rerender({ sinceDays: 1 });
+
+        await waitFor(() => {
+          expect(getSubscribeCalls().length).toBeGreaterThan(initialCallCount);
+        });
+
         expect(
           result.current.incidents.some(
-            (incident) => incident.incidentId === 'buffered-live'
+            (incident) => incident.incidentId === 'stale-buffered'
           )
-        ).toBe(true);
-      });
+        ).toBe(false);
+        expect(result.current.totalEventsReceived).toBe(0);
+      } finally {
+        nowSpy.mockRestore();
+      }
     });
 
     it('handles rapid enabled toggling', () => {
