@@ -51,6 +51,11 @@ type MapScreenLayoutProps = {
   incidentFeatureCollection: ReturnType<typeof incidentsToFeatureCollection>;
   hasReceivedHistory: boolean;
   historyWindowDays: number;
+  historyWindowPresets: readonly number[];
+  isHistoryWindowReady: boolean;
+  activeDateRangeLabel: string;
+  dateRangeStatusLabel: string;
+  isDateRangeRefreshing: boolean;
   visibleIncidents: ProcessedIncident[];
   isLoadingLocation: boolean;
   isFocused: boolean;
@@ -59,6 +64,7 @@ type MapScreenLayoutProps = {
   permission: LocationPermissionStatus;
   handleMapLayout: (event: LayoutChangeEvent) => void;
   handleRelaySettings: () => void;
+  onSelectDateRange: (days: number) => void;
   onShapeSourcePress: (event: ShapeSourcePressEvent) => void | Promise<void>;
   onFlyToUser: () => void;
 };
@@ -82,6 +88,11 @@ export function MapScreenCanvas({
   incidentFeatureCollection,
   hasReceivedHistory,
   historyWindowDays,
+  historyWindowPresets,
+  isHistoryWindowReady,
+  activeDateRangeLabel,
+  dateRangeStatusLabel,
+  isDateRangeRefreshing,
   visibleIncidents,
   isLoadingLocation,
   isFocused,
@@ -90,6 +101,7 @@ export function MapScreenCanvas({
   permission,
   handleMapLayout,
   handleRelaySettings,
+  onSelectDateRange,
   onShapeSourcePress,
   onFlyToUser,
 }: MapScreenLayoutProps) {
@@ -170,11 +182,17 @@ export function MapScreenCanvas({
         visibleIncidents={visibleIncidents}
         hasReceivedHistory={hasReceivedHistory}
         historyWindowDays={historyWindowDays}
+        historyWindowPresets={historyWindowPresets}
+        isHistoryWindowReady={isHistoryWindowReady}
+        activeDateRangeLabel={activeDateRangeLabel}
+        dateRangeStatusLabel={dateRangeStatusLabel}
+        isDateRangeRefreshing={isDateRangeRefreshing}
         isLoadingLocation={isLoadingLocation}
         isFocused={isFocused}
         isViewportCoveredBySubscriptionGrid={isViewportCoveredBySubscriptionGrid}
         locationSource={locationSource}
         permission={permission}
+        onSelectDateRange={onSelectDateRange}
       />
     </View>
   );

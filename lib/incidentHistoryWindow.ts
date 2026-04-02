@@ -21,6 +21,14 @@ export function isValidIncidentHistoryWindowPreset(
   return INCIDENT_HISTORY_WINDOW_PRESETS.includes(value as IncidentHistoryWindowPreset);
 }
 
+export function formatIncidentHistoryWindowLabel(days: number): string {
+  return days === 1 ? '1 day' : `${days} days`;
+}
+
+export function formatIncidentHistoryWindowChipLabel(days: number): string {
+  return days === 1 ? '24H' : `${days}D`;
+}
+
 export function normalizeIncidentHistoryWindowDays(value: unknown): number {
   if (typeof value !== 'number' || !Number.isFinite(value)) {
     return DEFAULT_INCIDENT_HISTORY_WINDOW_DAYS;

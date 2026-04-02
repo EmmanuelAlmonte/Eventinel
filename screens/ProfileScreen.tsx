@@ -4,23 +4,20 @@
  * Displays identity metadata, appearance settings, and push notification controls.
  */
 
-import { useCallback, useMemo } from 'react';
+import { useMemo } from 'react';
 import { Alert } from 'react-native';
 import * as Notifications from 'expo-notifications';
 import { useNavigation } from '@react-navigation/native';
 import { useNDKCurrentPubkey, useNDKCurrentUser, useNDKSessionLogout } from '@nostr-dev-kit/mobile';
 
-import { INCIDENT_HISTORY_WINDOW_PRESETS } from '@lib/incidentHistoryWindow';
 import { type AppNavigation } from '@lib/navigation';
 import { isCashuWalletFeatureEnabled, isLightningWalletFeatureEnabled } from '@lib/featureFlags';
 import { ScreenContainer } from '@components/ui';
-import { useIncidentHistoryWindow } from '@contexts';
 import { useAppTheme } from '@hooks';
 
 import {
   AccountCard,
   AppearanceCard,
-  IncidentHistoryCard,
   permissionLabelFromStatus,
   ProfileHeader,
   ProfileInfoNote,
@@ -37,8 +34,6 @@ export default function ProfileScreen() {
   const currentPubkey = useNDKCurrentPubkey();
   const currentUser = useNDKCurrentUser();
   const { colors, isDark, toggleMode } = useAppTheme();
-  const { historyWindowDays, isReady: isHistoryWindowReady, setHistoryWindowDays } =
-    useIncidentHistoryWindow();
   const {
     pushToken,
     isLoadingPushToken,
@@ -63,15 +58,6 @@ export default function ProfileScreen() {
       },
     ]);
   };
-
-  const handleSelectHistoryWindow = useCallback(
-    (days: number) => {
-      void setHistoryWindowDays(days).catch((error) => {
-        console.warn('[Profile] Failed to save incident history window:', error);
-      });
-    },
-    [setHistoryWindowDays]
-  );
 
   const permissionLabel = permissionLabelFromStatus(pushPermissionStatus);
   const lightningEnabled = isLightningWalletFeatureEnabled;
@@ -129,14 +115,6 @@ export default function ProfileScreen() {
         onRelayPress={() => navigation.navigate('Relays')}
         walletEnabled={walletSettingsEnabled}
         walletDescription={walletDescription}
-      />
-
-      <IncidentHistoryCard
-        colors={colors}
-        historyWindowDays={historyWindowDays}
-        isReady={isHistoryWindowReady}
-        presets={INCIDENT_HISTORY_WINDOW_PRESETS}
-        onSelectHistoryWindow={handleSelectHistoryWindow}
       />
 
       <PushTokenCard

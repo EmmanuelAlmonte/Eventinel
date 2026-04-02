@@ -2,6 +2,8 @@ import { Pressable, View } from 'react-native';
 import { Avatar, Button, Card, Divider, Icon, Switch, Text } from '@rneui/themed';
 import * as Notifications from 'expo-notifications';
 
+import { formatIncidentHistoryWindowLabel } from '@lib/incidentHistoryWindow';
+
 import { profileScreenStyles as styles } from './styles';
 
 type ThemeColors = {
@@ -208,10 +210,6 @@ type IncidentHistoryCardProps = {
   onSelectHistoryWindow: (days: number) => void;
 };
 
-function formatHistoryWindowLabel(days: number): string {
-  return days === 1 ? '1 day' : `${days} days`;
-}
-
 export function IncidentHistoryCard({
   colors,
   historyWindowDays,
@@ -223,11 +221,11 @@ export function IncidentHistoryCard({
     <Card containerStyle={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
       <View style={styles.cardHeader}>
         <Icon name="history" type="material" size={20} color={colors.primary} />
-        <Text style={[styles.cardTitle, { color: colors.text }]}>Incident History</Text>
+        <Text style={[styles.cardTitle, { color: colors.text }]}>Date Range</Text>
       </View>
 
       <Text style={[styles.settingDescription, { color: colors.textMuted }]}>
-        Choose how much recent incident history the map and feed request from relays.
+        This changes how much past incident history is loaded. You can also update it from the map screen.
       </Text>
 
       <View style={styles.historyWindowButtonRow}>
@@ -236,7 +234,7 @@ export function IncidentHistoryCard({
           return (
             <Button
               key={days}
-              title={formatHistoryWindowLabel(days)}
+              title={formatIncidentHistoryWindowLabel(days)}
               type={isActive ? 'solid' : 'outline'}
               onPress={() => onSelectHistoryWindow(days)}
               disabled={!isReady}
@@ -258,8 +256,8 @@ export function IncidentHistoryCard({
 
       <Text style={[styles.pushTokenHint, { color: colors.textMuted }]}>
         {isReady
-          ? `Current window: ${formatHistoryWindowLabel(historyWindowDays)}`
-          : 'Loading saved history window...'}
+          ? `Current range: ${formatIncidentHistoryWindowLabel(historyWindowDays)}`
+          : 'Loading saved date range...'}
       </Text>
     </Card>
   );

@@ -4,15 +4,24 @@
  * Composes shared-map state, handlers, and memoized incident data for the map screen.
  */
 
-import { useCallback, useMemo } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { LayoutChangeEvent } from 'react-native';
 import { useIsFocused, useNavigation } from '@react-navigation/native';
 import { useSafeAreaInsets, type EdgeInsets } from 'react-native-safe-area-context';
 
 import { type AppNavigation } from '@lib/navigation';
-import { useRelayStatus, useSharedIncidents, useSharedLocation } from '@contexts';
+import {
+  useIncidentHistoryWindow,
+  useRelayStatus,
+  useSharedIncidents,
+  useSharedLocation,
+} from '@contexts';
 import { useAppTheme, type ProcessedIncident } from '@hooks';
 import { incidentsToFeatureCollection } from '@lib/map/types';
+import {
+  formatIncidentHistoryWindowLabel,
+  INCIDENT_HISTORY_WINDOW_PRESETS,
+} from '@lib/incidentHistoryWindow';
 import {
   logIncidentNavFlow,
   markIncidentNavTrace,
@@ -44,6 +53,11 @@ export type MapScreenState = {
   userLocation: [number, number] | null;
   hasReceivedHistory: boolean;
   historyWindowDays: number;
+  historyWindowPresets: readonly number[];
+  isHistoryWindowReady: boolean;
+  activeDateRangeLabel: string;
+  dateRangeStatusLabel: string;
+  isDateRangeRefreshing: boolean;
   visibleIncidents: ProcessedIncident[];
   incidentFeatureCollection: ReturnType<typeof incidentsToFeatureCollection>;
   isLoadingLocation: boolean;
@@ -56,8 +70,11 @@ export type MapScreenState = {
   handleShapeSourcePress: (event: ShapeSourcePressEvent) => Promise<void>;
   handleMapLayout: (event: LayoutChangeEvent) => void;
   handleRelaySettings: () => void;
+  handleSelectDateRange: (days: number) => void;
   refreshLocation: () => void;
 };
+
+const DATE_RANGE_REFRESH_TIMEOUT_MS = 6000;
 
 function normalizeLocationPermission(
   permission: string | undefined
@@ -110,6 +127,11 @@ export function useMapScreenState(): MapScreenState {
   const isFocused = useIsFocused();
   const insets = useSafeAreaInsets();
   const { colors } = useAppTheme();
+  const {
+    historyWindowDays,
+    isReady: isHistoryWindowReady,
+    setHistoryWindowDays,
+  } = useIncidentHistoryWindow();
   const { hasConnectedRelay, hasRelays, isConnecting, relays } = useRelayStatus();
   const {
     location: userLocation,
@@ -122,11 +144,57 @@ export function useMapScreenState(): MapScreenState {
   const {
     incidents,
     hasReceivedHistory,
-    historyWindowDays,
     setMapFocused,
     setMapSubscriptionAnchor,
     setMapSubscriptionViewport,
   } = useSharedIncidents();
+  const [dateRangeTransition, setDateRangeTransition] = useState<{
+    days: number;
+    refreshStarted: boolean;
+  } | null>(null);
+  const fallbackClearTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const clearFallbackTimer = useCallback(() => {
+    if (fallbackClearTimerRef.current) {
+      clearTimeout(fallbackClearTimerRef.current);
+      fallbackClearTimerRef.current = null;
+    }
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      clearFallbackTimer();
+    };
+  }, [clearFallbackTimer]);
+
+  useEffect(() => {
+    if (!dateRangeTransition) {
+      return;
+    }
+
+    if (historyWindowDays !== dateRangeTransition.days) {
+      return;
+    }
+
+    if (!hasReceivedHistory && !dateRangeTransition.refreshStarted) {
+      setDateRangeTransition((current) =>
+        current && current.days === dateRangeTransition.days
+          ? { ...current, refreshStarted: true }
+          : current
+      );
+      return;
+    }
+
+    if (hasReceivedHistory) {
+      clearFallbackTimer();
+      setDateRangeTransition(null);
+    }
+  }, [
+    clearFallbackTimer,
+    dateRangeTransition,
+    hasReceivedHistory,
+    historyWindowDays,
+  ]);
 
   const camera = useMapCamera({ userLocation });
   const viewport = useMapViewportSubscription({
@@ -233,12 +301,52 @@ export function useMapScreenState(): MapScreenState {
     navigation.navigate('Relays');
   }, [navigation]);
 
+  const handleSelectDateRange = useCallback(
+    (days: number) => {
+      if (!isHistoryWindowReady || days === historyWindowDays) {
+        return;
+      }
+
+      clearFallbackTimer();
+      setDateRangeTransition({
+        days,
+        refreshStarted: false,
+      });
+
+      fallbackClearTimerRef.current = setTimeout(() => {
+        setDateRangeTransition((current) =>
+          current && current.days === days ? null : current
+        );
+        fallbackClearTimerRef.current = null;
+      }, DATE_RANGE_REFRESH_TIMEOUT_MS);
+
+      void setHistoryWindowDays(days).catch((error) => {
+        console.warn('[MapScreen] Failed to save date range:', error);
+        clearFallbackTimer();
+        setDateRangeTransition(null);
+      });
+    },
+    [
+      clearFallbackTimer,
+      historyWindowDays,
+      isHistoryWindowReady,
+      setHistoryWindowDays,
+    ]
+  );
+
   const relayStatus = buildRelayBannerStatus({
     hasConnectedRelay,
     hasRelays,
     isConnecting,
     relayLabel: formatRelayList(relays.map((relay) => relay.url)),
   });
+  const selectedRefreshDays = dateRangeTransition?.days ?? historyWindowDays;
+  const activeDateRangeLabel = formatIncidentHistoryWindowLabel(selectedRefreshDays);
+  const dateRangeStatusLabel = !isHistoryWindowReady
+    ? 'Loading saved date range...'
+    : dateRangeTransition
+      ? `Refreshing incidents for ${formatIncidentHistoryWindowLabel(selectedRefreshDays)} window...`
+      : `Current range: ${activeDateRangeLabel}`;
 
   return {
     colors: {
@@ -253,6 +361,11 @@ export function useMapScreenState(): MapScreenState {
     userLocation,
     hasReceivedHistory,
     historyWindowDays,
+    historyWindowPresets: INCIDENT_HISTORY_WINDOW_PRESETS,
+    isHistoryWindowReady,
+    activeDateRangeLabel,
+    dateRangeStatusLabel,
+    isDateRangeRefreshing: dateRangeTransition !== null,
     visibleIncidents,
     incidentFeatureCollection,
     isLoadingLocation,
@@ -265,6 +378,7 @@ export function useMapScreenState(): MapScreenState {
     handleShapeSourcePress,
     handleMapLayout,
     handleRelaySettings,
+    handleSelectDateRange,
     refreshLocation,
   };
 }
