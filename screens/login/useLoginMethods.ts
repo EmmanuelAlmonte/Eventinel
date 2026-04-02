@@ -14,6 +14,7 @@ import type { SignerAppInfo } from 'expo-nip55';
 import { showToast } from '@components/ui';
 
 type Nip46Ndk = Parameters<typeof NDKNip46Signer.bunker>[0];
+const LOGIN_TOAST_VISIBILITY_MS = 12000;
 
 type ValidationResult = {
   level: 'error' | 'warning';
@@ -139,24 +140,39 @@ export function useLoginMethods() {
   const [generatedPubkey, setGeneratedPubkey] = useState<string | null>(null);
   const [generatedSigner, setGeneratedSigner] = useState<NDKPrivateKeySigner | null>(null);
 
+  const showLoginSuccess = useCallback(
+    (title: string, message?: string) => {
+      showToast.success(title, message, { visibilityTime: LOGIN_TOAST_VISIBILITY_MS });
+    },
+    []
+  );
+
   const runLoginWithLoading = useCallback(
     async (
       action: () => Promise<void>,
       title: string,
       fallback: string,
-      preserveError = false
+      preserveError = false,
+      successTitle?: string,
+      successMessage?: string
     ) => {
       await withLoadingState(
         setIsLoading,
-        action,
+        async () => {
+          await action();
+          if (successTitle) {
+            showLoginSuccess(successTitle, successMessage);
+          }
+        },
         (error) =>
           showToast.error(
             title,
-            preserveError ? (error instanceof Error ? error.message : fallback) : fallback
+            preserveError ? (error instanceof Error ? error.message : fallback) : fallback,
+            { visibilityTime: LOGIN_TOAST_VISIBILITY_MS }
           )
       );
     },
-    []
+    [showLoginSuccess]
   );
 
   const handleNip55Login = useCallback(
@@ -165,7 +181,7 @@ export function useLoginMethods() {
         const signer = new NDKNip55Signer(app.packageName);
         await signer.blockUntilReady();
         await login(signer, true);
-      }, 'Login Failed', 'NIP-55 login failed', true);
+      }, 'Login Failed', 'NIP-55 login failed', true, 'Login successful');
     },
     [login, runLoginWithLoading]
   );
@@ -183,7 +199,7 @@ export function useLoginMethods() {
         const signer = makeRemoteSigner(ndk, trimmed, forceLegacyNip04);
         await signer.blockUntilReady();
         await login(signer, true);
-      }, 'Connection Failed', 'Remote signer connection failed', true);
+      }, 'Connection Failed', 'Remote signer connection failed', true, 'Login successful');
       return;
     }
 
@@ -251,7 +267,7 @@ export function useLoginMethods() {
       await login(nostrConnectSigner, true);
       setNostrConnectSigner(null);
       setNostrConnectUri(null);
-    }, 'Connection Failed', 'Nostr Connect failed', true);
+    }, 'Connection Failed', 'Nostr Connect failed', true, 'Login successful');
   }, [login, nostrConnectSigner, runLoginWithLoading]);
 
   const handleManualLogin = useCallback(async () => {
@@ -264,7 +280,7 @@ export function useLoginMethods() {
       const signer = new NDKPrivateKeySigner(key);
       await signer.user();
       await login(signer, true);
-    }, 'Login Failed', 'Please check your key and try again');
+    }, 'Login Failed', 'Please check your key and try again', false, 'Login successful');
   }, [login, manualKey, runLoginWithLoading]);
 
   const handleGenerateKey = useCallback(async () => {
@@ -291,7 +307,7 @@ export function useLoginMethods() {
     await runLoginWithLoading(async () => {
       await login(generatedSigner, true);
       clearGeneratedKeyState(setGeneratedKey, setGeneratedPubkey, setGeneratedSigner);
-    }, 'Login Failed', 'Unable to use generated key', false);
+    }, 'Login Failed', 'Unable to use generated key', false, 'Login successful');
   }, [generatedSigner, login, runLoginWithLoading]);
 
   return {

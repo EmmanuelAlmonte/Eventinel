@@ -44,12 +44,12 @@ This repository follows a strict, repeatable task execution flow for agents.
   - Task-relevant Jest suites (`npm test -- <path>` or scoped scripts)
   - Manual verification notes for UI/lifecycle-sensitive flows (map, auth, notifications, navigation) when touched.
 - For the Eventinel Android dev-launch flow, use this verified recovery sequence when Expo opens an overlay before the app UI:
-  - Start the lifecycle session with `mcp__eventinel__start`.
+  - Start the Android app/session using the currently approved launch workflow.
   - Wait for the Expo developer popup/menu to appear on the device.
   - Tap `Continue`.
   - Find the current tap target for the top-right close `X` from the live UI hierarchy and tap it.
   - Confirm the real Eventinel app opens cleanly with no error and that the screen is no longer inside the Expo dev application.
-  - Use `mcp__eventinel__inspect_session` or `mcp__eventinel__tail_session_log` when you need launch metadata or log evidence, and `mcp__eventinel__stop` when the lifecycle session should be ended explicitly.
+  - Use the current launch/session metadata source when needed, use direct `adb` for device-side log evidence, and end the session explicitly when the run should be closed.
 
 ### Commit Convention for MCP Tasks
 - Follow Conventional Commits (`feat:`, `fix:`, `refactor:`, `chore:`, `test:`).
@@ -73,7 +73,6 @@ This repository follows a strict, repeatable task execution flow for agents.
 
 ## Build, Test, and Development Commands
 - `npm install` – install dependencies.
-- `npm start` – launch Expo Metro; `npm run android|ios|web` to run on targets.
 - `npx tsc --noEmit` – TypeScript type-check.
 - `npm test`, `npm run test:watch`, `npm run test:coverage`, `npm run test:auth` – Jest (jest-expo) suites; `test:auth` scopes to auth flows.
 
