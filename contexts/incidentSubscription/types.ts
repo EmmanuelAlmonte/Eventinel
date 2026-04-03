@@ -4,6 +4,7 @@ import type { MapSubscriptionViewport } from '@lib/map/subscriptionPlanner';
 
 export interface IncidentSubscriptionContextValue {
   incidents: ProcessedIncident[];
+  updatedIncidents: ProcessedIncident[];
   isInitialLoading: boolean;
   hasReceivedHistory: boolean;
   historyWindowDays: number;

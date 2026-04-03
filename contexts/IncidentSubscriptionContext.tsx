@@ -31,10 +31,10 @@ export function IncidentSubscriptionProvider({ children }: { children: React.Rea
 
   const {
     incidents,
+    updatedIncidents,
     isInitialLoading,
     hasReceivedHistory,
     severityCounts,
-    updatedIncidents,
   } = useIncidentSubscription({
     location,
     subscriptionLocation,
@@ -52,6 +52,7 @@ export function IncidentSubscriptionProvider({ children }: { children: React.Rea
   const contextValue = useMemo(
     () => ({
       incidents,
+      updatedIncidents,
       isInitialLoading,
       hasReceivedHistory,
       historyWindowDays,
@@ -63,6 +64,7 @@ export function IncidentSubscriptionProvider({ children }: { children: React.Rea
     }),
     [
       incidents,
+      updatedIncidents,
       isInitialLoading,
       hasReceivedHistory,
       historyWindowDays,

@@ -1,7 +1,7 @@
 /**
  * IncidentNotificationBridge Tests
  *
- * Focuses on live-toast behavior across history-window refreshes.
+ * Focuses on silent-baseline toast eligibility and sequential queue behavior.
  *
  * @jest-environment jsdom
  */
@@ -11,11 +11,14 @@ import { render, waitFor } from '@testing-library/react-native';
 import { AppState } from 'react-native';
 
 const mockShowToastShow = jest.fn();
+const mockShowToastHide = jest.fn();
 const mockUseSharedIncidents = jest.fn();
 const mockUseIncidentCacheApi = jest.fn(() => ({
   upsertMany: jest.fn(),
   getIncident: jest.fn(),
 }));
+
+let appStateChangeListener: ((nextState: string) => void) | null = null;
 
 jest.mock('expo-notifications', () => ({
   setNotificationHandler: jest.fn(),
@@ -28,6 +31,7 @@ jest.mock('expo-notifications', () => ({
 jest.mock('@components/ui', () => ({
   showToast: {
     show: (...args: unknown[]) => mockShowToastShow(...args),
+    hide: (...args: unknown[]) => mockShowToastHide(...args),
     error: jest.fn(),
   },
 }));
@@ -61,55 +65,156 @@ jest.mock('@lib/notifications/pushRegistration', () => ({
   registerForPushNotificationsAsync: jest.fn().mockResolvedValue(null),
 }));
 
+Object.defineProperty(globalThis, '__DEV__', {
+  value: true,
+  configurable: true,
+  writable: true,
+});
+
 import IncidentNotificationBridge from '../../../components/notifications/IncidentNotificationBridge';
 
 function createIncident(
   incidentId: string,
   overrides: Partial<{
+    eventId: string;
     createdAtMs: number;
+    severity: number;
+    type: string;
+    title: string;
+    address: string;
   }> = {}
 ) {
   return {
     incidentId,
-    eventId: `event-${incidentId}`,
-    title: `Incident ${incidentId}`,
-    createdAtMs: overrides.createdAtMs ?? Date.now(),
+    eventId: overrides.eventId ?? `event-${incidentId}`,
+    title: overrides.title ?? `Incident ${incidentId}`,
+    createdAtMs: overrides.createdAtMs ?? 1_000,
+    severity: overrides.severity ?? 3,
+    type: overrides.type ?? 'fire',
     location: {
-      address: `Address ${incidentId}`,
+      address: overrides.address ?? `Address ${incidentId}`,
     },
   };
 }
 
+function buildSharedIncidentsState(
+  overrides: Partial<{
+    incidents: ReturnType<typeof createIncident>[];
+    updatedIncidents: ReturnType<typeof createIncident>[];
+    hasReceivedHistory: boolean;
+    historyWindowDays: number;
+  }> = {}
+) {
+  return {
+    incidents: [createIncident('a')],
+    updatedIncidents: [],
+    hasReceivedHistory: true,
+    historyWindowDays: 7,
+    ...overrides,
+  };
+}
+
+function setSharedIncidentsState(
+  overrides: Parameters<typeof buildSharedIncidentsState>[0] = {}
+) {
+  mockUseSharedIncidents.mockReturnValue(buildSharedIncidentsState(overrides));
+}
+
+function getShownToast(index = 0) {
+  return mockShowToastShow.mock.calls[index]?.[0] as
+    | {
+        text1?: string;
+        text2?: string;
+        onHide?: () => void;
+      }
+    | undefined;
+}
+
+function triggerAppState(nextState: string) {
+  if (!appStateChangeListener) {
+    throw new Error('AppState listener was not registered');
+  }
+
+  appStateChangeListener(nextState);
+}
+
+async function flushToastTurn() {
+  await new Promise((resolve) => setTimeout(resolve, 0));
+}
+
+function getToastLogCount(consoleInfoSpy: jest.SpyInstance, event: string) {
+  return consoleInfoSpy.mock.calls.filter(([message]) =>
+    String(message).includes(`[IncidentToasts] ${event}`)
+  ).length;
+}
+
 describe('IncidentNotificationBridge', () => {
+  let consoleInfoSpy: jest.SpyInstance;
+
   beforeEach(() => {
     jest.clearAllMocks();
+    appStateChangeListener = null;
+    consoleInfoSpy = jest.spyOn(console, 'info').mockImplementation(() => {});
+
     Object.defineProperty(AppState, 'currentState', {
       value: 'active',
       configurable: true,
     });
-    jest.spyOn(AppState, 'addEventListener').mockReturnValue({
-      remove: jest.fn(),
-    } as any);
-    mockUseSharedIncidents.mockReturnValue({
-      incidents: [createIncident('a')],
-      hasReceivedHistory: true,
-      historyWindowDays: 7,
+
+    jest.spyOn(AppState, 'addEventListener').mockImplementation((_, listener: any) => {
+      appStateChangeListener = listener;
+      return {
+        remove: jest.fn(),
+      } as any;
     });
+
+    setSharedIncidentsState();
   });
 
   afterEach(() => {
+    consoleInfoSpy.mockRestore();
     jest.restoreAllMocks();
   });
 
-  it('shows a toast for a new live incident when the history window is unchanged', async () => {
-    const { rerender } = render(<IncidentNotificationBridge />);
+  it('does not toast initial hydration backlog', () => {
+    render(<IncidentNotificationBridge />);
 
-    mockUseSharedIncidents.mockReturnValue({
-      incidents: [createIncident('a'), createIncident('b')],
-      hasReceivedHistory: true,
-      historyWindowDays: 7,
+    expect(mockShowToastShow).not.toHaveBeenCalled();
+  });
+
+  it('does not toast backlog when the history window changes before the first completed seed', () => {
+    const { rerender } = render(<IncidentNotificationBridge />);
+    const backlogIncident = createIncident('backlog', {
+      eventId: 'event-backlog-v1',
+      createdAtMs: 500,
     });
 
+    setSharedIncidentsState({
+      incidents: [],
+      updatedIncidents: [],
+      hasReceivedHistory: false,
+      historyWindowDays: 30,
+    });
+    rerender(<IncidentNotificationBridge />);
+
+    setSharedIncidentsState({
+      incidents: [createIncident('a'), backlogIncident],
+      updatedIncidents: [backlogIncident],
+      hasReceivedHistory: true,
+      historyWindowDays: 30,
+    });
+    rerender(<IncidentNotificationBridge />);
+
+    expect(mockShowToastShow).not.toHaveBeenCalled();
+  });
+
+  it('shows a toast for a new post-baseline incident from updatedIncidents', async () => {
+    const { rerender } = render(<IncidentNotificationBridge />);
+
+    setSharedIncidentsState({
+      incidents: [createIncident('a'), createIncident('b')],
+      updatedIncidents: [createIncident('b')],
+    });
     rerender(<IncidentNotificationBridge />);
 
     await waitFor(() => {
@@ -123,84 +228,204 @@ describe('IncidentNotificationBridge', () => {
     });
   });
 
-  it('does not toast backlog when the history window changes before initial seeding', () => {
-    mockUseSharedIncidents.mockReturnValue({
-      incidents: [],
-      hasReceivedHistory: false,
-      historyWindowDays: 7,
-    });
-
+  it('dedupes the same incident revision delivered twice in the same batch', async () => {
     const { rerender } = render(<IncidentNotificationBridge />);
+    const incidentB = createIncident('b', { eventId: 'event-b-v1' });
 
-    mockUseSharedIncidents.mockReturnValue({
-      incidents: [],
-      hasReceivedHistory: false,
-      historyWindowDays: 30,
+    setSharedIncidentsState({
+      incidents: [createIncident('a'), incidentB],
+      updatedIncidents: [incidentB, incidentB],
     });
     rerender(<IncidentNotificationBridge />);
 
-    mockUseSharedIncidents.mockReturnValue({
-      incidents: [createIncident('a'), createIncident('older')],
-      hasReceivedHistory: true,
-      historyWindowDays: 30,
+    await waitFor(() => {
+      expect(mockShowToastShow).toHaveBeenCalledTimes(1);
+      expect(mockShowToastShow).toHaveBeenNthCalledWith(
+        1,
+        expect.objectContaining({ text1: 'Incident b' })
+      );
+    });
+  });
+
+  it('does not re-toast a newer non-material revision', async () => {
+    const { rerender } = render(<IncidentNotificationBridge />);
+    const baselineIncident = createIncident('a', {
+      eventId: 'event-a-v1',
+      severity: 3,
+      type: 'fire',
+    });
+
+    setSharedIncidentsState({
+      incidents: [baselineIncident],
+      updatedIncidents: [],
+    });
+    rerender(<IncidentNotificationBridge />);
+
+    const newerRevision = createIncident('a', {
+      eventId: 'event-a-v2',
+      severity: 3,
+      type: 'fire',
+      title: 'Updated title only',
+    });
+
+    setSharedIncidentsState({
+      incidents: [newerRevision],
+      updatedIncidents: [newerRevision],
     });
     rerender(<IncidentNotificationBridge />);
 
     expect(mockShowToastShow).not.toHaveBeenCalled();
   });
 
-  it('does not toast historical backfill after a history-window change', () => {
-    const nowSpy = jest.spyOn(Date, 'now').mockReturnValue(1_000_000);
+  it('re-toasts a material severity change for the same incident revision stream', async () => {
     const { rerender } = render(<IncidentNotificationBridge />);
+    const firstInsert = createIncident('b', {
+      eventId: 'event-b-v1',
+      severity: 3,
+      type: 'fire',
+    });
 
-    try {
-      mockUseSharedIncidents.mockReturnValue({
-        incidents: [createIncident('a', { createdAtMs: 800_000 })],
-        hasReceivedHistory: false,
-        historyWindowDays: 30,
-      });
-      rerender(<IncidentNotificationBridge />);
+    setSharedIncidentsState({
+      incidents: [createIncident('a'), firstInsert],
+      updatedIncidents: [firstInsert],
+    });
+    rerender(<IncidentNotificationBridge />);
 
-      mockUseSharedIncidents.mockReturnValue({
-        incidents: [
-          createIncident('a', { createdAtMs: 800_000 }),
-          createIncident('older', { createdAtMs: 900_000 }),
-        ],
-        hasReceivedHistory: true,
-        historyWindowDays: 30,
-      });
-      rerender(<IncidentNotificationBridge />);
+    await waitFor(() => {
+      expect(mockShowToastShow).toHaveBeenCalledTimes(1);
+    });
 
-      expect(mockShowToastShow).not.toHaveBeenCalled();
-    } finally {
-      nowSpy.mockRestore();
-    }
+    getShownToast(0)?.onHide?.();
+    await flushToastTurn();
+
+    const severityUpdate = createIncident('b', {
+      eventId: 'event-b-v2',
+      severity: 4,
+      type: 'fire',
+    });
+
+    setSharedIncidentsState({
+      incidents: [createIncident('a'), severityUpdate],
+      updatedIncidents: [severityUpdate],
+    });
+    rerender(<IncidentNotificationBridge />);
+
+    await waitFor(() => {
+      expect(mockShowToastShow).toHaveBeenCalledTimes(2);
+      expect(mockShowToastShow).toHaveBeenNthCalledWith(
+        2,
+        expect.objectContaining({ text1: 'Incident b' })
+      );
+    });
   });
 
-  it('still toasts live incidents that arrive during the refresh window', async () => {
-    const nowSpy = jest.spyOn(Date, 'now').mockReturnValue(1_000_000);
+  it('drops queued old-epoch backlog when a new baseline starts but lets the current toast finish', async () => {
     const { rerender } = render(<IncidentNotificationBridge />);
+    const incidentB = createIncident('b', { eventId: 'event-b-v1', createdAtMs: 2_000 });
+    const incidentC = createIncident('c', { eventId: 'event-c-v1', createdAtMs: 3_000 });
 
-    mockUseSharedIncidents.mockReturnValue({
+    setSharedIncidentsState({
+      incidents: [createIncident('a'), incidentB, incidentC],
+      updatedIncidents: [incidentB, incidentC],
+    });
+    rerender(<IncidentNotificationBridge />);
+
+    await waitFor(() => {
+      expect(mockShowToastShow).toHaveBeenCalledTimes(1);
+      expect(mockShowToastShow).toHaveBeenNthCalledWith(
+        1,
+        expect.objectContaining({ text1: 'Incident b' })
+      );
+    });
+
+    setSharedIncidentsState({
+      incidents: [createIncident('a'), incidentB, incidentC],
+      updatedIncidents: [],
+      hasReceivedHistory: false,
+    });
+    rerender(<IncidentNotificationBridge />);
+
+    getShownToast(0)?.onHide?.();
+    await flushToastTurn();
+
+    expect(mockShowToastShow).toHaveBeenCalledTimes(1);
+
+    setSharedIncidentsState({
+      incidents: [createIncident('a'), incidentB, incidentC],
+      updatedIncidents: [],
+      hasReceivedHistory: true,
+    });
+    rerender(<IncidentNotificationBridge />);
+
+    expect(mockShowToastShow).toHaveBeenCalledTimes(1);
+  });
+
+  it('absorbs stale updatedIncidents when a silent baseline completes', () => {
+    const { rerender } = render(<IncidentNotificationBridge />);
+    const incidentB = createIncident('b', { eventId: 'event-b-v1' });
+
+    setSharedIncidentsState({
       incidents: [createIncident('a')],
+      updatedIncidents: [],
+      hasReceivedHistory: false,
+    });
+    rerender(<IncidentNotificationBridge />);
+
+    setSharedIncidentsState({
+      incidents: [createIncident('a'), incidentB],
+      updatedIncidents: [incidentB],
+      hasReceivedHistory: true,
+    });
+    rerender(<IncidentNotificationBridge />);
+
+    expect(mockShowToastShow).not.toHaveBeenCalled();
+  });
+
+  it('keeps refresh backlog silent but still toasts a genuinely new post-refresh incident after a seeded baseline', async () => {
+    const nowSpy = jest.spyOn(Date, 'now').mockReturnValue(10_000);
+    const { rerender } = render(<IncidentNotificationBridge />);
+    const preservedIncident = createIncident('a', {
+      eventId: 'event-a-v1',
+      createdAtMs: 1_000,
+    });
+    const refreshBackfill = createIncident('b', {
+      eventId: 'event-b-v1',
+      createdAtMs: 2_000,
+    });
+    const liveIncident = createIncident('c', {
+      eventId: 'event-c-v1',
+      createdAtMs: 11_000,
+    });
+
+    setSharedIncidentsState({
+      incidents: [preservedIncident],
+      updatedIncidents: [],
+      hasReceivedHistory: true,
+      historyWindowDays: 7,
+    });
+    rerender(<IncidentNotificationBridge />);
+
+    setSharedIncidentsState({
+      incidents: [preservedIncident],
+      updatedIncidents: [],
       hasReceivedHistory: false,
       historyWindowDays: 30,
     });
     rerender(<IncidentNotificationBridge />);
 
-    mockUseSharedIncidents.mockReturnValue({
-      incidents: [],
-      hasReceivedHistory: false,
+    setSharedIncidentsState({
+      incidents: [preservedIncident, refreshBackfill],
+      updatedIncidents: [refreshBackfill],
+      hasReceivedHistory: true,
       historyWindowDays: 30,
     });
     rerender(<IncidentNotificationBridge />);
 
-    mockUseSharedIncidents.mockReturnValue({
-      incidents: [
-        createIncident('a', { createdAtMs: 800_000 }),
-        createIncident('backfill', { createdAtMs: 900_000 }),
-        createIncident('live', { createdAtMs: 1_100_000 }),
-      ],
+    expect(mockShowToastShow).not.toHaveBeenCalled();
+
+    setSharedIncidentsState({
+      incidents: [preservedIncident, refreshBackfill, liveIncident],
+      updatedIncidents: [liveIncident],
       hasReceivedHistory: true,
       historyWindowDays: 30,
     });
@@ -210,12 +435,188 @@ describe('IncidentNotificationBridge', () => {
       expect(mockShowToastShow).toHaveBeenCalledTimes(1);
       expect(mockShowToastShow).toHaveBeenCalledWith(
         expect.objectContaining({
-          text1: 'Incident live',
-          text2: 'Address live',
+          text1: 'Incident c',
+          text2: 'Address c',
         })
       );
     });
 
     nowSpy.mockRestore();
   });
+
+  it('keeps an older post-refresh insert silent when it predates the current baseline', () => {
+    const { rerender } = render(<IncidentNotificationBridge />);
+    const staleIncident = createIncident('stale', {
+      eventId: 'event-stale-v1',
+      createdAtMs: 1,
+    });
+
+    setSharedIncidentsState({
+      incidents: [createIncident('a')],
+      updatedIncidents: [],
+      hasReceivedHistory: false,
+    });
+    rerender(<IncidentNotificationBridge />);
+
+    setSharedIncidentsState({
+      incidents: [createIncident('a')],
+      updatedIncidents: [],
+      hasReceivedHistory: true,
+    });
+    rerender(<IncidentNotificationBridge />);
+
+    setSharedIncidentsState({
+      incidents: [createIncident('a'), staleIncident],
+      updatedIncidents: [staleIncident],
+      hasReceivedHistory: true,
+    });
+    rerender(<IncidentNotificationBridge />);
+
+    expect(mockShowToastShow).not.toHaveBeenCalled();
+  });
+
+  it('keeps a same revision silent after a baseline reset and reconnect replay', async () => {
+    const { rerender } = render(<IncidentNotificationBridge />);
+    const incidentB = createIncident('b', { eventId: 'event-b-v1' });
+
+    setSharedIncidentsState({
+      incidents: [createIncident('a'), incidentB],
+      updatedIncidents: [incidentB],
+    });
+    rerender(<IncidentNotificationBridge />);
+
+    await waitFor(() => {
+      expect(mockShowToastShow).toHaveBeenCalledTimes(1);
+    });
+
+    getShownToast(0)?.onHide?.();
+    await flushToastTurn();
+
+    setSharedIncidentsState({
+      incidents: [createIncident('a')],
+      updatedIncidents: [],
+      hasReceivedHistory: false,
+    });
+    rerender(<IncidentNotificationBridge />);
+
+    setSharedIncidentsState({
+      incidents: [createIncident('a'), incidentB],
+      updatedIncidents: [],
+      hasReceivedHistory: true,
+    });
+    rerender(<IncidentNotificationBridge />);
+
+    setSharedIncidentsState({
+      incidents: [createIncident('a'), incidentB],
+      updatedIncidents: [incidentB],
+      hasReceivedHistory: true,
+    });
+    rerender(<IncidentNotificationBridge />);
+
+    expect(mockShowToastShow).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps background-to-foreground resume silent for already visible incidents', async () => {
+    const { rerender } = render(<IncidentNotificationBridge />);
+    const incidentB = createIncident('b', { eventId: 'event-b-v1' });
+
+    triggerAppState('background');
+
+    setSharedIncidentsState({
+      incidents: [createIncident('a'), incidentB],
+      updatedIncidents: [incidentB],
+      hasReceivedHistory: true,
+    });
+    rerender(<IncidentNotificationBridge />);
+
+    expect(mockShowToastShow).not.toHaveBeenCalled();
+
+    triggerAppState('active');
+
+    setSharedIncidentsState({
+      incidents: [createIncident('a'), incidentB],
+      updatedIncidents: [incidentB],
+      hasReceivedHistory: true,
+    });
+    rerender(<IncidentNotificationBridge />);
+
+    expect(mockShowToastShow).not.toHaveBeenCalled();
+  });
+
+  it('does not arm a later toast storm when the history window changes while the app is inactive before first seed completes', () => {
+    const { rerender } = render(<IncidentNotificationBridge />);
+    const backlogIncident = createIncident('backlog', {
+      eventId: 'event-backlog-v1',
+      createdAtMs: 750,
+    });
+
+    triggerAppState('background');
+
+    setSharedIncidentsState({
+      incidents: [],
+      updatedIncidents: [],
+      hasReceivedHistory: false,
+      historyWindowDays: 30,
+    });
+    rerender(<IncidentNotificationBridge />);
+
+    setSharedIncidentsState({
+      incidents: [createIncident('a'), backlogIncident],
+      updatedIncidents: [backlogIncident],
+      hasReceivedHistory: true,
+      historyWindowDays: 30,
+    });
+    rerender(<IncidentNotificationBridge />);
+
+    expect(mockShowToastShow).not.toHaveBeenCalled();
+
+    triggerAppState('active');
+
+    setSharedIncidentsState({
+      incidents: [createIncident('a'), backlogIncident],
+      updatedIncidents: [backlogIncident],
+      hasReceivedHistory: true,
+      historyWindowDays: 30,
+    });
+    rerender(<IncidentNotificationBridge />);
+
+    expect(mockShowToastShow).not.toHaveBeenCalled();
+  });
+
+  it('starts the baseline only once across overlapping refresh-cycle triggers', async () => {
+    const { rerender } = render(<IncidentNotificationBridge />);
+    const incidentB = createIncident('b', { eventId: 'event-b-v1', createdAtMs: 2_000 });
+    const incidentC = createIncident('c', { eventId: 'event-c-v1', createdAtMs: 3_000 });
+
+    setSharedIncidentsState({
+      incidents: [createIncident('a'), incidentB, incidentC],
+      updatedIncidents: [incidentB, incidentC],
+    });
+    rerender(<IncidentNotificationBridge />);
+
+    await waitFor(() => {
+      expect(mockShowToastShow).toHaveBeenCalledTimes(1);
+    });
+
+    setSharedIncidentsState({
+      incidents: [createIncident('a'), incidentB, incidentC],
+      updatedIncidents: [],
+      hasReceivedHistory: false,
+    });
+    rerender(<IncidentNotificationBridge />);
+
+    setSharedIncidentsState({
+      incidents: [createIncident('a'), incidentB, incidentC],
+      updatedIncidents: [],
+      hasReceivedHistory: false,
+    });
+    rerender(<IncidentNotificationBridge />);
+
+    getShownToast(0)?.onHide?.();
+    await flushToastTurn();
+
+    expect(getToastLogCount(consoleInfoSpy, 'baseline started')).toBe(1);
+    expect(mockShowToastShow).toHaveBeenCalledTimes(1);
+  });
+
 });

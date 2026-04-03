@@ -4,6 +4,7 @@ import * as Notifications from 'expo-notifications';
 
 import { showToast } from '@components/ui';
 import { useIncidentCacheApi, useSharedIncidents } from '@contexts';
+import type { ProcessedIncident } from '@hooks';
 import { toProcessedIncident } from '@hooks/useIncidentSubscription';
 import { navigationRef, type RootStackParamList } from '@lib/navigation';
 import { saveExpoPushToken } from '@lib/notifications/pushTokenStorage';
@@ -38,31 +39,48 @@ type ToastableIncident = {
   eventId: string;
   title: string;
   createdAtMs: number;
+  severity: ProcessedIncident['severity'];
+  type: ProcessedIncident['type'];
   location: {
     address: string;
   };
 };
 
-type RefreshPhase = 'idle' | 'awaiting-start' | 'active';
+type KnownIncidentSnapshot = {
+  incidentId: string;
+  eventId: string;
+  severity: ProcessedIncident['severity'];
+  type: ProcessedIncident['type'];
+};
 
-function showIncidentToasts(
-  incidents: readonly ToastableIncident[],
-  handleIncidentNotification: (payload: IncidentNotificationPayload) => Promise<void>
-) {
-  incidents.forEach((incident) => {
-    showToast.show({
-      type: 'info',
-      text1: incident.title,
-      text2: incident.location.address,
-      visibilityTime: 5000,
-      onPress: () =>
-        handleIncidentNotification({
-          incidentId: incident.incidentId,
-          eventId: incident.eventId,
-        }),
-    });
-  });
+type ToastTriggerSource = 'live-insert' | 'live-update';
+const INCIDENT_TOAST_VISIBILITY_MS = 5000;
+
+function logIncidentToastEvent(event: string, details?: Record<string, unknown>) {
+  if (!__DEV__) {
+    return;
+  }
+
+  if (details) {
+    console.info(`[IncidentToasts] ${event}`, details);
+    return;
+  }
+
+  console.info(`[IncidentToasts] ${event}`);
 }
+
+type QueuedIncidentToast = ToastableIncident & {
+  queueKey: string;
+  source: ToastTriggerSource;
+  epoch: number;
+};
+
+type ActiveQueuedToast = {
+  queueKey: string;
+  incidentId: string;
+  eventId: string;
+  epoch: number;
+};
 
 function navigateToIncidentDetail(params: RootStackParamList['IncidentDetail']) {
   if (!navigationRef.isReady()) {
@@ -72,17 +90,50 @@ function navigateToIncidentDetail(params: RootStackParamList['IncidentDetail']) 
   navigationRef.navigate('IncidentDetail', params);
 }
 
-function useAppStateRef() {
-  const appStateRef = useRef(AppState.currentState);
+function isAppStateActive(state: string) {
+  return state !== 'background' && state !== 'inactive';
+}
 
-  useEffect(() => {
-    const subscription = AppState.addEventListener('change', (nextState) => {
-      appStateRef.current = nextState;
-    });
-    return () => subscription.remove();
-  }, []);
+function toToastableIncident(incident: ProcessedIncident): ToastableIncident {
+  return {
+    incidentId: incident.incidentId,
+    eventId: incident.eventId,
+    title: incident.title,
+    createdAtMs: incident.createdAtMs,
+    severity: incident.severity,
+    type: incident.type,
+    location: {
+      address: incident.location.address,
+    },
+  };
+}
 
-  return appStateRef;
+function toKnownIncidentSnapshot(incident: ProcessedIncident): KnownIncidentSnapshot {
+  return {
+    incidentId: incident.incidentId,
+    eventId: incident.eventId,
+    severity: incident.severity,
+    type: incident.type,
+  };
+}
+
+function createKnownSnapshotState(incidents: readonly ProcessedIncident[]) {
+  const snapshotByIncidentId = new Map<string, KnownIncidentSnapshot>();
+  const revisionByIncidentId = new Map<string, string>();
+
+  incidents.forEach((incident) => {
+    snapshotByIncidentId.set(incident.incidentId, toKnownIncidentSnapshot(incident));
+    revisionByIncidentId.set(incident.incidentId, incident.eventId);
+  });
+
+  return {
+    snapshotByIncidentId,
+    revisionByIncidentId,
+  };
+}
+
+function getQueuedToastKey(incident: Pick<ToastableIncident, 'incidentId' | 'eventId'>) {
+  return `${incident.incidentId}:${incident.eventId}`;
 }
 
 function useHandleIncidentNotification() {
@@ -197,108 +248,367 @@ function useNotificationTapHandlers(
 }
 
 function useLiveIncidentToasts(
-  appStateRef: React.MutableRefObject<string>,
   handleIncidentNotification: (payload: IncidentNotificationPayload) => Promise<void>
 ) {
-  const { incidents, hasReceivedHistory, historyWindowDays } = useSharedIncidents();
+  const { incidents, updatedIncidents, hasReceivedHistory } = useSharedIncidents();
+  const appStateRef = useRef(AppState.currentState);
   const hasSeededRef = useRef(false);
-  const seenIncidentIdsRef = useRef<Set<string>>(new Set());
-  const previousHistoryWindowDaysRef = useRef(historyWindowDays);
-  const refreshPhaseRef = useRef<RefreshPhase>('idle');
-  const refreshStartedAtMsRef = useRef<number | null>(null);
+  const baselineActiveRef = useRef(false);
+  const baselineEpochRef = useRef(0);
+  const notificationEligibilityStartedAtMsRef = useRef(0);
+  const previousHasReceivedHistoryRef = useRef(hasReceivedHistory);
+  const knownSnapshotByIncidentIdRef = useRef<Map<string, KnownIncidentSnapshot>>(new Map());
+  const knownRevisionByIncidentIdRef = useRef<Map<string, string>>(new Map());
+  const lastNotifiedRevisionByIncidentIdRef = useRef<Map<string, string>>(new Map());
+  const queuedToastsRef = useRef<Map<string, QueuedIncidentToast>>(new Map());
+  const queuedToastOrderRef = useRef<string[]>([]);
+  const activeToastRef = useRef<ActiveQueuedToast | null>(null);
+  const pendingNextToastTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  useEffect(() => {
-    if (previousHistoryWindowDaysRef.current === historyWindowDays) {
-      return;
+  const clearPendingNextToastTimeout = useCallback(() => {
+    if (pendingNextToastTimeoutRef.current != null) {
+      clearTimeout(pendingNextToastTimeoutRef.current);
+      pendingNextToastTimeoutRef.current = null;
     }
+  }, []);
 
-    previousHistoryWindowDaysRef.current = historyWindowDays;
-    refreshStartedAtMsRef.current = null;
+  const clearQueuedBacklog = useCallback(() => {
+    const droppedQueuedCount = queuedToastOrderRef.current.length;
+    clearPendingNextToastTimeout();
+    queuedToastsRef.current.clear();
+    queuedToastOrderRef.current = [];
+    return droppedQueuedCount;
+  }, [clearPendingNextToastTimeout]);
 
-    if (!hasSeededRef.current) {
-      refreshPhaseRef.current = 'idle';
-      return;
-    }
+  const startSilentBaseline = useCallback(
+    (reason: string) => {
+      if (baselineActiveRef.current) {
+        return false;
+      }
 
-    if (hasReceivedHistory) {
-      refreshPhaseRef.current = 'awaiting-start';
-      return;
-    }
+      baselineActiveRef.current = true;
+      baselineEpochRef.current += 1;
+      notificationEligibilityStartedAtMsRef.current = Date.now();
+      const droppedQueuedCount = clearQueuedBacklog();
 
-    refreshPhaseRef.current = 'active';
-    refreshStartedAtMsRef.current = Date.now();
-  }, [hasReceivedHistory, historyWindowDays]);
-
-  useEffect(() => {
-    if (!hasReceivedHistory) return;
-
-    if (refreshPhaseRef.current === 'active') {
-      const refreshStartedAtMs = refreshStartedAtMsRef.current;
-      const arrivedDuringRefresh = incidents.filter((incident) => {
-        if (seenIncidentIdsRef.current.has(incident.incidentId)) {
-          return false;
-        }
-
-        if (refreshStartedAtMs == null) {
-          return false;
-        }
-
-        return incident.createdAtMs >= refreshStartedAtMs;
+      logIncidentToastEvent('baseline started', {
+        reason,
+        epoch: baselineEpochRef.current,
+        droppedQueuedCount,
+        hasActiveToast: activeToastRef.current != null,
       });
 
-      incidents.forEach((incident) => {
-        seenIncidentIdsRef.current.add(incident.incidentId);
+      return true;
+    },
+    [clearQueuedBacklog]
+  );
+
+  const completeSilentBaseline = useCallback((
+    reason: string,
+    nextIncidents: readonly ProcessedIncident[],
+    absorbedUpdatedIncidents: readonly ProcessedIncident[] = []
+  ) => {
+    const { snapshotByIncidentId, revisionByIncidentId } = createKnownSnapshotState(nextIncidents);
+
+    absorbedUpdatedIncidents.forEach((incident) => {
+      snapshotByIncidentId.set(incident.incidentId, toKnownIncidentSnapshot(incident));
+      revisionByIncidentId.set(incident.incidentId, incident.eventId);
+    });
+
+    knownSnapshotByIncidentIdRef.current = snapshotByIncidentId;
+    knownRevisionByIncidentIdRef.current = revisionByIncidentId;
+    baselineActiveRef.current = false;
+    hasSeededRef.current = true;
+
+    logIncidentToastEvent('baseline completed', {
+      reason,
+      epoch: baselineEpochRef.current,
+      visibleIncidentCount: nextIncidents.length,
+    });
+  }, []);
+
+  const showNextQueuedToast = useCallback(() => {
+    clearPendingNextToastTimeout();
+
+    if (activeToastRef.current != null) {
+      return;
+    }
+
+    while (queuedToastOrderRef.current.length > 0) {
+      const queueKey = queuedToastOrderRef.current[0];
+      const nextToast = queuedToastsRef.current.get(queueKey);
+
+      if (!nextToast) {
+        queuedToastOrderRef.current.shift();
+        continue;
+      }
+
+      if (nextToast.epoch < baselineEpochRef.current) {
+        queuedToastsRef.current.delete(queueKey);
+        queuedToastOrderRef.current.shift();
+        logIncidentToastEvent('drop queued toast from older epoch', {
+          queueKey,
+          incidentId: nextToast.incidentId,
+          queuedEpoch: nextToast.epoch,
+          currentEpoch: baselineEpochRef.current,
+        });
+        continue;
+      }
+
+      activeToastRef.current = {
+        queueKey,
+        incidentId: nextToast.incidentId,
+        eventId: nextToast.eventId,
+        epoch: nextToast.epoch,
+      };
+
+      lastNotifiedRevisionByIncidentIdRef.current.set(
+        nextToast.incidentId,
+        nextToast.eventId
+      );
+
+      logIncidentToastEvent('showToast.show', {
+        source: nextToast.source,
+        incidentId: nextToast.incidentId,
+        eventId: nextToast.eventId,
+        title: nextToast.title,
+        address: nextToast.location.address,
+        createdAtMs: nextToast.createdAtMs,
       });
 
-      refreshPhaseRef.current = 'idle';
-      refreshStartedAtMsRef.current = null;
+      showToast.show({
+        type: 'info',
+        text1: nextToast.title,
+        text2: nextToast.location.address,
+        visibilityTime: INCIDENT_TOAST_VISIBILITY_MS,
+        onPress: () => {
+          const currentToast = queuedToastsRef.current.get(queueKey) ?? nextToast;
 
-      if (appStateRef.current !== 'active' || arrivedDuringRefresh.length === 0) {
+          void handleIncidentNotification({
+            incidentId: currentToast.incidentId,
+            eventId: currentToast.eventId,
+          });
+        },
+        onHide: () => {
+          const activeToast = activeToastRef.current;
+          if (!activeToast || activeToast.queueKey !== queueKey) {
+            return;
+          }
+
+          const queuedCountBeforeDelete = queuedToastOrderRef.current.length;
+          activeToastRef.current = null;
+          queuedToastsRef.current.delete(queueKey);
+          queuedToastOrderRef.current = queuedToastOrderRef.current.filter(
+            (queuedKey) => queuedKey !== queueKey
+          );
+
+          logIncidentToastEvent('active toast cleared', {
+            queueKey,
+            incidentId: activeToast.incidentId,
+            queuedCountBeforeDelete,
+            queuedCountAfterDelete: queuedToastOrderRef.current.length,
+          });
+
+          if (
+            pendingNextToastTimeoutRef.current == null &&
+            queuedToastOrderRef.current.length > 0
+          ) {
+            logIncidentToastEvent('schedule next toast after hide', {
+              nextQueueKey: queuedToastOrderRef.current[0],
+              queuedCount: queuedToastOrderRef.current.length,
+            });
+
+            pendingNextToastTimeoutRef.current = setTimeout(() => {
+              pendingNextToastTimeoutRef.current = null;
+              showNextQueuedToast();
+            }, 0);
+          }
+        },
+      });
+      return;
+    }
+  }, [clearPendingNextToastTimeout, handleIncidentNotification]);
+
+  const enqueueIncidentToasts = useCallback(
+    (incidentsToQueue: readonly ToastableIncident[], source: ToastTriggerSource) => {
+      if (incidentsToQueue.length === 0) {
         return;
       }
 
-      showIncidentToasts(arrivedDuringRefresh, handleIncidentNotification);
-      return;
-    }
+      logIncidentToastEvent('displaying toasts', {
+        source,
+        count: incidentsToQueue.length,
+        incidentIds: incidentsToQueue.map((incident) => incident.incidentId),
+        titles: incidentsToQueue.map((incident) => incident.title),
+      });
 
-    if (!hasSeededRef.current) {
-      seenIncidentIdsRef.current = new Set(
-        incidents.map((incident) => incident.incidentId)
-      );
-      hasSeededRef.current = true;
-      return;
-    }
+      incidentsToQueue.forEach((incident) => {
+        const queueKey = getQueuedToastKey(incident);
+        if (queuedToastsRef.current.has(queueKey)) {
+          return;
+        }
 
-    if (appStateRef.current !== 'active') return;
+        const queuedToast: QueuedIncidentToast = {
+          ...incident,
+          queueKey,
+          source,
+          epoch: baselineEpochRef.current,
+        };
 
-    const newIncidents = incidents.filter(
-      (incident) => !seenIncidentIdsRef.current.has(incident.incidentId)
-    );
-    if (newIncidents.length === 0) return;
+        queuedToastsRef.current.set(queueKey, queuedToast);
+        queuedToastOrderRef.current.push(queueKey);
+      });
 
-    newIncidents.forEach((incident) => {
-      seenIncidentIdsRef.current.add(incident.incidentId);
-    });
-    showIncidentToasts(newIncidents, handleIncidentNotification);
-  }, [appStateRef, handleIncidentNotification, hasReceivedHistory, incidents]);
+      showNextQueuedToast();
+    },
+    [showNextQueuedToast]
+  );
 
   useEffect(() => {
-    if (hasReceivedHistory || refreshPhaseRef.current !== 'awaiting-start') {
+    const previousHasReceivedHistory = previousHasReceivedHistoryRef.current;
+    previousHasReceivedHistoryRef.current = hasReceivedHistory;
+
+    if (!hasSeededRef.current) {
+      if (!hasReceivedHistory) {
+        startSilentBaseline('initial-history');
+        return;
+      }
+
+      completeSilentBaseline('initial-history-complete', incidents, updatedIncidents);
       return;
     }
 
-    refreshPhaseRef.current = 'active';
-    refreshStartedAtMsRef.current = Date.now();
-  }, [hasReceivedHistory]);
+    if (previousHasReceivedHistory && !hasReceivedHistory) {
+      startSilentBaseline('subscription-refresh');
+      return;
+    }
+
+    if (!previousHasReceivedHistory && hasReceivedHistory && baselineActiveRef.current) {
+      completeSilentBaseline(
+        'subscription-refresh-complete',
+        incidents,
+        updatedIncidents
+      );
+    }
+  }, [
+    completeSilentBaseline,
+    hasReceivedHistory,
+    incidents,
+    startSilentBaseline,
+    updatedIncidents,
+  ]);
+
+  useEffect(() => {
+    const liveInsertToasts: ToastableIncident[] = [];
+    const liveUpdateToasts: ToastableIncident[] = [];
+
+    if (
+      !hasSeededRef.current ||
+      baselineActiveRef.current ||
+      !hasReceivedHistory ||
+      !isAppStateActive(appStateRef.current) ||
+      updatedIncidents.length === 0
+    ) {
+      return;
+    }
+
+    updatedIncidents.forEach((incident) => {
+      const previousSnapshot = knownSnapshotByIncidentIdRef.current.get(incident.incidentId);
+      const previousRevision = knownRevisionByIncidentIdRef.current.get(incident.incidentId);
+      const nextSnapshot = toKnownIncidentSnapshot(incident);
+
+      knownSnapshotByIncidentIdRef.current.set(incident.incidentId, nextSnapshot);
+      knownRevisionByIncidentIdRef.current.set(incident.incidentId, incident.eventId);
+
+      if (previousRevision === incident.eventId) {
+        return;
+      }
+
+      if (
+        lastNotifiedRevisionByIncidentIdRef.current.get(incident.incidentId) ===
+        incident.eventId
+      ) {
+        return;
+      }
+
+      if (!previousSnapshot) {
+        if (incident.createdAtMs < notificationEligibilityStartedAtMsRef.current) {
+          return;
+        }
+
+        liveInsertToasts.push(toToastableIncident(incident));
+        return;
+      }
+
+      const hasMaterialChange =
+        previousSnapshot.severity !== incident.severity ||
+        previousSnapshot.type !== incident.type;
+
+      if (!hasMaterialChange) {
+        return;
+      }
+
+      if (incident.createdAtMs < notificationEligibilityStartedAtMsRef.current) {
+        return;
+      }
+
+      liveUpdateToasts.push(toToastableIncident(incident));
+    });
+
+    if (liveInsertToasts.length > 0) {
+      enqueueIncidentToasts(liveInsertToasts, 'live-insert');
+    }
+
+    if (liveUpdateToasts.length > 0) {
+      enqueueIncidentToasts(liveUpdateToasts, 'live-update');
+    }
+  }, [enqueueIncidentToasts, hasReceivedHistory, updatedIncidents]);
+
+  useEffect(() => {
+    const subscription = AppState.addEventListener('change', (nextState) => {
+      const previousState = appStateRef.current;
+      appStateRef.current = nextState;
+
+      if (
+        !hasSeededRef.current ||
+        isAppStateActive(previousState) ||
+        !isAppStateActive(nextState)
+      ) {
+        return;
+      }
+
+      startSilentBaseline('app-resume');
+
+      if (hasReceivedHistory) {
+        completeSilentBaseline('app-resume', incidents, updatedIncidents);
+      }
+    });
+
+    return () => subscription.remove();
+  }, [
+    completeSilentBaseline,
+    hasReceivedHistory,
+    incidents,
+    startSilentBaseline,
+    updatedIncidents,
+  ]);
+
+  useEffect(() => {
+    return () => {
+      clearPendingNextToastTimeout();
+      activeToastRef.current = null;
+      queuedToastsRef.current.clear();
+      queuedToastOrderRef.current = [];
+    };
+  }, [clearPendingNextToastTimeout]);
 }
 
 export default function IncidentNotificationBridge() {
-  const appStateRef = useAppStateRef();
   const handleIncidentNotification = useHandleIncidentNotification();
 
   usePushRegistration();
   useNotificationTapHandlers(handleIncidentNotification);
-  useLiveIncidentToasts(appStateRef, handleIncidentNotification);
+  useLiveIncidentToasts(handleIncidentNotification);
 
   return null;
 }
