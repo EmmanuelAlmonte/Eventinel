@@ -617,43 +617,49 @@ describe('useIncidentSubscription', () => {
     });
 
     it('uses incidentId as a stable tie-breaker when distance and recency match', async () => {
-      const fixedOccurredAt = '2026-01-01T12:00:00.000Z';
-      const fixedCreatedAt = Math.floor(Date.parse(fixedOccurredAt) / 1000);
+      const fixedNowMs = 1_735_689_600_000;
+      const nowSpy = jest.spyOn(Date, 'now').mockReturnValue(fixedNowMs);
+      const fixedOccurredAt = new Date(fixedNowMs - 3600 * 1000).toISOString();
+      const fixedCreatedAt = Math.floor((fixedNowMs - 3600 * 1000) / 1000);
 
-      const incidentB = createMockIncidentEvent({
-        id: 'event-b',
-        incidentId: 'incident-b',
-        title: 'Incident B',
-        created_at: fixedCreatedAt,
-        occurredAt: fixedOccurredAt,
-        lat: 40.7128,
-        lng: -74.006,
-      });
-      const incidentA = createMockIncidentEvent({
-        id: 'event-a',
-        incidentId: 'incident-a',
-        title: 'Incident A',
-        created_at: fixedCreatedAt,
-        occurredAt: fixedOccurredAt,
-        lat: 40.7128,
-        lng: -74.006,
-      });
+      try {
+        const incidentB = createMockIncidentEvent({
+          id: 'event-b',
+          incidentId: 'incident-b',
+          title: 'Incident B',
+          created_at: fixedCreatedAt,
+          occurredAt: fixedOccurredAt,
+          lat: 39.9526,
+          lng: -75.1652,
+        });
+        const incidentA = createMockIncidentEvent({
+          id: 'event-a',
+          incidentId: 'incident-a',
+          title: 'Incident A',
+          created_at: fixedCreatedAt,
+          occurredAt: fixedOccurredAt,
+          lat: 39.9526,
+          lng: -75.1652,
+        });
 
-      mockSubscription.setEvents([incidentB, incidentA]);
-      mockSubscription.setEose(true);
+        mockSubscription.setEvents([incidentB, incidentA]);
+        mockSubscription.setEose(true);
 
-      const { result } = renderHook(() =>
-        useIncidentSubscription({
-          location: [-74.006, 40.7128],
-          sinceDays: 365,
-        })
-      );
+        const { result } = renderHook(() =>
+          useIncidentSubscription({
+            location: [-75.1652, 39.9526],
+            sinceDays: 30,
+          })
+        );
 
-      await waitFor(() => {
-        expect(result.current.incidents.length).toBe(2);
-        expect(result.current.incidents[0].incidentId).toBe('incident-a');
-        expect(result.current.incidents[1].incidentId).toBe('incident-b');
-      });
+        await waitFor(() => {
+          expect(result.current.incidents.length).toBe(2);
+          expect(result.current.incidents[0].incidentId).toBe('incident-a');
+          expect(result.current.incidents[1].incidentId).toBe('incident-b');
+        });
+      } finally {
+        nowSpy.mockRestore();
+      }
     });
 
     it('re-sorts existing incidents when location changes', async () => {
@@ -1307,6 +1313,152 @@ describe('useIncidentSubscription', () => {
         });
 
         expect(result.current.totalEventsReceived).toBe(0);
+      } finally {
+        nowSpy.mockRestore();
+      }
+    });
+
+    it('preserves already-visible in-window incidents when sinceDays changes and replay does not re-emit them', async () => {
+      const fixedNowMs = 1_735_689_600_000;
+      const nowSpy = jest.spyOn(Date, 'now').mockReturnValue(fixedNowMs);
+
+      try {
+        const freshVisibleEvent = createMockIncidentEvent({
+          incidentId: 'fresh-visible-incident',
+          title: 'Fresh Visible Incident',
+          created_at: Math.floor(fixedNowMs / 1000) - 3600,
+          occurredAt: new Date(fixedNowMs - 3600 * 1000).toISOString(),
+        });
+
+        mockSubscription.setEvents([freshVisibleEvent]);
+        mockSubscription.setEose(true);
+
+        const { result, rerender } = renderHook(
+          ({ sinceDays }) =>
+            useIncidentSubscription({
+              location: [-75.1652, 39.9526],
+              sinceDays,
+            }),
+          {
+            initialProps: { sinceDays: 30 },
+          }
+        );
+
+        await waitFor(() => {
+          expect(result.current.incidents.map((incident) => incident.incidentId)).toEqual([
+            'fresh-visible-incident',
+          ]);
+        });
+
+        mockSubscription.setEvents([]);
+        mockSubscription.setEose(false);
+        rerender({ sinceDays: 1 });
+
+        await waitFor(() => {
+          expect(result.current.incidents.map((incident) => incident.incidentId)).toEqual([
+            'fresh-visible-incident',
+          ]);
+          expect(result.current.hasReceivedHistory).toBe(false);
+        });
+      } finally {
+        nowSpy.mockRestore();
+      }
+    });
+
+    it('removes already-visible incidents that are outside the narrowed window even when replay does not re-emit them', async () => {
+      const fixedNowMs = 1_735_689_600_000;
+      const nowSpy = jest.spyOn(Date, 'now').mockReturnValue(fixedNowMs);
+
+      try {
+        const staleVisibleEvent = createMockIncidentEvent({
+          incidentId: 'stale-visible-incident',
+          title: 'Stale Visible Incident',
+          created_at: Math.floor(fixedNowMs / 1000) - 5 * 86400,
+          occurredAt: new Date(fixedNowMs - 5 * 86400 * 1000).toISOString(),
+        });
+
+        mockSubscription.setEvents([staleVisibleEvent]);
+        mockSubscription.setEose(true);
+
+        const { result, rerender } = renderHook(
+          ({ sinceDays }) =>
+            useIncidentSubscription({
+              location: [-75.1652, 39.9526],
+              sinceDays,
+            }),
+          {
+            initialProps: { sinceDays: 30 },
+          }
+        );
+
+        await waitFor(() => {
+          expect(result.current.incidents.map((incident) => incident.incidentId)).toEqual([
+            'stale-visible-incident',
+          ]);
+        });
+
+        mockSubscription.setEvents([]);
+        mockSubscription.setEose(false);
+        rerender({ sinceDays: 1 });
+
+        await waitFor(() => {
+          expect(result.current.incidents).toEqual([]);
+          expect(result.current.hasReceivedHistory).toBe(false);
+        });
+      } finally {
+        nowSpy.mockRestore();
+      }
+    });
+
+    it('preserves only the already-visible incidents that remain in-window across a sinceDays change without replay', async () => {
+      const fixedNowMs = 1_735_689_600_000;
+      const nowSpy = jest.spyOn(Date, 'now').mockReturnValue(fixedNowMs);
+
+      try {
+        const staleVisibleEvent = createMockIncidentEvent({
+          incidentId: 'mixed-stale-visible',
+          title: 'Mixed Stale Visible',
+          created_at: Math.floor(fixedNowMs / 1000) - 5 * 86400,
+          occurredAt: new Date(fixedNowMs - 5 * 86400 * 1000).toISOString(),
+        });
+        const freshVisibleEvent = createMockIncidentEvent({
+          incidentId: 'mixed-fresh-visible',
+          title: 'Mixed Fresh Visible',
+          created_at: Math.floor(fixedNowMs / 1000) - 2 * 3600,
+          occurredAt: new Date(fixedNowMs - 2 * 3600 * 1000).toISOString(),
+        });
+
+        mockSubscription.setEvents([staleVisibleEvent, freshVisibleEvent]);
+        mockSubscription.setEose(true);
+
+        const { result, rerender } = renderHook(
+          ({ sinceDays }) =>
+            useIncidentSubscription({
+              location: [-75.1652, 39.9526],
+              sinceDays,
+            }),
+          {
+            initialProps: { sinceDays: 30 },
+          }
+        );
+
+        await waitFor(() => {
+          expect(result.current.incidents.map((incident) => incident.incidentId)).toEqual([
+            'mixed-fresh-visible',
+            'mixed-stale-visible',
+          ]);
+        });
+
+        mockSubscription.setEvents([]);
+        mockSubscription.setEose(false);
+        rerender({ sinceDays: 1 });
+
+        await waitFor(() => {
+          expect(result.current.incidents.map((incident) => incident.incidentId)).toEqual([
+            'mixed-fresh-visible',
+          ]);
+          expect(result.current.hasReceivedHistory).toBe(false);
+        });
       } finally {
         nowSpy.mockRestore();
       }
