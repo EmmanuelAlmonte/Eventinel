@@ -6,6 +6,7 @@
 
 import type { LayoutChangeEvent } from 'react-native';
 import { ActivityIndicator, View } from 'react-native';
+import { buildFlags } from '@lib/buildFlags';
 import { DEFAULT_CAMERA, incidentsToFeatureCollection, MAP_STYLES } from '@lib/map/types';
 import { MAPBOX_CONFIG } from '@lib/map/constants';
 import { type EdgeInsets } from 'react-native-safe-area-context';
@@ -30,6 +31,7 @@ import { type MapScreenCamera, type MapScreenViewport, type LocationPermissionSt
 import { type RelayBannerStatus } from './helpers';
 import { mapLayerStyles, mapScreenStyles as styles } from './styles';
 import type { ProcessedIncident } from '@hooks';
+import { MapDebugSurface } from './MapDebugSurface';
 import { MapOverlays } from './MapOverlays';
 
 const MAP_PLACEHOLDER_COLOR = '#2563eb';
@@ -190,10 +192,18 @@ export function MapScreenCanvas({
         isLoadingLocation={isLoadingLocation}
         isFocused={isFocused}
         isViewportCoveredBySubscriptionGrid={isViewportCoveredBySubscriptionGrid}
-        locationSource={locationSource}
-        permission={permission}
         onSelectDateRange={onSelectDateRange}
       />
+      {buildFlags.showDebugUI ? (
+        <MapDebugSurface
+          insets={insets}
+          userLocation={userLocation}
+          visibleIncidentCount={visibleIncidents.length}
+          hasReceivedHistory={hasReceivedHistory}
+          locationSource={locationSource}
+          permission={permission}
+        />
+      ) : null}
     </View>
   );
 }

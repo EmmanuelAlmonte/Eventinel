@@ -9,7 +9,6 @@ import type { ProcessedIncident } from '@hooks';
 import { formatIncidentHistoryWindowChipLabel } from '@lib/incidentHistoryWindow';
 
 import type { RelayBannerStatus } from './helpers';
-import type { LocationPermissionStatus } from './useMapScreenState';
 import { mapScreenStyles as styles } from './styles';
 
 type ThemeColors = {
@@ -39,8 +38,6 @@ type MapOverlaysProps = {
   isLoadingLocation: boolean;
   isFocused: boolean;
   isViewportCoveredBySubscriptionGrid: boolean;
-  locationSource: string | null;
-  permission: LocationPermissionStatus;
   onSelectDateRange: (days: number) => void;
 };
 
@@ -123,64 +120,6 @@ function FlyToUserButton({
   );
 }
 
-function DevStatsOverlay({
-  visibleIncidents,
-  hasReceivedHistory,
-  top,
-}: {
-  visibleIncidents: ProcessedIncident[];
-  hasReceivedHistory: boolean;
-  top: number;
-}) {
-  if (!__DEV__) {
-    return null;
-  }
-
-  return (
-    <View style={[styles.statsOverlay, { top }]}>
-      <Text style={styles.statsText}>Incidents: {visibleIncidents.length}</Text>
-      <Text style={styles.statsText}>EOSE: {hasReceivedHistory ? '✓' : '...'}</Text>
-    </View>
-  );
-}
-
-function LocationDebugOverlay({
-  top,
-  locationSource,
-  permission,
-  userLocation,
-}: {
-  top: number;
-  locationSource: string | null;
-  permission: LocationPermissionStatus;
-  userLocation: [number, number] | null;
-}) {
-  if (!__DEV__) {
-    return null;
-  }
-
-  return (
-    <View style={[styles.locationDebugOverlay, { top }]}>
-      <Text
-        style={[
-          styles.locationSourceText,
-          locationSource === 'fresh' && styles.locationSourceFresh,
-          locationSource === 'cached' && styles.locationSourceCached,
-          locationSource === 'default' && styles.locationSourceDefault,
-        ]}
-      >
-        📍 {locationSource?.toUpperCase() || 'NONE'}
-      </Text>
-      <Text style={styles.locationDebugText}>Perm: {permission ?? 'undetermined'}</Text>
-      {userLocation ? (
-        <Text style={styles.locationDebugText} numberOfLines={1}>
-          {userLocation[1].toFixed(4)}, {userLocation[0].toFixed(4)}
-        </Text>
-      ) : null}
-    </View>
-  );
-}
-
 function ViewportHint({
   insets,
   isLoadingLocation,
@@ -230,6 +169,26 @@ function EmptyIncidentsState({
   );
 }
 
+function MapStatusSummary({
+  visibleIncidentCount,
+  hasReceivedHistory,
+}: {
+  visibleIncidentCount: number;
+  hasReceivedHistory: boolean;
+}) {
+  const label = !hasReceivedHistory
+    ? 'Loading nearby incidents...'
+    : visibleIncidentCount > 0
+      ? `${visibleIncidentCount} nearby`
+      : 'No nearby incidents';
+
+  return (
+    <View style={styles.mapStatusSummary}>
+      <Text style={styles.mapStatusSummaryText}>{label}</Text>
+    </View>
+  );
+}
+
 function MapTopControls({
   colors,
   insets,
@@ -239,6 +198,8 @@ function MapTopControls({
   activeDateRangeLabel,
   dateRangeStatusLabel,
   isDateRangeRefreshing,
+  visibleIncidentCount,
+  hasReceivedHistory,
   isDateRangeMenuOpen,
   onToggleDateRangeMenu,
   onCloseDateRangeMenu,
@@ -253,6 +214,8 @@ function MapTopControls({
   activeDateRangeLabel: string;
   dateRangeStatusLabel: string;
   isDateRangeRefreshing: boolean;
+  visibleIncidentCount: number;
+  hasReceivedHistory: boolean;
   isDateRangeMenuOpen: boolean;
   onToggleDateRangeMenu: () => void;
   onCloseDateRangeMenu: () => void;
@@ -344,6 +307,11 @@ function MapTopControls({
         </Pressable>
       </View>
 
+      <MapStatusSummary
+        visibleIncidentCount={visibleIncidentCount}
+        hasReceivedHistory={hasReceivedHistory}
+      />
+
       {isDateRangeMenuOpen ? (
         <View style={styles.dateRangePopover}>
           <View style={styles.dateRangePopoverHeader}>
@@ -433,8 +401,6 @@ export function MapOverlays({
   isLoadingLocation,
   isFocused,
   isViewportCoveredBySubscriptionGrid,
-  locationSource,
-  permission,
   onSelectDateRange,
 }: MapOverlaysProps) {
   const [topControlsHeight, setTopControlsHeight] = useState(0);
@@ -461,6 +427,8 @@ export function MapOverlays({
         activeDateRangeLabel={activeDateRangeLabel}
         dateRangeStatusLabel={dateRangeStatusLabel}
         isDateRangeRefreshing={isDateRangeRefreshing}
+        visibleIncidentCount={visibleIncidents.length}
+        hasReceivedHistory={hasReceivedHistory}
         isDateRangeMenuOpen={isDateRangeMenuOpen}
         onToggleDateRangeMenu={() => setIsDateRangeMenuOpen((current) => !current)}
         onCloseDateRangeMenu={() => setIsDateRangeMenuOpen(false)}
@@ -479,17 +447,6 @@ export function MapOverlays({
         userLocation={userLocation}
         isAnimating={isAnimating}
         onFlyToUser={onFlyToUser}
-      />
-      <DevStatsOverlay
-        visibleIncidents={visibleIncidents}
-        hasReceivedHistory={hasReceivedHistory}
-        top={overlayTopOffset}
-      />
-      <LocationDebugOverlay
-        top={overlayTopOffset}
-        locationSource={locationSource}
-        permission={permission}
-        userLocation={userLocation}
       />
       <ViewportHint
         insets={insets}
