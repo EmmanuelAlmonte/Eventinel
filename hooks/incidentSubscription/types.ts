@@ -28,6 +28,7 @@ export interface ProcessedIncidentSortInput {
   incidentMap: Map<string, ProcessedIncident>;
   location: [number, number] | null;
   maxIncidents: number;
+  minOccurredAtMs?: number | null;
 }
 
 export interface UseIncidentSubscriptionOptions {
@@ -84,6 +85,7 @@ export interface EventBatchInput {
   incidentMap: Map<string, ProcessedIncident>;
   maxCandidateRetention: number;
   location: [number, number] | null;
+  minCreatedAtUnixSeconds?: number | null;
 }
 
 export interface EventBatchResult {

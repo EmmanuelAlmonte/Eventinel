@@ -94,6 +94,7 @@ export function useIncidentSubscriptionController({
     useIncidentSubscriptionStateSyncController({
       enabled,
       stableLocation,
+      sinceDays,
       effectiveMaxIncidents,
       incidentMapRef,
       pendingEventsRef,

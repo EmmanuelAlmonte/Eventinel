@@ -156,7 +156,8 @@ function shouldReplaceExistingIncident(
 function partitionIncidentCandidates(
   queuedEvents: EventBatchInput['queuedEvents'],
   incidentMap: EventBatchInput['incidentMap'],
-  metricsInput: IncidentEventReducerMetrics
+  metricsInput: IncidentEventReducerMetrics,
+  minCreatedAtUnixSeconds: number | null | undefined
 ): IncidentBatchPartition {
   const candidates: QueuedEventCandidate[] = [];
   let totalRelevantEvents = 0;
@@ -172,6 +173,19 @@ function partitionIncidentCandidates(
       continue;
     }
 
+    const incidentTag = getIncidentIdFromEventTags(event);
+    const incomingCreatedAt = getIncomingCreatedAt(event);
+    const incomingEventId = typeof event.id === 'string' ? event.id : '';
+
+    if (
+      typeof minCreatedAtUnixSeconds === 'number' &&
+      Number.isFinite(minCreatedAtUnixSeconds) &&
+      incomingCreatedAt != null &&
+      incomingCreatedAt < minCreatedAtUnixSeconds
+    ) {
+      continue;
+    }
+
     totalRelevantEvents += 1;
     if (source === 'cache') {
       cacheCount += 1;
@@ -179,10 +193,6 @@ function partitionIncidentCandidates(
       relayCount += 1;
     }
     recordEventSource(candidate, metricsInput);
-
-    const incidentTag = getIncidentIdFromEventTags(event);
-    const incomingCreatedAt = getIncomingCreatedAt(event);
-    const incomingEventId = typeof event.id === 'string' ? event.id : '';
 
     if (incidentTag && incomingCreatedAt != null && incomingEventId) {
       const existing = incidentMap.get(incidentTag);
@@ -202,7 +212,8 @@ function partitionIncidentCandidates(
 function applyIncidentEventUpdates(
   candidates: readonly QueuedEventCandidate[],
   incidentMap: EventBatchInput['incidentMap'],
-  metricsInput: IncidentEventReducerMetrics
+  metricsInput: IncidentEventReducerMetrics,
+  minCreatedAtUnixSeconds: number | null | undefined
 ): IncidentEventParseResult {
   let nextIncidentMap = incidentMap;
   const updatedIncidents: ProcessedIncident[] = [];
@@ -226,6 +237,13 @@ function applyIncidentEventUpdates(
     }
 
     const processed = toProcessedIncident(parsed);
+    if (
+      typeof minCreatedAtUnixSeconds === 'number' &&
+      Number.isFinite(minCreatedAtUnixSeconds) &&
+      processed.createdAtMs < minCreatedAtUnixSeconds * 1000
+    ) {
+      continue;
+    }
     const existing = nextIncidentMap.get(parsed.incidentId);
     const shouldReplace = shouldReplaceExistingIncident(existing, {
       createdAt: parsed.createdAt,
@@ -307,7 +325,8 @@ export function applyIncidentEventBatch(input: EventBatchInput): EventBatchResul
     const partitioned = partitionIncidentCandidates(
       input.queuedEvents,
       input.incidentMap,
-      REDUCTION_METRICS
+      REDUCTION_METRICS,
+      input.minCreatedAtUnixSeconds
     );
     totalRelevantEvents = partitioned.totalRelevantEvents;
     cacheCount = partitioned.cacheCount;
@@ -317,7 +336,8 @@ export function applyIncidentEventBatch(input: EventBatchInput): EventBatchResul
     const parsed = applyIncidentEventUpdates(
       partitioned.candidates,
       input.incidentMap,
-      REDUCTION_METRICS
+      REDUCTION_METRICS,
+      input.minCreatedAtUnixSeconds
     );
     nextIncidentMap = parsed.incidentMap;
     updatedIncidents.push(...parsed.updatedIncidents);
