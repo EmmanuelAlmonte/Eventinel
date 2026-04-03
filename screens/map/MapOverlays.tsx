@@ -229,16 +229,15 @@ function MapTopControls({
 
   return (
     <View
-      style={[styles.topControlsContainer, { top: 12 + insets.top }]}
+      style={[styles.topControlsContainer, { top: 16 + insets.top }]}
       onLayout={onLayout}
     >
       <View
         style={[
           styles.topControlSurface,
-          styles.searchSurface,
           {
-            backgroundColor: 'rgba(15, 23, 42, 0.94)',
-            borderColor: 'rgba(148, 163, 184, 0.22)',
+            backgroundColor: 'rgba(10, 16, 28, 0.88)',
+            borderColor: 'rgba(255, 255, 255, 0.08)',
           },
         ]}
       >
@@ -252,65 +251,65 @@ function MapTopControls({
           autoCapitalize="none"
           lightTheme={false}
           round
-          searchIcon={{ color: 'rgba(226, 232, 240, 0.8)', size: 18 }}
-          clearIcon={{ color: 'rgba(226, 232, 240, 0.8)', size: 18 }}
+          searchIcon={{ color: '#AAB4C3', size: 18 }}
+          clearIcon={{ color: '#AAB4C3', size: 18 }}
           containerStyle={styles.searchBarContainer}
           inputContainerStyle={[
             styles.searchBarInputContainer,
             {
-              backgroundColor: 'rgba(30, 41, 59, 0.82)',
-              borderColor: 'rgba(148, 163, 184, 0.18)',
+              backgroundColor: 'rgba(255, 255, 255, 0.06)',
+              borderColor: 'rgba(255, 255, 255, 0.06)',
             },
           ]}
           inputStyle={styles.searchBarInput}
-          placeholderTextColor="rgba(203, 213, 225, 0.72)"
+          placeholderTextColor="#AAB4C3"
         />
-      </View>
 
-      <View style={styles.filterRow}>
-        <Pressable
-          style={({ pressed }) => [
-            styles.filterPill,
-            isDateRangeMenuOpen && styles.filterPillOpen,
-            isDateRangeRefreshing && styles.filterPillRefreshing,
-            pressed && styles.filterPillPressed,
-          ]}
-          accessibilityRole="button"
-          accessibilityLabel="Open date range filter"
-          accessibilityState={{
-            disabled: !isHistoryWindowReady,
-            expanded: isDateRangeMenuOpen,
-          }}
-          disabled={!isHistoryWindowReady}
-          onPress={onToggleDateRangeMenu}
-        >
-          <Icon
-            name="schedule"
-            type="material"
-            size={16}
-            color={isDateRangeRefreshing ? colors.primary : '#E2E8F0'}
-          />
-          <Text
-            style={[
-              styles.filterPillText,
-              isDateRangeRefreshing && styles.filterPillTextRefreshing,
+        <View style={styles.headerFooter}>
+          <Pressable
+            style={({ pressed }) => [
+              styles.filterPill,
+              isDateRangeMenuOpen && styles.filterPillOpen,
+              isDateRangeRefreshing && styles.filterPillRefreshing,
+              pressed && styles.filterPillPressed,
             ]}
+            accessibilityRole="button"
+            accessibilityLabel="Open date range filter"
+            accessibilityState={{
+              disabled: !isHistoryWindowReady,
+              expanded: isDateRangeMenuOpen,
+            }}
+            disabled={!isHistoryWindowReady}
+            onPress={onToggleDateRangeMenu}
           >
-            {pillLabel}
-          </Text>
-          <Icon
-            name={isDateRangeMenuOpen ? 'expand-less' : 'expand-more'}
-            type="material"
-            size={18}
-            color="#CBD5E1"
-          />
-        </Pressable>
-      </View>
+            <Icon
+              name="schedule"
+              type="material"
+              size={16}
+              color={isDateRangeRefreshing ? colors.primary : '#E7ECF5'}
+            />
+            <Text
+              style={[
+                styles.filterPillText,
+                isDateRangeRefreshing && styles.filterPillTextRefreshing,
+              ]}
+            >
+              {pillLabel}
+            </Text>
+            <Icon
+              name={isDateRangeMenuOpen ? 'expand-less' : 'expand-more'}
+              type="material"
+              size={18}
+              color="#E7ECF5"
+            />
+          </Pressable>
 
-      <MapStatusSummary
-        visibleIncidentCount={visibleIncidentCount}
-        hasReceivedHistory={hasReceivedHistory}
-      />
+          <MapStatusSummary
+            visibleIncidentCount={visibleIncidentCount}
+            hasReceivedHistory={hasReceivedHistory}
+          />
+        </View>
+      </View>
 
       {isDateRangeMenuOpen ? (
         <View style={styles.dateRangePopover}>
