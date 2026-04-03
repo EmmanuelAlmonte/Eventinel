@@ -28,6 +28,7 @@ export interface ProcessedIncidentSortInput {
   incidentMap: Map<string, ProcessedIncident>;
   location: [number, number] | null;
   maxIncidents: number;
+  minOccurredAtMs?: number | null;
 }
 
 export interface UseIncidentSubscriptionOptions {
@@ -41,6 +42,8 @@ export interface UseIncidentSubscriptionOptions {
   enabled?: boolean;
   /** Maximum incidents to return */
   maxIncidents?: number;
+  /** How many days back relay subscriptions should request history for. */
+  sinceDays?: number;
 }
 
 export interface ProcessedIncident extends ParsedIncident {
@@ -82,6 +85,7 @@ export interface EventBatchInput {
   incidentMap: Map<string, ProcessedIncident>;
   maxCandidateRetention: number;
   location: [number, number] | null;
+  minCreatedAtUnixSeconds?: number | null;
 }
 
 export interface EventBatchResult {

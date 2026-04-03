@@ -66,6 +66,8 @@ const { showToast: mockShowToast } = jest.requireMock('@components/ui') as {
   };
 };
 
+const LOGIN_TOAST_OPTIONS = { visibilityTime: 12000 };
+
 // Import the component
 import LoginScreen from '../../screens/LoginScreen';
 
@@ -232,7 +234,11 @@ describe('LoginScreen', () => {
       fireEvent.press(loginButton);
 
       await waitFor(() => {
-        expect(mockShowToast.error).toHaveBeenCalledWith('Login Failed', 'Signer unavailable');
+        expect(mockShowToast.error).toHaveBeenCalledWith(
+          'Login Failed',
+          'Signer unavailable',
+          LOGIN_TOAST_OPTIONS
+        );
       });
     });
 
@@ -335,7 +341,8 @@ describe('LoginScreen', () => {
       await waitFor(() => {
         expect(mockShowToast.error).toHaveBeenCalledWith(
           'Connection Failed',
-          'Connection timeout'
+          'Connection timeout',
+          LOGIN_TOAST_OPTIONS
         );
       });
     });
@@ -500,7 +507,8 @@ describe('LoginScreen', () => {
       await waitFor(() => {
         expect(mockShowToast.error).toHaveBeenCalledWith(
           'Login Failed',
-          'Please check your key and try again'
+          'Please check your key and try again',
+          LOGIN_TOAST_OPTIONS
         );
       });
     });
@@ -554,7 +562,8 @@ describe('LoginScreen', () => {
       await waitFor(() => {
         expect(mockShowToast.error).toHaveBeenCalledWith(
           'Login Failed',
-          'Please check your key and try again'
+          'Please check your key and try again',
+          LOGIN_TOAST_OPTIONS
         );
       });
 
@@ -581,7 +590,8 @@ describe('LoginScreen', () => {
       await waitFor(() => {
         expect(mockShowToast.error).toHaveBeenCalledWith(
           'Login Failed',
-          'Please check your key and try again'
+          'Please check your key and try again',
+          LOGIN_TOAST_OPTIONS
         );
       });
     });
@@ -640,7 +650,8 @@ describe('LoginScreen', () => {
       await waitFor(() => {
         expect(mockShowToast.error).toHaveBeenCalledWith(
           'Login Failed',
-          'Please check your key and try again'
+          'Please check your key and try again',
+          LOGIN_TOAST_OPTIONS
         );
         expect(queryByText('Connecting...')).toBeNull();
       });

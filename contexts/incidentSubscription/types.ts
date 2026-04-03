@@ -4,8 +4,10 @@ import type { MapSubscriptionViewport } from '@lib/map/subscriptionPlanner';
 
 export interface IncidentSubscriptionContextValue {
   incidents: ProcessedIncident[];
+  updatedIncidents: ProcessedIncident[];
   isInitialLoading: boolean;
   hasReceivedHistory: boolean;
+  historyWindowDays: number;
   severityCounts: Record<Severity, number>;
   setMapFocused: (focused: boolean) => void;
   setMapSubscriptionAnchor: (anchor: [number, number] | null) => void;

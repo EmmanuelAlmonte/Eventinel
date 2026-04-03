@@ -2,6 +2,8 @@ import { Pressable, View } from 'react-native';
 import { Avatar, Button, Card, Divider, Icon, Switch, Text } from '@rneui/themed';
 import * as Notifications from 'expo-notifications';
 
+import { formatIncidentHistoryWindowLabel } from '@lib/incidentHistoryWindow';
+
 import { profileScreenStyles as styles } from './styles';
 
 type ThemeColors = {
@@ -196,6 +198,67 @@ export function SettingsCard({
         </View>
         <Icon name="chevron-right" type="material" size={24} color={colors.textMuted} />
       </Pressable>
+    </Card>
+  );
+}
+
+type IncidentHistoryCardProps = {
+  colors: ThemeColors;
+  historyWindowDays: number;
+  isReady: boolean;
+  presets: readonly number[];
+  onSelectHistoryWindow: (days: number) => void;
+};
+
+export function IncidentHistoryCard({
+  colors,
+  historyWindowDays,
+  isReady,
+  presets,
+  onSelectHistoryWindow,
+}: IncidentHistoryCardProps) {
+  return (
+    <Card containerStyle={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+      <View style={styles.cardHeader}>
+        <Icon name="history" type="material" size={20} color={colors.primary} />
+        <Text style={[styles.cardTitle, { color: colors.text }]}>Date Range</Text>
+      </View>
+
+      <Text style={[styles.settingDescription, { color: colors.textMuted }]}>
+        This changes how much past incident history is loaded. You can also update it from the map screen.
+      </Text>
+
+      <View style={styles.historyWindowButtonRow}>
+        {presets.map((days) => {
+          const isActive = historyWindowDays === days;
+          return (
+            <Button
+              key={days}
+              title={formatIncidentHistoryWindowLabel(days)}
+              type={isActive ? 'solid' : 'outline'}
+              onPress={() => onSelectHistoryWindow(days)}
+              disabled={!isReady}
+              containerStyle={styles.historyWindowButtonContainer}
+              buttonStyle={[
+                styles.historyWindowButton,
+                isActive
+                  ? { backgroundColor: colors.primary }
+                  : { borderColor: colors.border, backgroundColor: 'transparent' },
+              ]}
+              titleStyle={[
+                styles.historyWindowButtonText,
+                { color: isActive ? '#FFFFFF' : colors.text },
+              ]}
+            />
+          );
+        })}
+      </View>
+
+      <Text style={[styles.pushTokenHint, { color: colors.textMuted }]}>
+        {isReady
+          ? `Current range: ${formatIncidentHistoryWindowLabel(historyWindowDays)}`
+          : 'Loading saved date range...'}
+      </Text>
     </Card>
   );
 }

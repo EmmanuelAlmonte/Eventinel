@@ -14,7 +14,7 @@
 
 import React, { useEffect } from 'react';
 import { render, waitFor } from '@testing-library/react-native';
-import { Text, View } from 'react-native';
+import { InteractionManager, Text, View } from 'react-native';
 
 import {
   IncidentSubscriptionProvider,
@@ -56,6 +56,16 @@ jest.mock('../../contexts/RelayStatusContext', () => ({
     relays: [],
     stats: { total: 1, connected: 1, connecting: 0, disconnected: 0 },
   }),
+}));
+
+const mockUseIncidentHistoryWindow = jest.fn(() => ({
+  historyWindowDays: 30,
+  isReady: true,
+  setHistoryWindowDays: jest.fn().mockResolvedValue(undefined),
+}));
+
+jest.mock('../../contexts/IncidentHistoryWindowContext', () => ({
+  useIncidentHistoryWindow: () => mockUseIncidentHistoryWindow(),
 }));
 
 // =============================================================================
@@ -214,10 +224,44 @@ function TestWrapper({ children }: { children: React.ReactNode }) {
 // =============================================================================
 
 describe('IncidentSubscriptionContext', () => {
+  const originalSetImmediate = global.setImmediate;
+  let runAfterInteractionsSpy: jest.SpiedFunction<
+    typeof InteractionManager.runAfterInteractions
+  >;
+
+  beforeAll(() => {
+    if (typeof global.setImmediate !== 'function') {
+      global.setImmediate = ((callback: (...args: any[]) => void, ...args: any[]) =>
+        setTimeout(callback, 0, ...args)) as unknown as typeof setImmediate;
+    }
+
+    runAfterInteractionsSpy = jest
+      .spyOn(InteractionManager, 'runAfterInteractions')
+      .mockImplementation((task) => {
+        if (typeof task === 'function') {
+          task();
+        }
+
+        return {
+          cancel: jest.fn(),
+        } as unknown as ReturnType<typeof InteractionManager.runAfterInteractions>;
+      });
+  });
+
+  afterAll(() => {
+    runAfterInteractionsSpy.mockRestore();
+    global.setImmediate = originalSetImmediate;
+  });
+
   beforeEach(() => {
     jest.clearAllMocks();
     mockUseUserLocation.mockReturnValue(defaultLocationMock);
     mockUseIncidentSubscription.mockReturnValue(defaultSubscriptionMock);
+    mockUseIncidentHistoryWindow.mockReturnValue({
+      historyWindowDays: 30,
+      isReady: true,
+      setHistoryWindowDays: jest.fn().mockResolvedValue(undefined),
+    });
   });
 
   // =============================================================================
@@ -343,7 +387,7 @@ describe('IncidentSubscriptionContext', () => {
       expect(mockUseIncidentSubscription).toHaveBeenCalledWith(
         expect.objectContaining({
           location: mockLocation,
-          enabled: true,
+          sinceDays: 30,
         })
       );
     });
@@ -364,11 +408,12 @@ describe('IncidentSubscriptionContext', () => {
         expect.objectContaining({
           location: null,
           enabled: false,
+          sinceDays: 30,
         })
       );
     });
 
-    it('enables subscription when location becomes available', () => {
+    it('passes the updated location through when location becomes available', () => {
       // Start with null location
       mockUseUserLocation.mockReturnValue({
         ...defaultLocationMock,
@@ -403,7 +448,29 @@ describe('IncidentSubscriptionContext', () => {
 
       expect(mockUseIncidentSubscription).toHaveBeenLastCalledWith(
         expect.objectContaining({
-          enabled: true,
+          location: [-74.006, 40.7128],
+          sinceDays: 30,
+        })
+      );
+    });
+
+    it('disables subscription while the history window preference is still loading', () => {
+      mockUseIncidentHistoryWindow.mockReturnValue({
+        historyWindowDays: 7,
+        isReady: false,
+        setHistoryWindowDays: jest.fn().mockResolvedValue(undefined),
+      });
+
+      render(
+        <TestWrapper>
+          <SubscriptionConsumer />
+        </TestWrapper>
+      );
+
+      expect(mockUseIncidentSubscription).toHaveBeenCalledWith(
+        expect.objectContaining({
+          enabled: false,
+          sinceDays: 7,
         })
       );
     });

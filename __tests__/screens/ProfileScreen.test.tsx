@@ -61,6 +61,16 @@ jest.mock('@hooks', () => ({
   }),
 }));
 
+const mockUseIncidentHistoryWindow = jest.fn(() => ({
+  historyWindowDays: 30,
+  isReady: true,
+  setHistoryWindowDays: jest.fn().mockResolvedValue(undefined),
+}));
+
+jest.mock('@contexts', () => ({
+  useIncidentHistoryWindow: () => mockUseIncidentHistoryWindow(),
+}));
+
 // Import the component
 import ProfileScreen from '../../screens/ProfileScreen';
 
@@ -93,6 +103,11 @@ describe('ProfileScreen', () => {
     mockNDKHooks.setCurrentPubkey(defaultMockUser.pubkey);
     mockFeatureFlags.isCashuWalletFeatureEnabled = true;
     mockFeatureFlags.isLightningWalletFeatureEnabled = true;
+    mockUseIncidentHistoryWindow.mockReturnValue({
+      historyWindowDays: 30,
+      isReady: true,
+      setHistoryWindowDays: jest.fn().mockResolvedValue(undefined),
+    });
     jest.clearAllMocks();
   });
 
@@ -129,6 +144,13 @@ describe('ProfileScreen', () => {
       expect(getByText('Wallet')).toBeTruthy();
     });
 
+    it('renders the incident history settings card', () => {
+      const { getByText } = render(<ProfileScreen />);
+      expect(getByText('Incident History')).toBeTruthy();
+      expect(getByText('1 day')).toBeTruthy();
+      expect(getByText('30 days')).toBeTruthy();
+    });
+
     it('hides wallet settings row when wallet features are disabled', () => {
       mockFeatureFlags.isCashuWalletFeatureEnabled = false;
       mockFeatureFlags.isLightningWalletFeatureEnabled = false;
@@ -136,6 +158,17 @@ describe('ProfileScreen', () => {
       const { getByText, queryByText } = render(<ProfileScreen />);
       expect(queryByText('Wallet')).toBeNull();
       expect(getByText('Relay Settings')).toBeTruthy();
+    });
+
+    it('shows the current history window summary', () => {
+      mockUseIncidentHistoryWindow.mockReturnValue({
+        historyWindowDays: 7,
+        isReady: true,
+        setHistoryWindowDays: jest.fn().mockResolvedValue(undefined),
+      });
+
+      const { getByText } = render(<ProfileScreen />);
+      expect(getByText('Current window: 7 days')).toBeTruthy();
     });
   });
 
@@ -399,6 +432,20 @@ describe('ProfileScreen', () => {
       const { getByText } = render(<ProfileScreen />);
       const pubkeyText = getByText('abc123def456');
       expect(pubkeyText.props.selectable).toBe(true);
+    });
+
+    it('updates the incident history window when a preset is pressed', () => {
+      const setHistoryWindowDays = jest.fn().mockResolvedValue(undefined);
+      mockUseIncidentHistoryWindow.mockReturnValue({
+        historyWindowDays: 30,
+        isReady: true,
+        setHistoryWindowDays,
+      });
+
+      const { getByText } = render(<ProfileScreen />);
+      fireEvent.press(getByText('3 days'));
+
+      expect(setHistoryWindowDays).toHaveBeenCalledWith(3);
     });
   });
 });

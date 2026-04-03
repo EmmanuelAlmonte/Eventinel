@@ -17,6 +17,12 @@ export default function MapScreen() {
     relayStatus,
     userLocation,
     hasReceivedHistory,
+    historyWindowDays,
+    historyWindowPresets,
+    isHistoryWindowReady,
+    activeDateRangeLabel,
+    dateRangeStatusLabel,
+    isDateRangeRefreshing,
     visibleIncidents,
     incidentFeatureCollection,
     isLoadingLocation,
@@ -29,6 +35,7 @@ export default function MapScreen() {
     handleShapeSourcePress,
     handleMapLayout,
     handleRelaySettings,
+    handleSelectDateRange,
     refreshLocation,
   } = useMapScreenState();
 
@@ -55,6 +62,12 @@ export default function MapScreen() {
       userLocation={userLocation}
       incidentFeatureCollection={incidentFeatureCollection}
       hasReceivedHistory={hasReceivedHistory}
+      historyWindowDays={historyWindowDays}
+      historyWindowPresets={historyWindowPresets}
+      isHistoryWindowReady={isHistoryWindowReady}
+      activeDateRangeLabel={activeDateRangeLabel}
+      dateRangeStatusLabel={dateRangeStatusLabel}
+      isDateRangeRefreshing={isDateRangeRefreshing}
       visibleIncidents={visibleIncidents}
       isLoadingLocation={isLoadingLocation}
       isFocused={isFocused}
@@ -63,6 +76,7 @@ export default function MapScreen() {
       permission={permission}
       handleMapLayout={handleMapLayout}
       handleRelaySettings={handleRelaySettings}
+      onSelectDateRange={handleSelectDateRange}
       onShapeSourcePress={handleShapeSourcePress}
       onFlyToUser={camera.handleFlyToUser}
     />

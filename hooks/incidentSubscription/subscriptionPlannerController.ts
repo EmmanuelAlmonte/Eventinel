@@ -9,6 +9,7 @@ import {
 
 import { MAP_SUBSCRIPTION } from '@lib/map/constants';
 import { INCIDENT_LIMITS } from '@lib/map/constants';
+import { calculateIncidentSinceUnixSeconds } from '@lib/incidentHistoryWindow';
 import { ndk } from '@lib/ndk';
 import { pruneIncidentsByDesiredCells } from './reconcile';
 import type {
@@ -30,11 +31,12 @@ type RegistryLike = {
   setHasReceivedHistory: (key: string) => void;
 };
 
-function createIncidentSubscriptionFilter(key: string): NDKFilter {
+function createIncidentSubscriptionFilter(key: string, sinceDays: number): NDKFilter {
   return {
     kinds: [30911 as number],
     '#g': [key],
     limit: INCIDENT_LIMITS.FETCH_LIMIT,
+    since: calculateIncidentSinceUnixSeconds(sinceDays),
   };
 }
 
@@ -45,6 +47,7 @@ function startIncidentSubscription(
     enqueueEvents: (events: NDKEvent[], source: IncomingEventSource) => void;
     hasReceivedHistory: () => boolean;
     setState: Dispatch<SetStateAction<IncidentSubscriptionDisplayState>>;
+    sinceDays: number;
   }
 ): void {
   const beforeCount = args.subscriptionRegistry.subscriptions.size;
@@ -54,7 +57,7 @@ function startIncidentSubscription(
     );
   }
 
-  const subscription = ndk.subscribe([createIncidentSubscriptionFilter(key)], {
+  const subscription = ndk.subscribe([createIncidentSubscriptionFilter(key, args.sinceDays)], {
     closeOnEose: false,
     cacheUsage: NDKSubscriptionCacheUsage.CACHE_FIRST,
     groupable: false,
@@ -142,12 +145,14 @@ export function useIncidentSubscriptionPlannerController({
   hasReceivedHistory,
   setState,
   incidentMapRef,
+  sinceDays,
 }: {
   subscriptionRegistry: RegistryLike;
   enqueueEvents: (events: NDKEvent[], source: IncomingEventSource) => void;
   hasReceivedHistory: () => boolean;
   setState: Dispatch<SetStateAction<IncidentSubscriptionDisplayState>>;
   incidentMapRef: MutableRefObject<Map<string, ProcessedIncident>>;
+  sinceDays: number;
 }) {
   const startSubscription = useCallback(
     (key: string) =>
@@ -156,8 +161,9 @@ export function useIncidentSubscriptionPlannerController({
         enqueueEvents,
         hasReceivedHistory,
         setState,
+        sinceDays,
       }),
-    [subscriptionRegistry, enqueueEvents, hasReceivedHistory, setState]
+    [subscriptionRegistry, enqueueEvents, hasReceivedHistory, setState, sinceDays]
   );
 
   const stopSubscription = useCallback(

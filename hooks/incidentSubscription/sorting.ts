@@ -99,7 +99,17 @@ export function sortIncidentsForRetention(incidents: ProcessedIncident[]): Proce
 }
 
 export function buildIncidentDisplayState(input: ProcessedIncidentSortInput): IncidentDisplayState {
-  const sorted = sortIncidentsForDisplay(Array.from(input.incidentMap.values()), input.location);
+  const effectiveMinOccurredAtMs =
+    typeof input.minOccurredAtMs === 'number' && Number.isFinite(input.minOccurredAtMs)
+      ? input.minOccurredAtMs
+      : null;
+  const filteredIncidents =
+    effectiveMinOccurredAtMs !== null
+      ? Array.from(input.incidentMap.values()).filter(
+          (incident) => incident.occurredAtMs >= effectiveMinOccurredAtMs
+        )
+      : Array.from(input.incidentMap.values());
+  const sorted = sortIncidentsForDisplay(filteredIncidents, input.location);
   const incidents = sorted.slice(0, input.maxIncidents);
 
   const severityCounts: SeverityCounts = { ...EMPTY_SEVERITY_COUNTS };

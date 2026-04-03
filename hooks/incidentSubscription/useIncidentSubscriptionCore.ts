@@ -6,9 +6,10 @@
 
 import { useEffect } from 'react';
 
+import { calculateIncidentSinceUnixSeconds } from '@lib/incidentHistoryWindow';
 import { INCIDENT_LIMITS } from '@lib/map/constants';
 import { computeReconcilePlan } from './reconcile';
-import { EMPTY_SEVERITY_COUNTS, toProcessedIncident } from './sorting';
+import { buildIncidentDisplayState, EMPTY_SEVERITY_COUNTS, toProcessedIncident } from './sorting';
 import { useIncidentSubscriptionController } from './useIncidentSubscriptionController';
 import { useIncidentSubscriptionPlan } from './useIncidentSubscriptionPlanner';
 import { useIncidentSubscriptionState } from './useIncidentSubscriptionState';
@@ -21,6 +22,36 @@ import type {
 // Keep subscription logs dev-only and opt-in to reduce noise during normal local runs.
 const DEBUG_CACHE =
   __DEV__ && process.env.EXPO_PUBLIC_DEBUG_INCIDENT_SUBSCRIPTION === '1';
+const DEBUG_HISTORY_WINDOW =
+  __DEV__ && (globalThis as Record<string, unknown>).describe == null;
+
+function logHistoryWindowDebugEvent(
+  event: string,
+  details?: Record<string, unknown>
+) {
+  if (!DEBUG_HISTORY_WINDOW) {
+    return;
+  }
+
+  if (details) {
+    console.info(`[HistoryWindowDebug] ${event}`, details);
+    return;
+  }
+
+  console.info(`[HistoryWindowDebug] ${event}`);
+}
+
+function summarizeQueuedEventSources(
+  queuedEvents: readonly { source: 'cache' | 'relay' }[]
+) {
+  return queuedEvents.reduce(
+    (summary, queued) => {
+      summary[queued.source] += 1;
+      return summary;
+    },
+    { cache: 0, relay: 0 }
+  );
+}
 
 export type {
   ProcessedIncident,
@@ -35,9 +66,14 @@ export function useIncidentSubscription({
   subscriptionViewport,
   enabled = true,
   maxIncidents = INCIDENT_LIMITS.MAX_VISIBLE,
+  sinceDays = INCIDENT_LIMITS.SINCE_DAYS,
 }: UseIncidentSubscriptionOptions): UseIncidentSubscriptionResult {
   const hasLocation = location !== null;
   const effectiveMaxIncidents = Math.min(maxIncidents, INCIDENT_LIMITS.MAX_VISIBLE);
+  const effectiveSinceDays =
+    Number.isFinite(sinceDays) && sinceDays > 0
+      ? Math.floor(sinceDays)
+      : INCIDENT_LIMITS.SINCE_DAYS;
   const {
     stableLocation,
     subscriptionPlan,
@@ -67,6 +103,7 @@ export function useIncidentSubscription({
   const {
     hasReceivedHistory,
     recomputeVisibleState,
+    flushQueuedEvents,
     startSubscription,
     stopSubscription,
     stopAllSubscriptions,
@@ -76,6 +113,7 @@ export function useIncidentSubscription({
     enabled,
     desiredSubscriptionCount: desiredCells.length,
     stableLocation,
+    sinceDays: effectiveSinceDays,
     effectiveMaxIncidents,
     incidentMapRef,
     pendingEventsRef,
@@ -143,12 +181,20 @@ export function useIncidentSubscription({
     if (previousMeta.truncated !== currentTruncated) {
       refreshTriggers.push('truncation-state');
     }
+    const historyWindowChanged = previousMeta.sinceDays !== effectiveSinceDays;
+    if (historyWindowChanged) {
+      refreshTriggers.push('history-window');
+    }
 
     const reconcilePlan = computeReconcilePlan({
       enabled,
       desiredCells,
       activeSubscriptionKeys: subscriptionRegistry.subscriptions.keys(),
     });
+    if (historyWindowChanged) {
+      reconcilePlan.toRemove = Array.from(subscriptionRegistry.subscriptions.keys());
+      reconcilePlan.toAdd = [...desiredCells];
+    }
 
     if (
       DEBUG_CACHE &&
@@ -174,7 +220,77 @@ export function useIncidentSubscription({
       filterKey: currentFilterKey,
       desiredCount: desiredCells.length,
       truncated: currentTruncated,
+      sinceDays: effectiveSinceDays,
     };
+
+    const replayCutoff = historyWindowChanged
+      ? calculateIncidentSinceUnixSeconds(effectiveSinceDays)
+      : null;
+    const preservedIncidentMap =
+      historyWindowChanged && replayCutoff != null
+        ? new Map(
+            Array.from(incidentMapRef.current.entries()).filter(([, incident]) => {
+              return incident.occurredAtMs >= replayCutoff * 1000;
+            })
+          )
+        : null;
+    const bufferedQueuedEvents =
+      historyWindowChanged && replayCutoff != null
+        ? pendingEventsRef.current.filter(({ event }) => {
+            const createdAt = event.created_at;
+            return (
+              typeof createdAt === 'number' &&
+              Number.isFinite(createdAt) &&
+              createdAt >= replayCutoff
+            );
+          })
+        : [];
+
+    if (historyWindowChanged) {
+      const pendingBeforeFilterCount = pendingEventsRef.current.length;
+      const filteredBufferedCount = bufferedQueuedEvents.length;
+      logHistoryWindowDebugEvent('history-window refresh planned', {
+        fromDays: previousMeta.sinceDays,
+        toDays: effectiveSinceDays,
+        refreshTriggers,
+        replayCutoff,
+        visibleIncidentCountBeforeClear: incidentMapRef.current.size,
+        preservedIncidentCount: preservedIncidentMap?.size ?? 0,
+        pendingBeforeFilterCount,
+        pendingSourceCounts: summarizeQueuedEventSources(pendingEventsRef.current),
+        bufferedAfterCutoffCount: filteredBufferedCount,
+        droppedBufferedCount: Math.max(
+          0,
+          pendingBeforeFilterCount - filteredBufferedCount
+        ),
+        bufferedSourceCounts: summarizeQueuedEventSources(bufferedQueuedEvents),
+        desiredCellCount: desiredCells.length,
+        toAddCount: reconcilePlan.toAdd.length,
+        toRemoveCount: reconcilePlan.toRemove.length,
+      });
+    }
+
+    if (historyWindowChanged) {
+      clearQueuedEvents();
+      incidentMapRef.current = preservedIncidentMap ?? new Map<string, ProcessedIncident>();
+      lastTotalEventsRef.current = 0;
+      const { incidents, severityCounts } = buildIncidentDisplayState({
+        incidentMap: incidentMapRef.current,
+        location: stableLocation,
+        maxIncidents: effectiveMaxIncidents,
+        minOccurredAtMs:
+          replayCutoff != null && Number.isFinite(replayCutoff)
+            ? replayCutoff * 1000
+            : null,
+      });
+      setState({
+        incidents,
+        severityCounts,
+        updatedIncidents: [],
+        totalEventsReceived: 0,
+        hasReceivedHistory: false,
+      });
+    }
 
     for (const key of reconcilePlan.toRemove) {
       stopSubscription(key);
@@ -184,6 +300,14 @@ export function useIncidentSubscription({
       startSubscription(key);
     }
 
+    if (historyWindowChanged && bufferedQueuedEvents.length > 0) {
+      pendingEventsRef.current.push(...bufferedQueuedEvents);
+    }
+
+    if (historyWindowChanged && pendingEventsRef.current.length > 0) {
+      flushQueuedEvents();
+    }
+
     if (reconcilePlan.shouldPruneByCell) {
       const didPrune = pruneToDesiredGeohashes(reconcilePlan.desiredKeys);
       if (didPrune) {
@@ -191,7 +315,11 @@ export function useIncidentSubscription({
       }
     }
 
-    if (reconcilePlan.toAdd.length > 0 || reconcilePlan.toRemove.length > 0) {
+    if (
+      historyWindowChanged ||
+      reconcilePlan.toAdd.length > 0 ||
+      reconcilePlan.toRemove.length > 0
+    ) {
       const afterCount = subscriptionRegistry.subscriptions.size;
       if (DEBUG_CACHE) {
         console.log(`🔁 [IncidentSub] Live subscriptions after refresh: ${afterCount}`);
@@ -214,15 +342,21 @@ export function useIncidentSubscription({
     desiredCells,
     subscriptionFilterKey,
     subscriptionPlan?.truncated,
+    effectiveSinceDays,
     startSubscription,
     stopSubscription,
     recomputeVisibleState,
+    flushQueuedEvents,
     pruneToDesiredGeohashes,
     hasReceivedHistory,
     setState,
     subscriptionRegistry,
     lastRefreshMetaRef,
     lastFilterKeyRef,
+    clearQueuedEvents,
+    incidentMapRef,
+    lastUpdatedRef,
+    lastTotalEventsRef,
   ]);
 
   // Resort existing incidents on location/max changes.

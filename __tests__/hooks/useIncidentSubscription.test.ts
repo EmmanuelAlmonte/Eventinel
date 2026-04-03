@@ -282,6 +282,45 @@ describe('useIncidentSubscription', () => {
 
       expect(getSubscribeCalls().length).toBe(0);
     });
+
+    it('adds the default freshness window to live subscription filters', () => {
+      const fixedNowMs = 1_735_689_600_000;
+      const nowSpy = jest.spyOn(Date, 'now').mockReturnValue(fixedNowMs);
+
+      try {
+        renderHook(() =>
+          useIncidentSubscription({
+            location: [-75.1652, 39.9526],
+          })
+        );
+
+        const filters = getSubscribeCalls()[0][0];
+        expect(filters[0].since).toBe(
+          Math.floor(fixedNowMs / 1000) - INCIDENT_LIMITS.SINCE_DAYS * 86400
+        );
+      } finally {
+        nowSpy.mockRestore();
+      }
+    });
+
+    it('uses a custom sinceDays override when provided', () => {
+      const fixedNowMs = 1_735_689_600_000;
+      const nowSpy = jest.spyOn(Date, 'now').mockReturnValue(fixedNowMs);
+
+      try {
+        renderHook(() =>
+          useIncidentSubscription({
+            location: [-75.1652, 39.9526],
+            sinceDays: 3,
+          })
+        );
+
+        const filters = getSubscribeCalls()[0][0];
+        expect(filters[0].since).toBe(Math.floor(fixedNowMs / 1000) - 3 * 86400);
+      } finally {
+        nowSpy.mockRestore();
+      }
+    });
   });
 
   // =============================================================================
@@ -578,48 +617,60 @@ describe('useIncidentSubscription', () => {
     });
 
     it('uses incidentId as a stable tie-breaker when distance and recency match', async () => {
-      const fixedOccurredAt = '2026-01-01T12:00:00.000Z';
+      const fixedNowMs = 1_735_689_600_000;
+      const nowSpy = jest.spyOn(Date, 'now').mockReturnValue(fixedNowMs);
+      const fixedOccurredAt = new Date(fixedNowMs - 3600 * 1000).toISOString();
+      const fixedCreatedAt = Math.floor((fixedNowMs - 3600 * 1000) / 1000);
 
-      const incidentB = createMockIncidentEvent({
-        id: 'event-b',
-        incidentId: 'incident-b',
-        title: 'Incident B',
-        occurredAt: fixedOccurredAt,
-        lat: 40.7128,
-        lng: -74.006,
-      });
-      const incidentA = createMockIncidentEvent({
-        id: 'event-a',
-        incidentId: 'incident-a',
-        title: 'Incident A',
-        occurredAt: fixedOccurredAt,
-        lat: 40.7128,
-        lng: -74.006,
-      });
+      try {
+        const incidentB = createMockIncidentEvent({
+          id: 'event-b',
+          incidentId: 'incident-b',
+          title: 'Incident B',
+          created_at: fixedCreatedAt,
+          occurredAt: fixedOccurredAt,
+          lat: 39.9526,
+          lng: -75.1652,
+        });
+        const incidentA = createMockIncidentEvent({
+          id: 'event-a',
+          incidentId: 'incident-a',
+          title: 'Incident A',
+          created_at: fixedCreatedAt,
+          occurredAt: fixedOccurredAt,
+          lat: 39.9526,
+          lng: -75.1652,
+        });
 
-      mockSubscription.setEvents([incidentB, incidentA]);
-      mockSubscription.setEose(true);
+        mockSubscription.setEvents([incidentB, incidentA]);
+        mockSubscription.setEose(true);
 
-      const { result } = renderHook(() =>
-        useIncidentSubscription({
-          location: [-74.006, 40.7128],
-        })
-      );
+        const { result } = renderHook(() =>
+          useIncidentSubscription({
+            location: [-75.1652, 39.9526],
+            sinceDays: 30,
+          })
+        );
 
-      await waitFor(() => {
-        expect(result.current.incidents.length).toBe(2);
-        expect(result.current.incidents[0].incidentId).toBe('incident-a');
-        expect(result.current.incidents[1].incidentId).toBe('incident-b');
-      });
+        await waitFor(() => {
+          expect(result.current.incidents.length).toBe(2);
+          expect(result.current.incidents[0].incidentId).toBe('incident-a');
+          expect(result.current.incidents[1].incidentId).toBe('incident-b');
+        });
+      } finally {
+        nowSpy.mockRestore();
+      }
     });
 
     it('re-sorts existing incidents when location changes', async () => {
       const fixedOccurredAt = '2026-01-01T12:00:00.000Z';
+      const fixedCreatedAt = Math.floor(Date.parse(fixedOccurredAt) / 1000);
 
       const phillyIncident = createMockIncidentEvent({
         id: 'event-philly',
         incidentId: 'incident-philly',
         title: 'Philadelphia Incident',
+        created_at: fixedCreatedAt,
         occurredAt: fixedOccurredAt,
         lat: 39.9526,
         lng: -75.1652,
@@ -628,6 +679,7 @@ describe('useIncidentSubscription', () => {
         id: 'event-nyc',
         incidentId: 'incident-nyc',
         title: 'NYC Incident',
+        created_at: fixedCreatedAt,
         occurredAt: fixedOccurredAt,
         lat: 40.7128,
         lng: -74.006,
@@ -639,7 +691,7 @@ describe('useIncidentSubscription', () => {
       const { result, rerender } = renderHook(
         (props: UseIncidentSubscriptionOptions) => useIncidentSubscription(props),
         {
-          initialProps: { location: [-75.1652, 39.9526] },
+          initialProps: { location: [-75.1652, 39.9526], sinceDays: 365 },
         }
       );
 
@@ -647,7 +699,7 @@ describe('useIncidentSubscription', () => {
         expect(result.current.incidents[0].incidentId).toBe('incident-philly');
       });
 
-      rerender({ location: [-74.006, 40.7128] });
+      rerender({ location: [-74.006, 40.7128], sinceDays: 365 });
 
       await waitFor(() => {
         expect(result.current.incidents[0].incidentId).toBe('incident-nyc');
@@ -964,6 +1016,28 @@ describe('useIncidentSubscription', () => {
       expect(result.current.hasReceivedHistory).toBe(true);
       expect(result.current.isInitialLoading).toBe(false);
     });
+
+    it('keeps history complete when sinceDays changes with no desired cells', () => {
+      const { result, rerender } = renderHook(
+        ({ sinceDays }) =>
+          useIncidentSubscription({
+            location: null,
+            sinceDays,
+          }),
+        {
+          initialProps: { sinceDays: 30 },
+        }
+      );
+
+      expect(result.current.hasReceivedHistory).toBe(true);
+      expect(result.current.isInitialLoading).toBe(false);
+
+      rerender({ sinceDays: 1 });
+
+      expect(result.current.hasReceivedHistory).toBe(true);
+      expect(result.current.isInitialLoading).toBe(false);
+      expect(getSubscribeCalls().length).toBe(0);
+    });
   });
 
   // =============================================================================
@@ -1044,31 +1118,449 @@ describe('useIncidentSubscription', () => {
     });
 
     it('handles location change without altering simple filter', () => {
-      const { rerender } = renderHook(
-        ({ location }) =>
-          useIncidentSubscription({
-            location,
-          }),
-        {
-          initialProps: { location: [-75.1652, 39.9526] as [number, number] },
-        }
-      );
+      const fixedNowMs = 1_735_689_600_000;
+      const nowSpy = jest.spyOn(Date, 'now').mockReturnValue(fixedNowMs);
 
-      rerender({ location: [-74.006, 40.7128] as [number, number] });
+      try {
+        const { rerender } = renderHook(
+          ({ location }) =>
+            useIncidentSubscription({
+              location,
+            }),
+          {
+            initialProps: { location: [-75.1652, 39.9526] as [number, number] },
+          }
+        );
 
-      const calls = getSubscribeCalls();
-      const globalFilterCall = calls.find(([filters]) => {
-        if (!Array.isArray(filters) || filters.length === 0) {
-          return false;
-        }
-        return Array.isArray(filters[0]?.kinds) && filters[0].kinds.includes(30911);
-      });
-      const filters = globalFilterCall?.[0];
+        rerender({ location: [-74.006, 40.7128] as [number, number] });
 
-      expect(filters).toBeDefined();
-      expect(filters[0].kinds).toEqual([30911]);
-      expect(filters[0].limit).toBe(INCIDENT_LIMITS.FETCH_LIMIT);
-      expect(filters[0].since).toBeUndefined();
+        const calls = getSubscribeCalls();
+        const globalFilterCall = calls.find(([filters]) => {
+          if (!Array.isArray(filters) || filters.length === 0) {
+            return false;
+          }
+          return Array.isArray(filters[0]?.kinds) && filters[0].kinds.includes(30911);
+        });
+        const filters = globalFilterCall?.[0];
+
+        expect(filters).toBeDefined();
+        expect(filters[0].kinds).toEqual([30911]);
+        expect(filters[0].limit).toBe(INCIDENT_LIMITS.FETCH_LIMIT);
+        expect(filters[0].since).toBe(
+          Math.floor(fixedNowMs / 1000) - INCIDENT_LIMITS.SINCE_DAYS * 86400
+        );
+      } finally {
+        nowSpy.mockRestore();
+      }
+    });
+
+    it('restarts live subscriptions when sinceDays changes', async () => {
+      const fixedNowMs = 1_735_689_600_000;
+      const nowSpy = jest.spyOn(Date, 'now').mockReturnValue(fixedNowMs);
+
+      try {
+        const { rerender } = renderHook(
+          ({ sinceDays }) =>
+            useIncidentSubscription({
+              location: [-75.1652, 39.9526],
+              sinceDays,
+            }),
+          {
+            initialProps: { sinceDays: 30 },
+          }
+        );
+
+        const initialCallCount = getSubscribeCalls().length;
+
+        rerender({ sinceDays: 1 });
+
+        await waitFor(() => {
+          expect(getSubscribeCalls().length).toBeGreaterThan(initialCallCount);
+        });
+
+        const latestFilters = getSubscribeCalls()[getSubscribeCalls().length - 1][0];
+        expect(latestFilters[0].since).toBe(
+          Math.floor(fixedNowMs / 1000) - 86400
+        );
+      } finally {
+        nowSpy.mockRestore();
+      }
+    });
+
+    it('preserves buffered live incidents when sinceDays changes before flush', async () => {
+      const fixedNowMs = 1_735_689_600_000;
+      const nowSpy = jest.spyOn(Date, 'now').mockReturnValue(fixedNowMs);
+
+      try {
+        const bufferedEvent = createMockIncidentEvent({
+          incidentId: 'buffered-live',
+          title: 'Buffered Live',
+          created_at: Math.floor(fixedNowMs / 1000) - 3600,
+        });
+
+        const { result, rerender } = renderHook(
+          ({ sinceDays }) =>
+            useIncidentSubscription({
+              location: [-75.1652, 39.9526],
+              sinceDays,
+            }),
+          {
+            initialProps: { sinceDays: 30 },
+          }
+        );
+
+        mockSubscription.addEvent(bufferedEvent);
+        mockSubscription.setEvents([]);
+        rerender({ sinceDays: 1 });
+
+        await waitFor(() => {
+          expect(
+            result.current.incidents.some(
+              (incident) => incident.incidentId === 'buffered-live'
+            )
+          ).toBe(true);
+        });
+      } finally {
+        nowSpy.mockRestore();
+      }
+    });
+
+    it('drops buffered incidents older than the narrowed sinceDays before flush', async () => {
+      const fixedNowMs = 1_735_689_600_000;
+      const nowSpy = jest.spyOn(Date, 'now').mockReturnValue(fixedNowMs);
+
+      try {
+        const bufferedEvent = createMockIncidentEvent({
+          incidentId: 'stale-buffered',
+          title: 'Stale Buffered',
+          created_at: Math.floor(fixedNowMs / 1000) - 5 * 86400,
+        });
+
+        const { result, rerender } = renderHook(
+          ({ sinceDays }) =>
+            useIncidentSubscription({
+              location: [-75.1652, 39.9526],
+              sinceDays,
+            }),
+          {
+            initialProps: { sinceDays: 30 },
+          }
+        );
+
+        const initialCallCount = getSubscribeCalls().length;
+
+        mockSubscription.addEvent(bufferedEvent);
+        mockSubscription.setEvents([]);
+        rerender({ sinceDays: 1 });
+
+        await waitFor(() => {
+          expect(getSubscribeCalls().length).toBeGreaterThan(initialCallCount);
+        });
+
+        expect(
+          result.current.incidents.some(
+            (incident) => incident.incidentId === 'stale-buffered'
+          )
+        ).toBe(false);
+        expect(result.current.totalEventsReceived).toBe(0);
+      } finally {
+        nowSpy.mockRestore();
+      }
+    });
+
+    it('drops stale cache replayed incidents when sinceDays narrows and subscriptions restart', async () => {
+      const fixedNowMs = 1_735_689_600_000;
+      const nowSpy = jest.spyOn(Date, 'now').mockReturnValue(fixedNowMs);
+
+      try {
+        const staleEvent = createMockIncidentEvent({
+          incidentId: 'stale-cache-replay',
+          title: 'Stale Cache Replay',
+          created_at: Math.floor(fixedNowMs / 1000) - 5 * 86400,
+          occurredAt: new Date(fixedNowMs - 5 * 86400 * 1000).toISOString(),
+        });
+
+        mockSubscription.setEvents([staleEvent]);
+        mockSubscription.setEose(true);
+
+        const { result, rerender } = renderHook(
+          ({ sinceDays }) =>
+            useIncidentSubscription({
+              location: [-75.1652, 39.9526],
+              sinceDays,
+            }),
+          {
+            initialProps: { sinceDays: 30 },
+          }
+        );
+
+        await waitFor(() => {
+          expect(
+            result.current.incidents.some(
+              (incident) => incident.incidentId === 'stale-cache-replay'
+            )
+          ).toBe(true);
+        });
+
+        rerender({ sinceDays: 1 });
+
+        await waitFor(() => {
+          expect(
+            result.current.incidents.some(
+              (incident) => incident.incidentId === 'stale-cache-replay'
+            )
+          ).toBe(false);
+        });
+
+        expect(result.current.totalEventsReceived).toBe(0);
+      } finally {
+        nowSpy.mockRestore();
+      }
+    });
+
+    it('preserves already-visible in-window incidents when sinceDays changes and replay does not re-emit them', async () => {
+      const fixedNowMs = 1_735_689_600_000;
+      const nowSpy = jest.spyOn(Date, 'now').mockReturnValue(fixedNowMs);
+
+      try {
+        const freshVisibleEvent = createMockIncidentEvent({
+          incidentId: 'fresh-visible-incident',
+          title: 'Fresh Visible Incident',
+          created_at: Math.floor(fixedNowMs / 1000) - 3600,
+          occurredAt: new Date(fixedNowMs - 3600 * 1000).toISOString(),
+        });
+
+        mockSubscription.setEvents([freshVisibleEvent]);
+        mockSubscription.setEose(true);
+
+        const { result, rerender } = renderHook(
+          ({ sinceDays }) =>
+            useIncidentSubscription({
+              location: [-75.1652, 39.9526],
+              sinceDays,
+            }),
+          {
+            initialProps: { sinceDays: 30 },
+          }
+        );
+
+        await waitFor(() => {
+          expect(result.current.incidents.map((incident) => incident.incidentId)).toEqual([
+            'fresh-visible-incident',
+          ]);
+        });
+
+        mockSubscription.setEvents([]);
+        mockSubscription.setEose(false);
+        rerender({ sinceDays: 1 });
+
+        await waitFor(() => {
+          expect(result.current.incidents.map((incident) => incident.incidentId)).toEqual([
+            'fresh-visible-incident',
+          ]);
+          expect(result.current.hasReceivedHistory).toBe(false);
+        });
+      } finally {
+        nowSpy.mockRestore();
+      }
+    });
+
+    it('removes already-visible incidents that are outside the narrowed window even when replay does not re-emit them', async () => {
+      const fixedNowMs = 1_735_689_600_000;
+      const nowSpy = jest.spyOn(Date, 'now').mockReturnValue(fixedNowMs);
+
+      try {
+        const staleVisibleEvent = createMockIncidentEvent({
+          incidentId: 'stale-visible-incident',
+          title: 'Stale Visible Incident',
+          created_at: Math.floor(fixedNowMs / 1000) - 5 * 86400,
+          occurredAt: new Date(fixedNowMs - 5 * 86400 * 1000).toISOString(),
+        });
+
+        mockSubscription.setEvents([staleVisibleEvent]);
+        mockSubscription.setEose(true);
+
+        const { result, rerender } = renderHook(
+          ({ sinceDays }) =>
+            useIncidentSubscription({
+              location: [-75.1652, 39.9526],
+              sinceDays,
+            }),
+          {
+            initialProps: { sinceDays: 30 },
+          }
+        );
+
+        await waitFor(() => {
+          expect(result.current.incidents.map((incident) => incident.incidentId)).toEqual([
+            'stale-visible-incident',
+          ]);
+        });
+
+        mockSubscription.setEvents([]);
+        mockSubscription.setEose(false);
+        rerender({ sinceDays: 1 });
+
+        await waitFor(() => {
+          expect(result.current.incidents).toEqual([]);
+          expect(result.current.hasReceivedHistory).toBe(false);
+        });
+      } finally {
+        nowSpy.mockRestore();
+      }
+    });
+
+    it('preserves only the already-visible incidents that remain in-window across a sinceDays change without replay', async () => {
+      const fixedNowMs = 1_735_689_600_000;
+      const nowSpy = jest.spyOn(Date, 'now').mockReturnValue(fixedNowMs);
+
+      try {
+        const staleVisibleEvent = createMockIncidentEvent({
+          incidentId: 'mixed-stale-visible',
+          title: 'Mixed Stale Visible',
+          created_at: Math.floor(fixedNowMs / 1000) - 5 * 86400,
+          occurredAt: new Date(fixedNowMs - 5 * 86400 * 1000).toISOString(),
+        });
+        const freshVisibleEvent = createMockIncidentEvent({
+          incidentId: 'mixed-fresh-visible',
+          title: 'Mixed Fresh Visible',
+          created_at: Math.floor(fixedNowMs / 1000) - 2 * 3600,
+          occurredAt: new Date(fixedNowMs - 2 * 3600 * 1000).toISOString(),
+        });
+
+        mockSubscription.setEvents([staleVisibleEvent, freshVisibleEvent]);
+        mockSubscription.setEose(true);
+
+        const { result, rerender } = renderHook(
+          ({ sinceDays }) =>
+            useIncidentSubscription({
+              location: [-75.1652, 39.9526],
+              sinceDays,
+            }),
+          {
+            initialProps: { sinceDays: 30 },
+          }
+        );
+
+        await waitFor(() => {
+          expect(result.current.incidents.map((incident) => incident.incidentId)).toEqual([
+            'mixed-fresh-visible',
+            'mixed-stale-visible',
+          ]);
+        });
+
+        mockSubscription.setEvents([]);
+        mockSubscription.setEose(false);
+        rerender({ sinceDays: 1 });
+
+        await waitFor(() => {
+          expect(result.current.incidents.map((incident) => incident.incidentId)).toEqual([
+            'mixed-fresh-visible',
+          ]);
+          expect(result.current.hasReceivedHistory).toBe(false);
+        });
+      } finally {
+        nowSpy.mockRestore();
+      }
+    });
+
+    it('keeps only in-window replayed incidents visible when sinceDays narrows', async () => {
+      const fixedNowMs = 1_735_689_600_000;
+      const nowSpy = jest.spyOn(Date, 'now').mockReturnValue(fixedNowMs);
+
+      try {
+        const staleEvent = createMockIncidentEvent({
+          incidentId: 'stale-cache-replay',
+          title: 'Stale Cache Replay',
+          created_at: Math.floor(fixedNowMs / 1000) - 5 * 86400,
+          occurredAt: new Date(fixedNowMs - 5 * 86400 * 1000).toISOString(),
+        });
+        const freshEvent = createMockIncidentEvent({
+          incidentId: 'fresh-cache-replay',
+          title: 'Fresh Cache Replay',
+          created_at: Math.floor(fixedNowMs / 1000) - 3600,
+          occurredAt: new Date(fixedNowMs - 3600 * 1000).toISOString(),
+        });
+
+        mockSubscription.setEvents([staleEvent, freshEvent]);
+        mockSubscription.setEose(true);
+
+        const { result, rerender } = renderHook(
+          ({ sinceDays }) =>
+            useIncidentSubscription({
+              location: [-75.1652, 39.9526],
+              sinceDays,
+            }),
+          {
+            initialProps: { sinceDays: 30 },
+          }
+        );
+
+        await waitFor(() => {
+          expect(result.current.incidents.length).toBe(2);
+        });
+
+        rerender({ sinceDays: 1 });
+
+        await waitFor(() => {
+          expect(result.current.incidents.map((incident) => incident.incidentId)).toEqual([
+            'fresh-cache-replay',
+          ]);
+        });
+
+      } finally {
+        nowSpy.mockRestore();
+      }
+    });
+
+    it('drops replayed incidents whose occurrence is older than the narrowed window even when created_at is recent', async () => {
+      const fixedNowMs = 1_735_689_600_000;
+      const nowSpy = jest.spyOn(Date, 'now').mockReturnValue(fixedNowMs);
+
+      try {
+        const recentlyReportedOldIncident = createMockIncidentEvent({
+          incidentId: 'recently-reported-old-incident',
+          title: 'Recently Reported Old Incident',
+          created_at: Math.floor(fixedNowMs / 1000) - 3600,
+          occurredAt: new Date(fixedNowMs - 5 * 86400 * 1000).toISOString(),
+        });
+        const freshIncident = createMockIncidentEvent({
+          incidentId: 'fresh-occurrence-incident',
+          title: 'Fresh Occurrence Incident',
+          created_at: Math.floor(fixedNowMs / 1000) - 1800,
+          occurredAt: new Date(fixedNowMs - 1800 * 1000).toISOString(),
+        });
+
+        mockSubscription.setEvents([recentlyReportedOldIncident, freshIncident]);
+        mockSubscription.setEose(true);
+
+        const { result, rerender } = renderHook(
+          ({ sinceDays }) =>
+            useIncidentSubscription({
+              location: [-75.1652, 39.9526],
+              sinceDays,
+            }),
+          {
+            initialProps: { sinceDays: 30 },
+          }
+        );
+
+        await waitFor(() => {
+          expect(
+            result.current.incidents.map((incident) => incident.incidentId)
+          ).toContain('recently-reported-old-incident');
+        });
+
+        rerender({ sinceDays: 1 });
+
+        await waitFor(() => {
+          expect(result.current.incidents.map((incident) => incident.incidentId)).toEqual([
+            'fresh-occurrence-incident',
+          ]);
+        });
+      } finally {
+        nowSpy.mockRestore();
+      }
     });
 
     it('handles rapid enabled toggling', () => {

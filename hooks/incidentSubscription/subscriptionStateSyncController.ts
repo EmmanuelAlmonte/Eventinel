@@ -2,6 +2,7 @@ import { useCallback } from 'react';
 import type { Dispatch, MutableRefObject, SetStateAction } from 'react';
 import type { NDKEvent } from '@nostr-dev-kit/mobile';
 
+import { calculateIncidentSinceUnixSeconds } from '@lib/incidentHistoryWindow';
 import { INCIDENT_LIMITS } from '@lib/map/constants';
 import { buildIncidentDisplayState } from './sorting';
 import { applyIncidentEventBatch } from './eventReducer';
@@ -16,11 +17,30 @@ import { SUBSCRIPTION_BUFFER_MS } from './types';
 // Keep subscription logs dev-only and opt-in to reduce noise during normal local runs.
 const DEBUG_CACHE =
   __DEV__ && process.env.EXPO_PUBLIC_DEBUG_INCIDENT_SUBSCRIPTION === '1';
+const DEBUG_HISTORY_WINDOW =
+  __DEV__ && (globalThis as Record<string, unknown>).describe == null;
+
+function logHistoryWindowDebugEvent(
+  event: string,
+  details?: Record<string, unknown>
+) {
+  if (!DEBUG_HISTORY_WINDOW) {
+    return;
+  }
+
+  if (details) {
+    console.info(`[HistoryWindowDebug] ${event}`, details);
+    return;
+  }
+
+  console.info(`[HistoryWindowDebug] ${event}`);
+}
 
 function recomputeVisibleSubscriptionState(
   {
     enabled,
     incidentMapRef,
+    sinceDays,
     stableLocation,
     effectiveMaxIncidents,
     lastUpdatedRef,
@@ -30,6 +50,7 @@ function recomputeVisibleSubscriptionState(
   }: {
     enabled: boolean;
     incidentMapRef: MutableRefObject<Map<string, ProcessedIncident>>;
+    sinceDays: number;
     stableLocation: [number, number] | null;
     effectiveMaxIncidents: number;
     lastUpdatedRef: MutableRefObject<number | null>;
@@ -43,15 +64,37 @@ function recomputeVisibleSubscriptionState(
     return;
   }
 
+  const cutoffUnixSeconds = calculateIncidentSinceUnixSeconds(sinceDays);
+  const cutoffMs = cutoffUnixSeconds * 1000;
   const { incidents, severityCounts } = buildIncidentDisplayState({
     incidentMap: incidentMapRef.current,
     location: stableLocation,
     maxIncidents: effectiveMaxIncidents,
+    minOccurredAtMs: cutoffMs,
   });
+
+  const visibleOutOfWindowIncidents = incidents.filter(
+    (incident) => incident.occurredAtMs < cutoffMs
+  );
 
   if (updatedIncidents.length > 0) {
     lastUpdatedRef.current = Date.now();
   }
+
+  logHistoryWindowDebugEvent('visible window check', {
+    historyWindowDays: sinceDays,
+    cutoffUnixSeconds,
+    visibleIncidentCount: incidents.length,
+    updatedIncidentCount: updatedIncidents.length,
+    visibleOutOfWindowCount: visibleOutOfWindowIncidents.length,
+    visibleOutOfWindowSamples: visibleOutOfWindowIncidents.slice(0, 3).map((incident) => ({
+      incidentId: incident.incidentId,
+      eventId: incident.eventId,
+      createdAtMs: incident.createdAtMs,
+      occurredAtMs: incident.occurredAtMs,
+      title: incident.title,
+    })),
+  });
 
   setState({
     incidents,
@@ -74,6 +117,7 @@ function clearSubscriptionFlushTimer(
 function flushQueuedIncidentEvents(
   args: {
     stableLocation: [number, number] | null;
+    sinceDays: number;
     incidentMapRef: MutableRefObject<Map<string, ProcessedIncident>>;
     pendingEventsRef: MutableRefObject<QueuedEvent[]>;
     flushTimerRef: MutableRefObject<ReturnType<typeof setTimeout> | null>;
@@ -98,6 +142,7 @@ function flushQueuedIncidentEvents(
     incidentMap: args.incidentMapRef.current,
     maxCandidateRetention: INCIDENT_LIMITS.CANDIDATE_RETENTION,
     location: args.stableLocation,
+    minCreatedAtUnixSeconds: calculateIncidentSinceUnixSeconds(args.sinceDays),
   });
   args.incidentMapRef.current = reducerResult.incidentMap;
 
@@ -150,6 +195,7 @@ function enqueueIncidentEvents(
 export function useIncidentSubscriptionStateSyncController({
   enabled,
   stableLocation,
+  sinceDays,
   effectiveMaxIncidents,
   incidentMapRef,
   pendingEventsRef,
@@ -161,6 +207,7 @@ export function useIncidentSubscriptionStateSyncController({
 }: {
   enabled: boolean;
   stableLocation: [number, number] | null;
+  sinceDays: number;
   effectiveMaxIncidents: number;
   incidentMapRef: MutableRefObject<Map<string, ProcessedIncident>>;
   pendingEventsRef: MutableRefObject<QueuedEvent[]>;
@@ -181,6 +228,7 @@ export function useIncidentSubscriptionStateSyncController({
         {
           enabled,
           incidentMapRef,
+          sinceDays,
           stableLocation,
           effectiveMaxIncidents,
           lastUpdatedRef,
@@ -198,6 +246,7 @@ export function useIncidentSubscriptionStateSyncController({
       lastUpdatedRef,
       lastTotalEventsRef,
       setState,
+      sinceDays,
       stableLocation,
     ]
   );
@@ -206,6 +255,7 @@ export function useIncidentSubscriptionStateSyncController({
     flushQueuedIncidentEvents(
       {
         stableLocation,
+        sinceDays,
         incidentMapRef,
         pendingEventsRef,
         flushTimerRef,
@@ -217,6 +267,7 @@ export function useIncidentSubscriptionStateSyncController({
       recomputeVisibleState
     );
   }, [
+    sinceDays,
     stableLocation,
     incidentMapRef,
     pendingEventsRef,
@@ -252,4 +303,3 @@ export function useIncidentSubscriptionStateSyncController({
     clearQueuedEvents,
   };
 }
-
