@@ -195,8 +195,6 @@ function MapTopControls({
   historyWindowDays,
   historyWindowPresets,
   isHistoryWindowReady,
-  activeDateRangeLabel,
-  dateRangeStatusLabel,
   isDateRangeRefreshing,
   visibleIncidentCount,
   hasReceivedHistory,
@@ -211,8 +209,6 @@ function MapTopControls({
   historyWindowDays: number;
   historyWindowPresets: readonly number[];
   isHistoryWindowReady: boolean;
-  activeDateRangeLabel: string;
-  dateRangeStatusLabel: string;
   isDateRangeRefreshing: boolean;
   visibleIncidentCount: number;
   hasReceivedHistory: boolean;
@@ -304,32 +300,16 @@ function MapTopControls({
             />
           </Pressable>
 
-          <MapStatusSummary
-            visibleIncidentCount={visibleIncidentCount}
-            hasReceivedHistory={hasReceivedHistory}
-          />
+          {!isDateRangeMenuOpen ? (
+            <MapStatusSummary
+              visibleIncidentCount={visibleIncidentCount}
+              hasReceivedHistory={hasReceivedHistory}
+            />
+          ) : null}
         </View>
-      </View>
 
-      {isDateRangeMenuOpen ? (
-        <View style={styles.dateRangePopover}>
-          <View style={styles.dateRangePopoverHeader}>
-            <Text style={styles.dateRangePopoverTitle}>Date Range</Text>
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel="Close date range options"
-              onPress={onCloseDateRangeMenu}
-              style={({ pressed }) => [styles.dateRangePopoverClose, pressed && styles.filterPillPressed]}
-            >
-              <Icon name="close" type="material" size={16} color="#CBD5E1" />
-            </Pressable>
-          </View>
-
-          <Text style={styles.dateRangePopoverDescription}>
-            This changes how much past incident history is loaded.
-          </Text>
-
-          <View style={styles.dateRangeChipRow}>
+        {isDateRangeMenuOpen ? (
+          <View style={styles.inlineDateRangeOptions}>
             {historyWindowPresets.map((days) => {
               const isActive = historyWindowDays === days;
               const isDisabled = !isHistoryWindowReady;
@@ -338,8 +318,8 @@ function MapTopControls({
                 <Pressable
                   key={days}
                   style={({ pressed }) => [
-                    styles.dateRangeChip,
-                    isActive && styles.dateRangeChipActive,
+                    styles.inlineDateRangeChip,
+                    isActive && styles.inlineDateRangeChipActive,
                     isDisabled && styles.dateRangeChipDisabled,
                     pressed && !isDisabled && styles.dateRangeChipPressed,
                   ]}
@@ -354,8 +334,8 @@ function MapTopControls({
                 >
                   <Text
                     style={[
-                      styles.dateRangeChipText,
-                      isActive && styles.dateRangeChipTextActive,
+                      styles.inlineDateRangeChipText,
+                      isActive && styles.inlineDateRangeChipTextActive,
                     ]}
                   >
                     {formatIncidentHistoryWindowChipLabel(days)}
@@ -364,19 +344,8 @@ function MapTopControls({
               );
             })}
           </View>
-
-          <Text
-            style={[
-              styles.dateRangePopoverStatusText,
-              { color: isDateRangeRefreshing ? colors.primary : 'rgba(203, 213, 225, 0.74)' },
-            ]}
-          >
-            {isDateRangeRefreshing
-              ? dateRangeStatusLabel
-              : `Current range: ${activeDateRangeLabel}`}
-          </Text>
-        </View>
-      ) : null}
+        ) : null}
+      </View>
     </View>
   );
 }
@@ -409,22 +378,12 @@ export function MapOverlays({
 
   return (
     <>
-      {isDateRangeMenuOpen ? (
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="Close date range menu"
-          onPress={() => setIsDateRangeMenuOpen(false)}
-          style={styles.popoverBackdrop}
-        />
-      ) : null}
       <MapTopControls
         colors={colors}
         insets={insets}
         historyWindowDays={historyWindowDays}
         historyWindowPresets={historyWindowPresets}
         isHistoryWindowReady={isHistoryWindowReady}
-        activeDateRangeLabel={activeDateRangeLabel}
-        dateRangeStatusLabel={dateRangeStatusLabel}
         isDateRangeRefreshing={isDateRangeRefreshing}
         visibleIncidentCount={visibleIncidents.length}
         hasReceivedHistory={hasReceivedHistory}

@@ -93,67 +93,37 @@ export const mapScreenStyles = StyleSheet.create({
   filterPillTextRefreshing: {
     color: '#DBEAFE',
   },
-  dateRangePopover: {
-    marginTop: 10,
-    maxWidth: 280,
-    borderRadius: 18,
-    borderWidth: 1,
-    borderColor: 'rgba(96, 165, 250, 0.35)',
-    backgroundColor: 'rgba(7, 11, 22, 0.96)',
-    paddingHorizontal: 14,
-    paddingVertical: 14,
-    gap: 12,
-    shadowColor: '#020617',
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.28,
-    shadowRadius: 24,
-    elevation: 14,
-  },
-  dateRangePopoverHeader: {
+  inlineDateRangeOptions: {
     flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 12,
-  },
-  dateRangePopoverTitle: {
-    color: '#F8FAFC',
-    fontSize: 14,
-    fontWeight: '700',
-    letterSpacing: 0.3,
-  },
-  dateRangePopoverClose: {
-    width: 28,
-    height: 28,
-    borderRadius: 999,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: 'rgba(30, 41, 59, 0.82)',
-    borderWidth: 1,
-    borderColor: 'rgba(148, 163, 184, 0.2)',
-  },
-  dateRangePopoverDescription: {
-    color: 'rgba(203, 213, 225, 0.78)',
-    fontSize: 12,
-    lineHeight: 17,
-  },
-  dateRangeChipRow: {
-    flexDirection: 'row',
-    gap: 8,
     flexWrap: 'wrap',
+    gap: 8,
   },
-  dateRangeChip: {
+  inlineDateRangeChip: {
     minWidth: 58,
     paddingHorizontal: 12,
     paddingVertical: 9,
     borderRadius: 999,
     borderWidth: 1,
-    borderColor: 'rgba(148, 163, 184, 0.22)',
-    backgroundColor: 'rgba(15, 23, 42, 0.58)',
+    borderColor: 'rgba(255, 255, 255, 0.06)',
+    backgroundColor: 'rgba(255, 255, 255, 0.06)',
     alignItems: 'center',
   },
-  dateRangeChipActive: {
+  inlineDateRangeChipActive: {
     backgroundColor: '#2563eb',
-    borderColor: '#60a5fa',
+    borderColor: 'rgba(96, 165, 250, 0.55)',
+  },
+  inlineDateRangeChipText: {
+    color: '#E2E8F0',
+    fontSize: 12,
+    fontWeight: '700',
+    letterSpacing: 0.6,
+  },
+  inlineDateRangeChipTextActive: {
+    color: '#FFFFFF',
+  },
+  dateRangeChipRow: {
+    flexDirection: 'row',
+    gap: 12,
   },
   dateRangeChipDisabled: {
     opacity: 0.55,
@@ -161,23 +131,6 @@ export const mapScreenStyles = StyleSheet.create({
   dateRangeChipPressed: {
     opacity: 0.82,
     transform: [{ scale: 0.98 }],
-  },
-  dateRangeChipText: {
-    color: '#e2e8f0',
-    fontSize: 12,
-    fontWeight: '700',
-    letterSpacing: 0.6,
-  },
-  dateRangeChipTextActive: {
-    color: '#ffffff',
-  },
-  dateRangePopoverStatusText: {
-    fontSize: 12,
-    fontWeight: '600',
-  },
-  popoverBackdrop: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'transparent',
   },
   mapPlaceholder: {
     flex: 1,
