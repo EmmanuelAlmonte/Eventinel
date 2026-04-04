@@ -1,5 +1,5 @@
 import { ActivityIndicator, Pressable, StyleSheet, View } from 'react-native';
-import { Avatar, Card, Icon, Text } from '@rneui/themed';
+import { Avatar, Icon, Text } from '@rneui/themed';
 
 import { formatRelativeTimeMs } from '@lib/utils/time';
 import type { IncidentComment } from '@hooks';
@@ -61,8 +61,13 @@ export function IncidentCommentsSection({
   return (
     <View style={styles.section}>
       <View style={styles.commentsHeader}>
-        <Icon name="chat-bubble-outline" type="material" size={20} color={colors.textMuted} />
-        <Text style={[styles.commentsTitle, { color: colors.text }]}>Comments ({comments.length})</Text>
+        <Text style={[styles.commentsEyebrow, { color: colors.primary }]}>Community context</Text>
+        <Text style={[styles.commentsTitle, { color: colors.text }]}>Discussion</Text>
+        <Text style={[styles.commentsSubtitle, { color: colors.textMuted }]}>
+          {comments.length > 0
+            ? `${comments.length} people have added context to this report.`
+            : 'No comments yet. Add context if you know more.'}
+        </Text>
       </View>
 
       {commentsAreStale && comments.length === 0 ? (
@@ -110,9 +115,9 @@ export function IncidentCommentsSection({
             const isDeleting = deletingCommentId === comment.id;
 
             return (
-              <Card
+              <View
                 key={comment.id}
-                containerStyle={[
+                style={[
                   styles.commentCard,
                   { backgroundColor: colors.surface, borderColor: colors.border },
                 ]}
@@ -153,7 +158,7 @@ export function IncidentCommentsSection({
                     </View>
                   </View>
                 </Pressable>
-              </Card>
+              </View>
             );
           })}
 
@@ -173,21 +178,30 @@ export function IncidentCommentsSection({
 const styles = StyleSheet.create({
   section: {
     paddingHorizontal: 16,
-    marginBottom: 12,
+    marginBottom: 20,
   },
   commentsHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    marginBottom: 12,
+    marginBottom: 18,
+  },
+  commentsEyebrow: {
+    fontSize: 12,
+    fontWeight: '700',
+    letterSpacing: 0.8,
+    textTransform: 'uppercase',
+    marginBottom: 4,
   },
   commentsTitle: {
-    fontSize: 16,
-    fontWeight: '600',
+    fontSize: 24,
+    fontWeight: '700',
+    marginBottom: 6,
+  },
+  commentsSubtitle: {
+    fontSize: 14,
+    lineHeight: 20,
   },
   emptyComments: {
     alignItems: 'center',
-    paddingVertical: 24,
+    paddingVertical: 28,
   },
   emptyText: {
     fontSize: 16,
@@ -198,11 +212,10 @@ const styles = StyleSheet.create({
     fontSize: 14,
   },
   commentCard: {
-    borderRadius: 12,
+    borderRadius: 18,
     borderWidth: 1,
-    padding: 12,
-    margin: 0,
-    marginBottom: 8,
+    padding: 14,
+    marginBottom: 10,
   },
   comment: {
     flexDirection: 'row',

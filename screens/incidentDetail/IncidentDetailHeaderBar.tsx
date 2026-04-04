@@ -4,8 +4,8 @@ import type { EdgeInsets } from 'react-native-safe-area-context';
 
 type ThemeColors = {
   background: string;
+  border: string;
   text: string;
-  textMuted: string;
 };
 
 type IncidentDetailHeaderBarProps = {
@@ -22,17 +22,22 @@ export function IncidentDetailHeaderBar({
   onShare,
 }: IncidentDetailHeaderBarProps) {
   return (
-    <View style={[styles.header, { paddingTop: insets.top + 8, backgroundColor: colors.background }]}>
+    <View
+      style={[
+        styles.header,
+        {
+          paddingTop: insets.top + 8,
+          backgroundColor: colors.background,
+          borderBottomColor: colors.border,
+        },
+      ]}
+    >
       <Pressable onPress={onBack} style={styles.backButton}>
         <Icon name="chevron-left" type="material" size={28} color={colors.text} />
         <Text style={[styles.backText, { color: colors.text }]}>Back</Text>
       </Pressable>
 
       <View style={styles.headerRight}>
-        <View style={styles.liveIndicator}>
-          <View style={styles.liveDot} />
-          <Text style={[styles.liveText, { color: colors.textMuted }]}>LIVE</Text>
-        </View>
         <Pressable onPress={onShare} style={styles.shareButton}>
           <Icon name="share" type="material" size={24} color={colors.text} />
         </Pressable>
@@ -63,25 +68,9 @@ const styles = StyleSheet.create({
   headerRight: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 16,
-  },
-  liveIndicator: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  liveDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: '#EF4444',
-  },
-  liveText: {
-    fontSize: 11,
-    fontWeight: '700',
-    letterSpacing: 1,
+    gap: 8,
   },
   shareButton: {
-    padding: 4,
+    padding: 6,
   },
 });

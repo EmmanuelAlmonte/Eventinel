@@ -1,5 +1,4 @@
 import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet } from 'react-native';
-import { Divider } from '@rneui/themed';
 import type { EdgeInsets } from 'react-native-safe-area-context';
 
 import { type CommentDeletionNotice, type IncidentComment } from '@hooks';
@@ -84,13 +83,6 @@ export function IncidentDetailScreenView({
         contentContainerStyle={[styles.scrollContent, { paddingBottom: 100 + insets.bottom }]}
         showsVerticalScrollIndicator={false}
       >
-        <IncidentDetailMiniMap
-          location={incident.location}
-          markerColor={typeConfig.color}
-          markerIconSource={typeIconSource}
-          markerIconTintColor={severityColor}
-        />
-
         <IncidentDetailInfoCards
           incident={incident}
           colors={colors}
@@ -99,7 +91,12 @@ export function IncidentDetailScreenView({
           severityColor={severityColor}
         />
 
-        <Divider style={[styles.divider, { backgroundColor: colors.border }]} />
+        <IncidentDetailMiniMap
+          location={incident.location}
+          markerColor={typeConfig.color}
+          markerIconSource={typeIconSource}
+          markerIconTintColor={severityColor}
+        />
 
         <IncidentCommentsSection
           colors={colors}
@@ -143,9 +140,5 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     paddingBottom: 20,
-  },
-  divider: {
-    marginHorizontal: 16,
-    marginBottom: 16,
   },
 });
