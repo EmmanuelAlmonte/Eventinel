@@ -9,7 +9,6 @@ import type { ProcessedIncident } from '@hooks';
 import { formatIncidentHistoryWindowChipLabel } from '@lib/incidentHistoryWindow';
 
 import type { RelayBannerStatus } from './helpers';
-import type { LocationPermissionStatus } from './useMapScreenState';
 import { mapScreenStyles as styles } from './styles';
 
 type ThemeColors = {
@@ -39,8 +38,6 @@ type MapOverlaysProps = {
   isLoadingLocation: boolean;
   isFocused: boolean;
   isViewportCoveredBySubscriptionGrid: boolean;
-  locationSource: string | null;
-  permission: LocationPermissionStatus;
   onSelectDateRange: (days: number) => void;
 };
 
@@ -123,64 +120,6 @@ function FlyToUserButton({
   );
 }
 
-function DevStatsOverlay({
-  visibleIncidents,
-  hasReceivedHistory,
-  top,
-}: {
-  visibleIncidents: ProcessedIncident[];
-  hasReceivedHistory: boolean;
-  top: number;
-}) {
-  if (!__DEV__) {
-    return null;
-  }
-
-  return (
-    <View style={[styles.statsOverlay, { top }]}>
-      <Text style={styles.statsText}>Incidents: {visibleIncidents.length}</Text>
-      <Text style={styles.statsText}>EOSE: {hasReceivedHistory ? '✓' : '...'}</Text>
-    </View>
-  );
-}
-
-function LocationDebugOverlay({
-  top,
-  locationSource,
-  permission,
-  userLocation,
-}: {
-  top: number;
-  locationSource: string | null;
-  permission: LocationPermissionStatus;
-  userLocation: [number, number] | null;
-}) {
-  if (!__DEV__) {
-    return null;
-  }
-
-  return (
-    <View style={[styles.locationDebugOverlay, { top }]}>
-      <Text
-        style={[
-          styles.locationSourceText,
-          locationSource === 'fresh' && styles.locationSourceFresh,
-          locationSource === 'cached' && styles.locationSourceCached,
-          locationSource === 'default' && styles.locationSourceDefault,
-        ]}
-      >
-        📍 {locationSource?.toUpperCase() || 'NONE'}
-      </Text>
-      <Text style={styles.locationDebugText}>Perm: {permission ?? 'undetermined'}</Text>
-      {userLocation ? (
-        <Text style={styles.locationDebugText} numberOfLines={1}>
-          {userLocation[1].toFixed(4)}, {userLocation[0].toFixed(4)}
-        </Text>
-      ) : null}
-    </View>
-  );
-}
-
 function ViewportHint({
   insets,
   isLoadingLocation,
@@ -230,15 +169,35 @@ function EmptyIncidentsState({
   );
 }
 
+function MapStatusSummary({
+  visibleIncidentCount,
+  hasReceivedHistory,
+}: {
+  visibleIncidentCount: number;
+  hasReceivedHistory: boolean;
+}) {
+  const label = !hasReceivedHistory
+    ? 'Loading nearby incidents...'
+    : visibleIncidentCount > 0
+      ? `${visibleIncidentCount} nearby`
+      : 'No nearby incidents';
+
+  return (
+    <View style={styles.mapStatusSummary}>
+      <Text style={styles.mapStatusSummaryText}>{label}</Text>
+    </View>
+  );
+}
+
 function MapTopControls({
   colors,
   insets,
   historyWindowDays,
   historyWindowPresets,
   isHistoryWindowReady,
-  activeDateRangeLabel,
-  dateRangeStatusLabel,
   isDateRangeRefreshing,
+  visibleIncidentCount,
+  hasReceivedHistory,
   isDateRangeMenuOpen,
   onToggleDateRangeMenu,
   onCloseDateRangeMenu,
@@ -250,9 +209,9 @@ function MapTopControls({
   historyWindowDays: number;
   historyWindowPresets: readonly number[];
   isHistoryWindowReady: boolean;
-  activeDateRangeLabel: string;
-  dateRangeStatusLabel: string;
   isDateRangeRefreshing: boolean;
+  visibleIncidentCount: number;
+  hasReceivedHistory: boolean;
   isDateRangeMenuOpen: boolean;
   onToggleDateRangeMenu: () => void;
   onCloseDateRangeMenu: () => void;
@@ -266,16 +225,15 @@ function MapTopControls({
 
   return (
     <View
-      style={[styles.topControlsContainer, { top: 12 + insets.top }]}
+      style={[styles.topControlsContainer, { top: 16 + insets.top }]}
       onLayout={onLayout}
     >
       <View
         style={[
           styles.topControlSurface,
-          styles.searchSurface,
           {
-            backgroundColor: 'rgba(15, 23, 42, 0.94)',
-            borderColor: 'rgba(148, 163, 184, 0.22)',
+            backgroundColor: 'rgba(10, 16, 28, 0.88)',
+            borderColor: 'rgba(255, 255, 255, 0.08)',
           },
         ]}
       >
@@ -289,80 +247,69 @@ function MapTopControls({
           autoCapitalize="none"
           lightTheme={false}
           round
-          searchIcon={{ color: 'rgba(226, 232, 240, 0.8)', size: 18 }}
-          clearIcon={{ color: 'rgba(226, 232, 240, 0.8)', size: 18 }}
+          searchIcon={{ color: '#AAB4C3', size: 18 }}
+          clearIcon={{ color: '#AAB4C3', size: 18 }}
           containerStyle={styles.searchBarContainer}
           inputContainerStyle={[
             styles.searchBarInputContainer,
             {
-              backgroundColor: 'rgba(30, 41, 59, 0.82)',
-              borderColor: 'rgba(148, 163, 184, 0.18)',
+              backgroundColor: 'rgba(255, 255, 255, 0.06)',
+              borderColor: 'rgba(255, 255, 255, 0.06)',
             },
           ]}
           inputStyle={styles.searchBarInput}
-          placeholderTextColor="rgba(203, 213, 225, 0.72)"
+          placeholderTextColor="#AAB4C3"
         />
-      </View>
 
-      <View style={styles.filterRow}>
-        <Pressable
-          style={({ pressed }) => [
-            styles.filterPill,
-            isDateRangeMenuOpen && styles.filterPillOpen,
-            isDateRangeRefreshing && styles.filterPillRefreshing,
-            pressed && styles.filterPillPressed,
-          ]}
-          accessibilityRole="button"
-          accessibilityLabel="Open date range filter"
-          accessibilityState={{
-            disabled: !isHistoryWindowReady,
-            expanded: isDateRangeMenuOpen,
-          }}
-          disabled={!isHistoryWindowReady}
-          onPress={onToggleDateRangeMenu}
-        >
-          <Icon
-            name="schedule"
-            type="material"
-            size={16}
-            color={isDateRangeRefreshing ? colors.primary : '#E2E8F0'}
-          />
-          <Text
-            style={[
-              styles.filterPillText,
-              isDateRangeRefreshing && styles.filterPillTextRefreshing,
+        <View style={styles.headerFooter}>
+          <Pressable
+            style={({ pressed }) => [
+              styles.filterPill,
+              isDateRangeMenuOpen && styles.filterPillOpen,
+              isDateRangeRefreshing && styles.filterPillRefreshing,
+              pressed && styles.filterPillPressed,
             ]}
+            accessibilityRole="button"
+            accessibilityLabel="Open date range filter"
+            accessibilityState={{
+              disabled: !isHistoryWindowReady,
+              expanded: isDateRangeMenuOpen,
+            }}
+            disabled={!isHistoryWindowReady}
+            onPress={onToggleDateRangeMenu}
           >
-            {pillLabel}
-          </Text>
-          <Icon
-            name={isDateRangeMenuOpen ? 'expand-less' : 'expand-more'}
-            type="material"
-            size={18}
-            color="#CBD5E1"
-          />
-        </Pressable>
-      </View>
-
-      {isDateRangeMenuOpen ? (
-        <View style={styles.dateRangePopover}>
-          <View style={styles.dateRangePopoverHeader}>
-            <Text style={styles.dateRangePopoverTitle}>Date Range</Text>
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel="Close date range options"
-              onPress={onCloseDateRangeMenu}
-              style={({ pressed }) => [styles.dateRangePopoverClose, pressed && styles.filterPillPressed]}
+            <Icon
+              name="schedule"
+              type="material"
+              size={16}
+              color={isDateRangeRefreshing ? colors.primary : '#E7ECF5'}
+            />
+            <Text
+              style={[
+                styles.filterPillText,
+                isDateRangeRefreshing && styles.filterPillTextRefreshing,
+              ]}
             >
-              <Icon name="close" type="material" size={16} color="#CBD5E1" />
-            </Pressable>
-          </View>
+              {pillLabel}
+            </Text>
+            <Icon
+              name={isDateRangeMenuOpen ? 'expand-less' : 'expand-more'}
+              type="material"
+              size={18}
+              color="#E7ECF5"
+            />
+          </Pressable>
 
-          <Text style={styles.dateRangePopoverDescription}>
-            This changes how much past incident history is loaded.
-          </Text>
+          {!isDateRangeMenuOpen ? (
+            <MapStatusSummary
+              visibleIncidentCount={visibleIncidentCount}
+              hasReceivedHistory={hasReceivedHistory}
+            />
+          ) : null}
+        </View>
 
-          <View style={styles.dateRangeChipRow}>
+        {isDateRangeMenuOpen ? (
+          <View style={styles.inlineDateRangeOptions}>
             {historyWindowPresets.map((days) => {
               const isActive = historyWindowDays === days;
               const isDisabled = !isHistoryWindowReady;
@@ -371,8 +318,8 @@ function MapTopControls({
                 <Pressable
                   key={days}
                   style={({ pressed }) => [
-                    styles.dateRangeChip,
-                    isActive && styles.dateRangeChipActive,
+                    styles.inlineDateRangeChip,
+                    isActive && styles.inlineDateRangeChipActive,
                     isDisabled && styles.dateRangeChipDisabled,
                     pressed && !isDisabled && styles.dateRangeChipPressed,
                   ]}
@@ -387,8 +334,8 @@ function MapTopControls({
                 >
                   <Text
                     style={[
-                      styles.dateRangeChipText,
-                      isActive && styles.dateRangeChipTextActive,
+                      styles.inlineDateRangeChipText,
+                      isActive && styles.inlineDateRangeChipTextActive,
                     ]}
                   >
                     {formatIncidentHistoryWindowChipLabel(days)}
@@ -397,19 +344,8 @@ function MapTopControls({
               );
             })}
           </View>
-
-          <Text
-            style={[
-              styles.dateRangePopoverStatusText,
-              { color: isDateRangeRefreshing ? colors.primary : 'rgba(203, 213, 225, 0.74)' },
-            ]}
-          >
-            {isDateRangeRefreshing
-              ? dateRangeStatusLabel
-              : `Current range: ${activeDateRangeLabel}`}
-          </Text>
-        </View>
-      ) : null}
+        ) : null}
+      </View>
     </View>
   );
 }
@@ -433,8 +369,6 @@ export function MapOverlays({
   isLoadingLocation,
   isFocused,
   isViewportCoveredBySubscriptionGrid,
-  locationSource,
-  permission,
   onSelectDateRange,
 }: MapOverlaysProps) {
   const [topControlsHeight, setTopControlsHeight] = useState(0);
@@ -444,23 +378,15 @@ export function MapOverlays({
 
   return (
     <>
-      {isDateRangeMenuOpen ? (
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="Close date range menu"
-          onPress={() => setIsDateRangeMenuOpen(false)}
-          style={styles.popoverBackdrop}
-        />
-      ) : null}
       <MapTopControls
         colors={colors}
         insets={insets}
         historyWindowDays={historyWindowDays}
         historyWindowPresets={historyWindowPresets}
         isHistoryWindowReady={isHistoryWindowReady}
-        activeDateRangeLabel={activeDateRangeLabel}
-        dateRangeStatusLabel={dateRangeStatusLabel}
         isDateRangeRefreshing={isDateRangeRefreshing}
+        visibleIncidentCount={visibleIncidents.length}
+        hasReceivedHistory={hasReceivedHistory}
         isDateRangeMenuOpen={isDateRangeMenuOpen}
         onToggleDateRangeMenu={() => setIsDateRangeMenuOpen((current) => !current)}
         onCloseDateRangeMenu={() => setIsDateRangeMenuOpen(false)}
@@ -479,17 +405,6 @@ export function MapOverlays({
         userLocation={userLocation}
         isAnimating={isAnimating}
         onFlyToUser={onFlyToUser}
-      />
-      <DevStatsOverlay
-        visibleIncidents={visibleIncidents}
-        hasReceivedHistory={hasReceivedHistory}
-        top={overlayTopOffset}
-      />
-      <LocationDebugOverlay
-        top={overlayTopOffset}
-        locationSource={locationSource}
-        permission={permission}
-        userLocation={userLocation}
       />
       <ViewportHint
         insets={insets}
