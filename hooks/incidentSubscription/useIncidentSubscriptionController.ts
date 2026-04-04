@@ -9,6 +9,7 @@ import { computeHasReceivedHistory } from './reconcile';
 import { useIncidentSubscriptionPlannerController } from './subscriptionPlannerController';
 import { useIncidentSubscriptionStateSyncController } from './subscriptionStateSyncController';
 import {
+  type HistoryRefreshProgress,
   type IncidentSubscriptionDisplayState,
   type IncomingEventSource,
   type QueuedEvent,
@@ -37,6 +38,12 @@ export interface SubscriptionControllerArgs {
   lastTotalEventsRef: MutableRefObject<number>;
   setState: Dispatch<SetStateAction<IncidentSubscriptionDisplayState>>;
   subscriptionRegistry: RegistryLike;
+  activeHistoryRefreshRef: MutableRefObject<HistoryRefreshProgress | null>;
+  markHistoryRefreshSatisfied: (
+    key: string,
+    epoch: number,
+    source: 'cache' | 'eose'
+  ) => void;
 }
 
 export interface SubscriptionController {
@@ -44,7 +51,7 @@ export interface SubscriptionController {
   recomputeVisibleState: (updatedIncidents?: ProcessedIncident[]) => void;
   flushQueuedEvents: () => void;
   enqueueEvents: (events: NDKEvent[], source: IncomingEventSource) => void;
-  startSubscription: (key: string) => void;
+  startSubscription: (key: string, historyRefreshEpoch?: number | null) => void;
   stopSubscription: (key: string) => void;
   stopAllSubscriptions: () => void;
   pruneToDesiredGeohashes: (desiredKeys: Set<string>) => boolean;
@@ -55,11 +62,21 @@ function getHasReceivedHistory({
   enabled,
   desiredSubscriptionCount,
   subscriptionRegistry,
+  activeHistoryRefreshRef,
 }: {
   enabled: boolean;
   desiredSubscriptionCount: number;
   subscriptionRegistry: RegistryLike;
+  activeHistoryRefreshRef: MutableRefObject<HistoryRefreshProgress | null>;
 }): boolean {
+  const activeHistoryRefresh = activeHistoryRefreshRef.current;
+  if (activeHistoryRefresh) {
+    return (
+      activeHistoryRefresh.expectedKeys.size === 0 ||
+      activeHistoryRefresh.satisfiedKeys.size >= activeHistoryRefresh.expectedKeys.size
+    );
+  }
+
   return computeHasReceivedHistory(
     enabled,
     subscriptionRegistry.subscriptions.keys(),
@@ -81,14 +98,17 @@ export function useIncidentSubscriptionController({
   lastTotalEventsRef,
   setState,
   subscriptionRegistry,
+  activeHistoryRefreshRef,
+  markHistoryRefreshSatisfied,
 }: SubscriptionControllerArgs): SubscriptionController {
   const hasReceivedHistory = useCallback(() => {
     return getHasReceivedHistory({
       enabled,
       desiredSubscriptionCount,
       subscriptionRegistry,
+      activeHistoryRefreshRef,
     });
-  }, [enabled, desiredSubscriptionCount, subscriptionRegistry]);
+  }, [enabled, desiredSubscriptionCount, subscriptionRegistry, activeHistoryRefreshRef]);
 
   const { recomputeVisibleState, flushQueuedEvents, enqueueEvents, clearQueuedEvents } =
     useIncidentSubscriptionStateSyncController({
@@ -110,6 +130,7 @@ export function useIncidentSubscriptionController({
       subscriptionRegistry,
       enqueueEvents,
       hasReceivedHistory,
+      markHistoryRefreshSatisfied,
       setState,
       incidentMapRef,
       sinceDays,
