@@ -436,7 +436,11 @@ export function useIncidentSubscription({
     }
 
     for (const key of reconcilePlan.toAdd) {
-      startSubscription(key, activeHistoryRefreshRef.current?.epoch ?? null);
+      const activeRefreshEpoch =
+        activeHistoryRefreshRef.current?.expectedKeys.has(key) === true
+          ? activeHistoryRefreshRef.current.epoch
+          : null;
+      startSubscription(key, activeRefreshEpoch);
     }
 
     if (historyWindowChanged && bufferedQueuedEvents.length > 0) {

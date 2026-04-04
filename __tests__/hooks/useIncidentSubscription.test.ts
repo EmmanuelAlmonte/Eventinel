@@ -1338,6 +1338,74 @@ describe('useIncidentSubscription', () => {
       }
     });
 
+    it('lets subscriptions added after a history refresh starts complete through normal EOSE handling', async () => {
+      const fixedNowMs = 1_735_689_600_000;
+      const nowSpy = jest.spyOn(Date, 'now').mockReturnValue(fixedNowMs);
+
+      try {
+        const seededEvent = createMockIncidentEvent({
+          incidentId: 'seeded-visible',
+          title: 'Seeded Visible',
+          created_at: Math.floor(fixedNowMs / 1000) - 3600,
+          occurredAt: new Date(fixedNowMs - 3600 * 1000).toISOString(),
+        });
+
+        mockSubscription.setEvents([seededEvent]);
+        mockSubscription.setEose(true);
+
+        const { result, rerender } = renderHook(
+          (props: UseIncidentSubscriptionOptions) => useIncidentSubscription(props),
+          {
+            initialProps: {
+              location: [-75.1652, 39.9526],
+              sinceDays: 30,
+            },
+          }
+        );
+
+        await waitFor(() => {
+          expect(result.current.hasReceivedHistory).toBe(true);
+        });
+
+        mockSubscription.setEvents([]);
+        mockSubscription.setEose(false);
+
+        const callCountBeforeRefresh = getSubscribeCalls().length;
+        rerender({
+          location: [-75.1652, 39.9526],
+          sinceDays: 7,
+        });
+        const refreshCalls = getSubscribeCalls().slice(callCountBeforeRefresh);
+
+        const callCountBeforeMove = getSubscribeCalls().length;
+        rerender({
+          location: [-74.006, 40.7128],
+          sinceDays: 7,
+        });
+        const movedCalls = getSubscribeCalls().slice(callCountBeforeMove);
+
+        act(() => {
+          movedCalls.forEach(([, options]) => {
+            options?.onEose?.();
+          });
+        });
+
+        expect(result.current.hasReceivedHistory).toBe(false);
+
+        act(() => {
+          refreshCalls.forEach(([, options]) => {
+            options?.onEose?.();
+          });
+        });
+
+        await waitFor(() => {
+          expect(result.current.hasReceivedHistory).toBe(true);
+        });
+      } finally {
+        nowSpy.mockRestore();
+      }
+    });
+
     it('preserves buffered live incidents when sinceDays changes before flush', async () => {
       const fixedNowMs = 1_735_689_600_000;
       const nowSpy = jest.spyOn(Date, 'now').mockReturnValue(fixedNowMs);
