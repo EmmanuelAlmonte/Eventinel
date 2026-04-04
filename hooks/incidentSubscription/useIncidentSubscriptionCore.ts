@@ -123,8 +123,14 @@ export function useIncidentSubscription({
     const unsatisfiedKeys = Array.from(activeHistoryRefresh.expectedKeys).filter(
       (key) => !activeHistoryRefresh.satisfiedKeys.has(key)
     );
+    const stillActiveUnsatisfiedKeys = unsatisfiedKeys.filter((key) =>
+      subscriptionRegistry.subscriptions.has(key)
+    );
+    const removedUnsatisfiedKeys = unsatisfiedKeys.filter(
+      (key) => !subscriptionRegistry.subscriptions.has(key)
+    );
 
-    for (const key of unsatisfiedKeys) {
+    for (const key of stillActiveUnsatisfiedKeys) {
       subscriptionRegistry.setHasReceivedHistory(key);
     }
 
@@ -136,8 +142,9 @@ export function useIncidentSubscription({
       reason,
       expectedKeyCount: activeHistoryRefresh.expectedKeys.size,
       satisfiedKeyCount:
-        activeHistoryRefresh.satisfiedKeys.size + unsatisfiedKeys.length,
-      forcedUnsatisfiedKeys: unsatisfiedKeys,
+        activeHistoryRefresh.satisfiedKeys.size + stillActiveUnsatisfiedKeys.length,
+      forcedUnsatisfiedKeys: stillActiveUnsatisfiedKeys,
+      skippedRemovedKeys: removedUnsatisfiedKeys,
     });
 
     setState((prev) => {
