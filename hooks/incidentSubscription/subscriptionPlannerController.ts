@@ -46,8 +46,14 @@ function startIncidentSubscription(
     subscriptionRegistry: RegistryLike;
     enqueueEvents: (events: NDKEvent[], source: IncomingEventSource) => void;
     hasReceivedHistory: () => boolean;
+    markHistoryRefreshSatisfied: (
+      key: string,
+      epoch: number,
+      source: 'cache' | 'eose'
+    ) => void;
     setState: Dispatch<SetStateAction<IncidentSubscriptionDisplayState>>;
     sinceDays: number;
+    historyRefreshEpoch?: number | null;
   }
 ): void {
   const beforeCount = args.subscriptionRegistry.subscriptions.size;
@@ -62,12 +68,24 @@ function startIncidentSubscription(
     cacheUsage: NDKSubscriptionCacheUsage.CACHE_FIRST,
     groupable: false,
     onEvents: (events) => {
+      if (
+        args.historyRefreshEpoch != null &&
+        Array.isArray(events) &&
+        events.length > 0
+      ) {
+        args.markHistoryRefreshSatisfied(key, args.historyRefreshEpoch, 'cache');
+      }
       args.enqueueEvents(events, 'cache');
     },
     onEvent: (event) => {
       args.enqueueEvents([event], 'relay');
     },
     onEose: () => {
+      if (args.historyRefreshEpoch != null) {
+        args.markHistoryRefreshSatisfied(key, args.historyRefreshEpoch, 'eose');
+        return;
+      }
+
       args.subscriptionRegistry.setHasReceivedHistory(key);
       args.setState((prev) => ({
         ...prev,
@@ -143,6 +161,7 @@ export function useIncidentSubscriptionPlannerController({
   subscriptionRegistry,
   enqueueEvents,
   hasReceivedHistory,
+  markHistoryRefreshSatisfied,
   setState,
   incidentMapRef,
   sinceDays,
@@ -150,20 +169,34 @@ export function useIncidentSubscriptionPlannerController({
   subscriptionRegistry: RegistryLike;
   enqueueEvents: (events: NDKEvent[], source: IncomingEventSource) => void;
   hasReceivedHistory: () => boolean;
+  markHistoryRefreshSatisfied: (
+    key: string,
+    epoch: number,
+    source: 'cache' | 'eose'
+  ) => void;
   setState: Dispatch<SetStateAction<IncidentSubscriptionDisplayState>>;
   incidentMapRef: MutableRefObject<Map<string, ProcessedIncident>>;
   sinceDays: number;
 }) {
   const startSubscription = useCallback(
-    (key: string) =>
+    (key: string, historyRefreshEpoch?: number | null) =>
       startIncidentSubscription(key, {
         subscriptionRegistry,
         enqueueEvents,
         hasReceivedHistory,
+        markHistoryRefreshSatisfied,
         setState,
         sinceDays,
+        historyRefreshEpoch,
       }),
-    [subscriptionRegistry, enqueueEvents, hasReceivedHistory, setState, sinceDays]
+    [
+      subscriptionRegistry,
+      enqueueEvents,
+      hasReceivedHistory,
+      markHistoryRefreshSatisfied,
+      setState,
+      sinceDays,
+    ]
   );
 
   const stopSubscription = useCallback(

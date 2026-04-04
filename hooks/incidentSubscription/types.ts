@@ -24,6 +24,13 @@ export interface SubscriptionLifecycle {
   eoseBySubscriptionKey: Map<string, boolean>;
 }
 
+export interface HistoryRefreshProgress {
+  epoch: number;
+  expectedKeys: Set<string>;
+  satisfiedKeys: Set<string>;
+  sawDataSignal: boolean;
+}
+
 export interface ProcessedIncidentSortInput {
   incidentMap: Map<string, ProcessedIncident>;
   location: [number, number] | null;

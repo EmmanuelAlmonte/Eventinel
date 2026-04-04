@@ -3,7 +3,12 @@ import type { Dispatch, SetStateAction, MutableRefObject } from 'react';
 
 import { createSubscriptionRegistry } from './subscriptionRegistry';
 import { EMPTY_SEVERITY_COUNTS } from './sorting';
-import type { IncidentSubscriptionDisplayState, ProcessedIncident, QueuedEvent } from './types';
+import type {
+  HistoryRefreshProgress,
+  IncidentSubscriptionDisplayState,
+  ProcessedIncident,
+  QueuedEvent,
+} from './types';
 
 export interface IncidentSubscriptionCoreState {
   state: IncidentSubscriptionDisplayState;
@@ -21,6 +26,9 @@ export interface IncidentSubscriptionCoreState {
     truncated: boolean;
     sinceDays: number;
   }>;
+  refreshEpochRef: MutableRefObject<number>;
+  activeHistoryRefreshRef: MutableRefObject<HistoryRefreshProgress | null>;
+  refreshWatchdogTimerRef: MutableRefObject<ReturnType<typeof setTimeout> | null>;
 }
 
 export function useIncidentSubscriptionState(): IncidentSubscriptionCoreState {
@@ -37,6 +45,9 @@ export function useIncidentSubscriptionState(): IncidentSubscriptionCoreState {
     truncated: false,
     sinceDays: 0,
   });
+  const refreshEpochRef = useRef(0);
+  const activeHistoryRefreshRef = useRef<HistoryRefreshProgress | null>(null);
+  const refreshWatchdogTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const [state, setState] = useState<IncidentSubscriptionDisplayState>({
     incidents: [],
@@ -57,5 +68,8 @@ export function useIncidentSubscriptionState(): IncidentSubscriptionCoreState {
     flushTimerRef,
     subscriptionRegistry,
     lastRefreshMetaRef,
+    refreshEpochRef,
+    activeHistoryRefreshRef,
+    refreshWatchdogTimerRef,
   };
 }
