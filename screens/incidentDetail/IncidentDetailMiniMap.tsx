@@ -5,11 +5,19 @@ import { Text } from '@rneui/themed';
 
 import { MAP_STYLES } from '@lib/map/types';
 
-const MINI_MAP_PITCH = 18;
 const MINI_MAP_HEADING = 0;
 const MINI_MAP_ZOOM = 16.9;
+const MINI_MAP_MAX_ZOOM = 22;
 const MINI_MAP_FALLBACK_TIMEOUT_MS = 1800;
 const DEBUG_MINI_MAP_FLASH = __DEV__ && process.env.EXPO_PUBLIC_DEBUG_MINIMAP_FLASH === '1';
+const MINI_MAP_3D_PITCH = 45;
+const MINI_MAP_3D_BUILDINGS_STYLE = {
+  fillExtrusionColor: '#94A3B8',
+  fillExtrusionOpacity: 0.7,
+  fillExtrusionHeight: ['coalesce', ['get', 'height'], 0],
+  fillExtrusionBase: ['coalesce', ['get', 'min_height'], 0],
+  fillExtrusionVerticalGradient: true,
+} as const;
 
 type MiniMapReadyStage = 'style' | 'load' | 'idle' | 'render' | 'error';
 
@@ -113,9 +121,17 @@ export function IncidentDetailMiniMap({
         <Mapbox.Camera
           zoomLevel={MINI_MAP_ZOOM}
           centerCoordinate={markerCoordinate}
-          pitch={MINI_MAP_PITCH}
+          pitch={MINI_MAP_3D_PITCH}
           heading={MINI_MAP_HEADING}
           animationDuration={0}
+        />
+        <Mapbox.FillExtrusionLayer
+          id="incident-detail-3d-buildings"
+          sourceID="composite"
+          sourceLayerID="building"
+          minZoomLevel={14}
+          maxZoomLevel={MINI_MAP_MAX_ZOOM}
+          style={MINI_MAP_3D_BUILDINGS_STYLE}
         />
         <Mapbox.MarkerView coordinate={markerCoordinate}>
           <View style={[styles.mapMarker, { backgroundColor: markerColor }]}>
