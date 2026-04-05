@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, useWindowDimensions, View } from 'react-native';
 import { Text } from '@rneui/themed';
 import type { EdgeInsets } from 'react-native-safe-area-context';
@@ -63,6 +64,7 @@ export function IncidentDetailScreenView({
   onShare,
 }: IncidentDetailScreenViewProps) {
   const { height: screenHeight } = useWindowDimensions();
+  const [isMapExpanded, setIsMapExpanded] = useState(false);
   const typeConfig = TYPE_CONFIG[incident.type] || TYPE_CONFIG.other;
   const typeIconSource = incidentTypeIconAssetByType[incident.type] || incidentTypeIconAssetByType.other;
   const severityColor = SEVERITY_COLORS[incident.severity] || SEVERITY_COLORS[1];
@@ -84,13 +86,17 @@ export function IncidentDetailScreenView({
             markerColor={typeConfig.color}
             markerIconSource={typeIconSource}
             markerIconTintColor={severityColor}
+            isExpanded={isMapExpanded}
+            onExpand={setIsMapExpanded}
             hero
           />
           <IncidentDetailHeaderBar
             colors={colors}
             insets={insets}
             onBack={onBack}
-            onShare={() => void onShare()}
+            onRightAction={() => setIsMapExpanded(true)}
+            rightActionIcon="open-in-full"
+            rightActionLabel="Expand map"
             overlay
           />
         </View>

@@ -13,7 +13,9 @@ type IncidentDetailHeaderBarProps = {
   colors: ThemeColors;
   insets: EdgeInsets;
   onBack: () => void;
-  onShare: () => void;
+  onRightAction: () => void;
+  rightActionIcon?: string;
+  rightActionLabel?: string;
   overlay?: boolean;
 };
 
@@ -21,7 +23,9 @@ export function IncidentDetailHeaderBar({
   colors,
   insets,
   onBack,
-  onShare,
+  onRightAction,
+  rightActionIcon = 'share',
+  rightActionLabel = 'Share incident',
   overlay = false,
 }: IncidentDetailHeaderBarProps) {
   return (
@@ -65,9 +69,9 @@ export function IncidentDetailHeaderBar({
 
       <View style={styles.headerRight}>
         <Pressable
-          onPress={onShare}
+          onPress={onRightAction}
           accessibilityRole="button"
-          accessibilityLabel="Share incident"
+          accessibilityLabel={rightActionLabel}
           style={[
             styles.iconButton,
             overlay && styles.overlayButton,
@@ -77,7 +81,7 @@ export function IncidentDetailHeaderBar({
             },
           ]}
         >
-          <Icon name="share" type="material" size={20} color={colors.text} />
+          <Icon name={rightActionIcon} type="material" size={20} color={colors.text} />
         </Pressable>
       </View>
     </View>
