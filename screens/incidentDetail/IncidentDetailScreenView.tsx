@@ -1,4 +1,5 @@
-import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet } from 'react-native';
+import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, useWindowDimensions, View } from 'react-native';
+import { Text } from '@rneui/themed';
 import type { EdgeInsets } from 'react-native-safe-area-context';
 
 import { type CommentDeletionNotice, type IncidentComment } from '@hooks';
@@ -11,6 +12,7 @@ import { IncidentDetailActionBar } from './IncidentDetailActionBar';
 import { IncidentDetailHeaderBar } from './IncidentDetailHeaderBar';
 import { IncidentDetailInfoCards } from './IncidentDetailInfoCards';
 import { IncidentDetailMiniMap } from './IncidentDetailMiniMap';
+import { IncidentDetailUpdatesSection } from './IncidentDetailUpdatesSection';
 
 type ThemeColors = {
   background: string;
@@ -49,7 +51,6 @@ type IncidentDetailScreenViewProps = {
   comments: IncidentDetailCommentsController;
   onBack: () => void;
   onShare: () => Promise<void>;
-  onDirections: () => void;
 };
 
 export function IncidentDetailScreenView({
@@ -60,72 +61,88 @@ export function IncidentDetailScreenView({
   comments,
   onBack,
   onShare,
-  onDirections,
 }: IncidentDetailScreenViewProps) {
+  const { height: screenHeight } = useWindowDimensions();
   const typeConfig = TYPE_CONFIG[incident.type] || TYPE_CONFIG.other;
   const typeIconSource = incidentTypeIconAssetByType[incident.type] || incidentTypeIconAssetByType.other;
   const severityColor = SEVERITY_COLORS[incident.severity] || SEVERITY_COLORS[1];
+  const heroHeight = Math.max(232, Math.min(320, Math.round(screenHeight * 0.31)));
 
   return (
     <KeyboardAvoidingView
       style={[styles.container, { backgroundColor: colors.background }]}
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
     >
-      <IncidentDetailHeaderBar
-        colors={colors}
-        insets={insets}
-        onBack={onBack}
-        onShare={() => void onShare()}
-      />
-
       <ScrollView
         style={styles.scrollView}
         contentContainerStyle={[styles.scrollContent, { paddingBottom: 100 + insets.bottom }]}
         showsVerticalScrollIndicator={false}
       >
-        <IncidentDetailInfoCards
-          incident={incident}
-          colors={colors}
-          typeConfig={typeConfig}
-          typeIconSource={typeIconSource}
-          severityColor={severityColor}
-        />
+        <View style={[styles.heroContainer, { height: heroHeight }]}>
+          <IncidentDetailMiniMap
+            location={incident.location}
+            markerColor={typeConfig.color}
+            markerIconSource={typeIconSource}
+            markerIconTintColor={severityColor}
+            hero
+          />
+          <IncidentDetailHeaderBar
+            colors={colors}
+            insets={insets}
+            onBack={onBack}
+            onShare={() => void onShare()}
+            overlay
+          />
+        </View>
 
-        <IncidentDetailMiniMap
-          location={incident.location}
-          markerColor={typeConfig.color}
-          markerIconSource={typeIconSource}
-          markerIconTintColor={severityColor}
-        />
+        <View style={[styles.sheet, { backgroundColor: colors.background }]}>
+          <IncidentDetailInfoCards
+            incident={incident}
+            colors={colors}
+            typeConfig={typeConfig}
+            typeIconSource={typeIconSource}
+            severityColor={severityColor}
+            onShare={() => void onShare()}
+          />
 
-        <IncidentCommentsSection
-          colors={colors}
-          comments={comments.comments}
-          isLoadingComments={comments.isLoadingComments}
-          commentsAreStale={comments.commentsAreStale}
-          retryComments={comments.retryComments}
-          recentDeletions={comments.recentDeletions}
-          showAllComments={comments.showAllComments}
-          onShowAllComments={() => comments.setShowAllComments(true)}
-          currentUserPubkey={currentUser?.pubkey}
-          deletingCommentId={comments.deletingCommentId}
-          onDeleteComment={comments.confirmDeleteComment}
-        />
+          <IncidentDetailUpdatesSection
+            incident={incident}
+            colors={{
+              border: colors.border,
+              primary: colors.primary,
+              success: colors.success,
+              surface: colors.surface,
+              text: colors.text,
+              textMuted: colors.textMuted,
+            }}
+          />
+
+          <IncidentCommentsSection
+            colors={colors}
+            comments={comments.comments}
+            isLoadingComments={comments.isLoadingComments}
+            commentsAreStale={comments.commentsAreStale}
+            retryComments={comments.retryComments}
+            recentDeletions={comments.recentDeletions}
+            showAllComments={comments.showAllComments}
+            onShowAllComments={() => comments.setShowAllComments(true)}
+            currentUserPubkey={currentUser?.pubkey}
+            deletingCommentId={comments.deletingCommentId}
+            onDeleteComment={comments.confirmDeleteComment}
+          />
+        </View>
       </ScrollView>
 
       <IncidentDetailActionBar
         colors={colors}
         insets={insets}
         isAuthenticated={Boolean(currentUser)}
-        typeConfig={typeConfig}
         commentText={comments.commentText}
         setCommentText={comments.setCommentText}
         isSubmitting={comments.isSubmitting}
         isUploadingMedia={comments.isUploadingMedia}
         onAddMedia={() => void comments.handleAddMedia()}
         onSubmitComment={() => void comments.handleCommentSubmit()}
-        onShare={() => void onShare()}
-        onDirections={onDirections}
       />
     </KeyboardAvoidingView>
   );
@@ -138,7 +155,16 @@ const styles = StyleSheet.create({
   scrollView: {
     flex: 1,
   },
+  heroContainer: {
+    position: 'relative',
+  },
   scrollContent: {
     paddingBottom: 20,
+  },
+  sheet: {
+    marginTop: -14,
+    borderTopLeftRadius: 26,
+    borderTopRightRadius: 26,
+    paddingTop: 24,
   },
 });

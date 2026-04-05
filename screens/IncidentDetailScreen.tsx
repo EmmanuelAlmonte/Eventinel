@@ -5,7 +5,7 @@
  */
 
 import { useCallback, useEffect } from 'react';
-import { InteractionManager, Linking, Platform, Share } from 'react-native';
+import { InteractionManager, Share } from 'react-native';
 import { useNavigation, useRoute, type RouteProp } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNDKCurrentUser } from '@nostr-dev-kit/mobile';
@@ -118,20 +118,6 @@ export default function IncidentDetailScreen() {
     }
   }, [incident]);
 
-  const handleDirections = useCallback(() => {
-    if (!incident) return;
-
-    const { lat, lng } = incident.location;
-    const url = Platform.select({
-      ios: `maps://?daddr=${lat},${lng}`,
-      android: `geo:${lat},${lng}?q=${lat},${lng}(${encodeURIComponent(incident.title)})`,
-    });
-
-    if (url) {
-      Linking.openURL(url).catch((error) => console.error('Could not open maps:', error));
-    }
-  }, [incident]);
-
   if (!incident) {
     return (
       <IncidentDetailLoadingState
@@ -152,7 +138,6 @@ export default function IncidentDetailScreen() {
       comments={comments}
       onBack={() => navigation.goBack()}
       onShare={handleShare}
-      onDirections={handleDirections}
     />
   );
 }
