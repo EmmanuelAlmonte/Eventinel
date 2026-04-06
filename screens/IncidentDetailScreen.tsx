@@ -22,6 +22,17 @@ import { IncidentDetailScreenView } from './incidentDetail/IncidentDetailScreenV
 import { useIncidentCommentsController } from './incidentDetail/useIncidentCommentsController';
 import { useIncidentRecord } from './incidentDetail/useIncidentRecord';
 
+const DEBUG_INCIDENT_VERIFICATION =
+  __DEV__ && process.env.EXPO_PUBLIC_DEBUG_INCIDENT_VERIFICATION === '1';
+
+function getOfficialPubkey(): string {
+  return (
+    process.env.EXPO_PUBLIC_EVENTINEL_OFFICIAL_PUBKEY_HEX ??
+    process.env.EVENTINEL_OFFICIAL_PUBKEY_HEX ??
+    'missing'
+  );
+}
+
 export default function IncidentDetailScreen() {
   const navigation = useNavigation<AppNavigation>();
   const route = useRoute<RouteProp<RootStackParamList, 'IncidentDetail'>>();
@@ -104,6 +115,18 @@ export default function IncidentDetailScreen() {
         source: incident.source,
       },
     });
+
+    if (DEBUG_INCIDENT_VERIFICATION) {
+      console.log('[IncidentDetail] verification snapshot', {
+        incidentId: incident.incidentId,
+        eventId: incident.eventId,
+        source: incident.source,
+        sourceId: incident.sourceId,
+        pubkey: incident.pubkey,
+        officialPubkey: getOfficialPubkey(),
+        isVerified: incident.isVerified,
+      });
+    }
   }, [incident, routeEventId]);
 
   const handleShare = useCallback(async () => {

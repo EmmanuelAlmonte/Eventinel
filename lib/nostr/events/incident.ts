@@ -37,6 +37,17 @@ import {
   parseContentLocation,
 } from './incidentTagHelpers';
 
+const DEBUG_INCIDENT_VERIFICATION =
+  __DEV__ && process.env.EXPO_PUBLIC_DEBUG_INCIDENT_VERIFICATION === '1';
+const loggedIncidentVerificationKeys = new Set<string>();
+
+function getOfficialPubkey(): string | undefined {
+  return (
+    process.env.EXPO_PUBLIC_EVENTINEL_OFFICIAL_PUBKEY_HEX ??
+    process.env.EVENTINEL_OFFICIAL_PUBKEY_HEX
+  );
+}
+
 type ParsedIncidentTags = {
   incidentId: string;
   geohashTag?: string;
@@ -89,11 +100,40 @@ function resolveVerification(
   event: NDKEvent,
   verifiedPubkeys?: Set<string>
 ): boolean {
-  const officialPubkey = process.env.EVENTINEL_OFFICIAL_PUBKEY_HEX;
+  const officialPubkey = getOfficialPubkey();
   return (
     (officialPubkey && event.pubkey === officialPubkey) ||
     (verifiedPubkeys?.has(event.pubkey) ?? false)
   );
+}
+
+function logIncidentVerification(
+  event: NDKEvent,
+  sourceTag: string,
+  isVerified: boolean,
+  verifiedPubkeys?: Set<string>
+): void {
+  if (!DEBUG_INCIDENT_VERIFICATION || sourceTag !== 'opendataphilly') {
+    return;
+  }
+
+  const officialPubkey = getOfficialPubkey() ?? 'missing';
+  const logKey = `${sourceTag}:${event.pubkey}:${officialPubkey}:${isVerified}`;
+  if (loggedIncidentVerificationKeys.has(logKey)) {
+    return;
+  }
+
+  loggedIncidentVerificationKeys.add(logKey);
+  console.log('[IncidentVerification] parsed incident publisher', {
+    incidentId: getTagValue(event.tags, TAGS.IDENTIFIER),
+    eventId: event.id,
+    source: sourceTag,
+    eventPubkey: event.pubkey,
+    officialPubkey,
+    matchedOfficialPubkey: officialPubkey !== 'missing' && event.pubkey === officialPubkey,
+    matchedVerifiedPubkeySet: verifiedPubkeys?.has(event.pubkey) ?? false,
+    isVerified,
+  });
 }
 
 function appendMissingRequiredTags(tags: string[][], errors: string[]): void {
@@ -198,6 +238,9 @@ export function parseIncidentEvent(
   const geo = parseContentLocation(content.lat, content.lng);
   if (!geo) return null;
 
+  const isVerified = resolveVerification(event, verifiedPubkeys);
+  logIncidentVerification(event, parsedTags.sourceTag, isVerified, verifiedPubkeys);
+
   return {
     eventId: event.id,
     incidentId: parsedTags.incidentId,
@@ -220,7 +263,7 @@ export function parseIncidentEvent(
     occurredAt: new Date(content.occurredAt),
     source: parsedTags.sourceTag,
     sourceId: content.sourceId,
-    isVerified: resolveVerification(event, verifiedPubkeys),
+    isVerified,
     metadata: content.metadata,
   };
 }
@@ -241,7 +284,7 @@ export function validateIncidentEvent(event: NDKEvent): VerificationResult {
   appendContentValidation(event.content, errors);
   appendRecommendedTagWarnings(event.tags, warnings);
 
-  const officialPubkey = process.env.EVENTINEL_OFFICIAL_PUBKEY_HEX;
+  const officialPubkey = getOfficialPubkey();
   const isVerified = officialPubkey ? event.pubkey === officialPubkey : false;
 
   return {
