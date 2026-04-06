@@ -1,6 +1,7 @@
 import { Pressable, View } from 'react-native';
-import { Button, Divider, Icon, Input, Text } from '@rneui/themed';
+import { Divider, Icon, Input, Text } from '@rneui/themed';
 
+import { WalletActionButton } from './WalletActionButton';
 import { walletScreenStyles as styles } from './styles';
 
 export type ThemeColors = {
@@ -112,7 +113,11 @@ function DepositInvoicePanel({
       <View style={styles.invoiceActions}>
         <Pressable
           onPress={() => onCopy(invoice)}
-          style={({ pressed }) => [styles.smallAction, pressed && { opacity: 0.7 }]}
+          style={({ pressed }) => [
+            styles.smallAction,
+            { backgroundColor: `${colors.primary}10`, borderColor: `${colors.primary}24` },
+            pressed && styles.smallActionPressed,
+          ]}
         >
           <Icon name="content-copy" type="material" size={18} color={colors.primary} />
           <Text style={[styles.smallActionText, { color: colors.primary }]}>Copy</Text>
@@ -142,7 +147,11 @@ function SendTokenPanel({
       <View style={styles.invoiceActions}>
         <Pressable
           onPress={() => onCopy(token)}
-          style={({ pressed }) => [styles.smallAction, pressed && { opacity: 0.7 }]}
+          style={({ pressed }) => [
+            styles.smallAction,
+            { backgroundColor: `${colors.primary}10`, borderColor: `${colors.primary}24` },
+            pressed && styles.smallActionPressed,
+          ]}
         >
           <Icon name="content-copy" type="material" size={18} color={colors.primary} />
           <Text style={[styles.smallActionText, { color: colors.primary }]}>Copy</Text>
@@ -234,12 +243,13 @@ export function CashuWalletConnectedPanel({
         autoCorrect={false}
         multiline
       />
-      <Button
-        title="Save Wallet Settings"
-        type="outline"
+      <WalletActionButton
+        colors={colors}
+        label="Save Wallet Settings"
         onPress={onSaveMints}
         disabled={busy}
-        containerStyle={styles.buttonContainer}
+        iconName="save"
+        variant="secondary"
       />
       <Divider style={[styles.divider, { backgroundColor: colors.border }]} />
       <Text style={[styles.sectionTitle, { color: colors.text }]}>Deposit (Mint)</Text>
@@ -253,11 +263,13 @@ export function CashuWalletConnectedPanel({
         value={depositAmount}
         onChangeText={setDepositAmount}
       />
-      <Button
-        title="Create Deposit Invoice"
+      <WalletActionButton
+        colors={colors}
+        label="Create Deposit Invoice"
         onPress={onCreateDeposit}
         disabled={busy}
-        containerStyle={styles.buttonContainer}
+        iconName="receipt-long"
+        variant="primary"
       />
       <DepositInvoicePanel colors={colors} invoice={depositInvoice} onCopy={onCopyInvoice} />
       <Divider style={[styles.divider, { backgroundColor: colors.border }]} />
@@ -269,12 +281,13 @@ export function CashuWalletConnectedPanel({
         value={sendAmount}
         onChangeText={setSendAmount}
       />
-      <Button
-        title="Create Token"
-        type="outline"
+      <WalletActionButton
+        colors={colors}
+        label="Create Token"
         onPress={onSendToken}
         disabled={busy}
-        containerStyle={styles.buttonContainer}
+        iconName="sell"
+        variant="secondary"
       />
       <SendTokenPanel colors={colors} token={sendToken} onCopy={onCopySendToken} />
       <Divider style={[styles.divider, { backgroundColor: colors.border }]} />
@@ -287,15 +300,24 @@ export function CashuWalletConnectedPanel({
         autoCapitalize="none"
         autoCorrect={false}
       />
-      <Button
-        title="Receive"
-        type="outline"
+      <WalletActionButton
+        colors={colors}
+        label="Receive"
         onPress={onReceiveToken}
         disabled={busy}
-        containerStyle={styles.buttonContainer}
+        iconName="call-received"
+        variant="secondary"
       />
       <View style={styles.rowActions}>
-        <Button title="Refresh" type="clear" onPress={onRefresh} disabled={busy} />
+        <WalletActionButton
+          colors={colors}
+          label="Refresh"
+          onPress={onRefresh}
+          disabled={busy}
+          iconName="refresh"
+          variant="ghost"
+          containerStyle={styles.rowActionButton}
+        />
       </View>
     </>
   );
@@ -333,11 +355,13 @@ export function CashuWalletCreatePanel({
         autoCorrect={false}
         editable={false}
       />
-      <Button
-        title="Create Cashu Wallet"
+      <WalletActionButton
+        colors={colors}
+        label="Create Cashu Wallet"
         onPress={onCreateWallet}
         disabled={busy}
-        containerStyle={styles.buttonContainer}
+        iconName="account-balance-wallet"
+        variant="primary"
       />
     </>
   );

@@ -9,12 +9,12 @@ import { useAppTheme } from '@hooks';
 import { LOCAL_RELAYS } from '@lib/relay/storage';
 
 import {
-  AddRelayCard,
-  DevRelayToggleCard,
+  AddRelaySection,
+  DeveloperToolsSection,
   RelayHeader,
   RelayInfoNote,
-  RelayListCard,
-  RelayMessageBanner,
+  RelayListSection,
+  RelaySummarySection,
 } from './relayConnect/RelayConnectSections';
 import { useRelayManagement } from './relayConnect/useRelayManagement';
 
@@ -37,33 +37,41 @@ export default function RelayConnectScreen() {
 
   return (
     <ScreenContainer scroll>
-      <RelayHeader colors={colors} relayCount={relays.length} connectedCount={connectedCount} />
+      <RelayHeader colors={colors} />
 
-      <AddRelayCard
+      <RelaySummarySection
+        colors={colors}
+        relays={relays}
+        connectedCount={connectedCount}
+        message={message}
+        isError={isError}
+      />
+
+      <RelayListSection
+        colors={colors}
+        relays={relays}
+        canRemoveRelay={relays.length > 1}
+        onReconnect={handleReconnect}
+        onDisconnect={handleDisconnect}
+      />
+
+      <AddRelaySection
         colors={colors}
         relayUrl={relayUrl}
         setRelayUrl={setRelayUrl}
-        onConnect={() => void handleConnect()}
+        canAddRelay={Boolean(relayUrl.trim())}
+        onAddRelay={() => void handleConnect()}
       />
 
-      <DevRelayToggleCard
+      <RelayInfoNote colors={colors} />
+
+      <DeveloperToolsSection
         colors={colors}
         localRelays={LOCAL_RELAYS}
         useLocalRelay={useLocalRelay}
         isSwitchingRelay={isSwitchingRelay}
         onToggle={(nextValue) => void handleToggleLocalRelay(nextValue)}
       />
-
-      <RelayMessageBanner colors={colors} message={message} isError={isError} />
-
-      <RelayListCard
-        colors={colors}
-        relays={relays}
-        onReconnect={handleReconnect}
-        onDisconnect={handleDisconnect}
-      />
-
-      <RelayInfoNote colors={colors} />
     </ScreenContainer>
   );
 }

@@ -1,6 +1,7 @@
 import { View } from 'react-native';
-import { Button, Icon, Overlay, Text } from '@rneui/themed';
+import { Icon, Overlay, Text } from '@rneui/themed';
 
+import { LoginActionButton } from './LoginActionButton';
 import { loginScreenStyles as styles } from './styles';
 
 type ThemeColors = {
@@ -72,19 +73,20 @@ export function GeneratedKeyOverlay({
         {generatedPubkey ? (
           <Text style={[styles.generatedPubkeyText, { color: colors.textMuted }]}>Public key: {generatedPubkey}</Text>
         ) : null}
-        <Button
-          title="Use this key to login"
+        <LoginActionButton
+          colors={colors}
+          label="Use this key to login"
           onPress={onUseKey}
           disabled={isLoading}
-          containerStyle={styles.buttonContainer}
-          icon={<Icon name="login" type="material" size={20} color="#FFFFFF" style={{ marginRight: 8 }} />}
+          iconName="login"
+          variant="primary"
         />
-        <Button
-          title="Close"
-          type="clear"
+        <LoginActionButton
+          colors={colors}
+          label="Close"
           onPress={onDismiss}
           disabled={isLoading}
-          titleStyle={{ color: colors.textMuted }}
+          variant="ghost"
         />
       </View>
     </Overlay>
@@ -129,34 +131,36 @@ export function NostrConnectOverlay({
             {uri}
           </Text>
         ) : null}
-        <Button
-          title="Copy URI"
+        <LoginActionButton
+          colors={colors}
+          label="Copy URI"
           onPress={onCopy}
           disabled={isLoading}
-          containerStyle={styles.buttonContainer}
-          type="outline"
-          buttonStyle={{ borderColor: colors.primary }}
-          titleStyle={{ color: colors.primary }}
+          variant="secondary"
+          iconName="content-copy"
         />
-        <Button
-          title="Open Signer"
+        <LoginActionButton
+          colors={colors}
+          label="Open Signer"
           onPress={onOpen}
           disabled={isLoading}
-          containerStyle={styles.buttonContainer}
-          icon={<Icon name="open-in-new" type="material" size={18} color="#FFFFFF" style={{ marginRight: 8 }} />}
+          iconName="open-in-new"
+          variant="primary"
         />
-        <Button
-          title="I Approved in Signer"
+        <LoginActionButton
+          colors={colors}
+          label="I Approved in Signer"
           onPress={onComplete}
           disabled={isLoading}
-          containerStyle={styles.buttonContainer}
+          iconName="check-circle"
+          variant="neutral"
         />
-        <Button
-          title="Cancel"
-          type="clear"
+        <LoginActionButton
+          colors={colors}
+          label="Cancel"
           onPress={onDismiss}
           disabled={isLoading}
-          titleStyle={{ color: colors.textMuted }}
+          variant="ghost"
         />
       </View>
     </Overlay>

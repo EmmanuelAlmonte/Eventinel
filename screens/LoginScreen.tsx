@@ -1,9 +1,10 @@
 /**
  * LoginScreen
  *
- * Multi-method Nostr authentication (NIP-55, NIP-46, manual test keys).
+ * Guided Nostr authentication with one active method at a time.
  */
 
+import { useState } from 'react';
 import { KeyboardAvoidingView, Platform } from 'react-native';
 
 import { ScreenContainer } from '@components/ui';
@@ -13,19 +14,16 @@ import {
   GeneratedKeyOverlay,
   LoginHeader,
   LoginLoadingOverlay,
-  ManualLoginCard,
-  Nip55Card,
-  NostrConnectCard,
   NostrConnectOverlay,
-  RemoteSignerCard,
-  SecurityNoticeCard,
+  UnifiedAuthCard,
+  type LoginMethod,
 } from './login/LoginSections';
 import { useLoginMethods } from './login/useLoginMethods';
 
 export default function LoginScreen() {
   const { colors } = useAppTheme();
   const isAndroid = Platform.OS === 'android';
-  const isIOS = Platform.OS === 'ios';
+  const [selectedMethod, setSelectedMethod] = useState<LoginMethod>('signer');
   const {
     isAvailable,
     apps,
@@ -82,44 +80,27 @@ export default function LoginScreen() {
           onDismiss={dismissNostrConnect}
         />
 
-        {isAndroid && isAvailable && apps.length > 0 ? (
-          <Nip55Card
-            colors={colors}
-            apps={apps}
-            isLoading={isLoading}
-            onLogin={(app) => void handleNip55Login(app)}
-          />
-        ) : null}
-
-        <RemoteSignerCard
+        <UnifiedAuthCard
           colors={colors}
-          isIOS={isIOS}
-          input={remoteSignerInput}
-          setInput={setRemoteSignerInput}
+          selectedMethod={selectedMethod}
+          onSelectMethod={setSelectedMethod}
+          isAndroid={isAndroid && isAvailable}
+          apps={apps}
+          remoteSignerInput={remoteSignerInput}
+          setRemoteSignerInput={setRemoteSignerInput}
           forceLegacyNip04={forceLegacyNip04}
           setForceLegacyNip04={setForceLegacyNip04}
-          isLoading={isLoading}
-          onConnect={() => void handleRemoteSignerLogin()}
-        />
-
-        <NostrConnectCard
-          colors={colors}
-          relay={nostrConnectRelay}
-          setRelay={setNostrConnectRelay}
-          isLoading={isLoading}
-          onGenerate={() => void handleStartNostrConnect()}
-        />
-
-        <ManualLoginCard
-          colors={colors}
+          nostrConnectRelay={nostrConnectRelay}
+          setNostrConnectRelay={setNostrConnectRelay}
           manualKey={manualKey}
           setManualKey={setManualKey}
           isLoading={isLoading}
-          onGenerate={() => void handleGenerateKey()}
-          onLogin={() => void handleManualLogin()}
+          onNip55Login={(app) => void handleNip55Login(app)}
+          onRemoteSignerLogin={() => void handleRemoteSignerLogin()}
+          onGenerateNostrConnect={() => void handleStartNostrConnect()}
+          onGenerateKey={() => void handleGenerateKey()}
+          onManualLogin={() => void handleManualLogin()}
         />
-
-        <SecurityNoticeCard colors={colors} isAndroid={isAndroid} />
       </ScreenContainer>
     </KeyboardAvoidingView>
   );

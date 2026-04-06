@@ -1,8 +1,9 @@
 import { Pressable, View } from 'react-native';
-import { Button, Card, Divider, Icon, Input, Text } from '@rneui/themed';
+import { Card, Divider, Icon, Input, Text } from '@rneui/themed';
 import type { NDKNWCGetInfoResult, NDKNWCWallet, NDKWalletStatus } from '@nostr-dev-kit/mobile';
 
 import { shortHex, walletStatusLabel } from './helpers';
+import { WalletActionButton } from './WalletActionButton';
 import { walletScreenStyles as styles } from './styles';
 
 type ThemeColors = {
@@ -84,7 +85,11 @@ function InvoiceCopyBox({ colors, invoice, onCopy }: { colors: ThemeColors; invo
       <View style={styles.invoiceActions}>
         <Pressable
           onPress={() => onCopy(invoice)}
-          style={({ pressed }) => [styles.smallAction, pressed && { opacity: 0.7 }]}
+          style={({ pressed }) => [
+            styles.smallAction,
+            { backgroundColor: `${colors.primary}10`, borderColor: `${colors.primary}24` },
+            pressed && styles.smallActionPressed,
+          ]}
         >
           <Icon name="content-copy" type="material" size={18} color={colors.primary} />
           <Text style={[styles.smallActionText, { color: colors.primary }]}>Copy</Text>
@@ -200,7 +205,14 @@ function NwcConnectedPanel({
         autoCapitalize="none"
         autoCorrect={false}
       />
-      <Button title="Pay" onPress={onPayInvoice} disabled={busy} containerStyle={styles.buttonContainer} />
+      <WalletActionButton
+        colors={colors}
+        label="Pay"
+        onPress={onPayInvoice}
+        disabled={busy}
+        iconName="bolt"
+        variant="primary"
+      />
       <Divider style={[styles.divider, { backgroundColor: colors.border }]} />
       <Text style={[styles.sectionTitle, { color: colors.text }]}>Create Invoice</Text>
       <SectionInput
@@ -216,16 +228,25 @@ function NwcConnectedPanel({
         value={makeDescription}
         onChangeText={onSetDescription}
       />
-      <Button
-        title="Create Invoice"
-        type="outline"
+      <WalletActionButton
+        colors={colors}
+        label="Create Invoice"
         onPress={onCreateInvoice}
         disabled={busy}
-        containerStyle={styles.buttonContainer}
+        iconName="receipt-long"
+        variant="secondary"
       />
       <InvoiceCopyBox colors={colors} invoice={createdInvoice} onCopy={onCopyInvoice} />
       <View style={styles.rowActions}>
-        <Button title="Disconnect" type="clear" onPress={onDisconnect} disabled={busy} />
+        <WalletActionButton
+          colors={colors}
+          label="Disconnect"
+          onPress={onDisconnect}
+          disabled={busy}
+          iconName="link-off"
+          variant="ghost"
+          containerStyle={styles.rowActionButton}
+        />
       </View>
     </>
   );
@@ -255,7 +276,14 @@ function NwcDisconnectedPanel({
         autoCapitalize="none"
         autoCorrect={false}
       />
-      <Button title="Connect" onPress={onConnect} disabled={busy} containerStyle={styles.buttonContainer} />
+      <WalletActionButton
+        colors={colors}
+        label="Connect"
+        onPress={onConnect}
+        disabled={busy}
+        iconName="login"
+        variant="primary"
+      />
     </>
   );
 }
