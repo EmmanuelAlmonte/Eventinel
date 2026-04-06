@@ -5,12 +5,17 @@ export type RootStackParamList = {
   Main: undefined;
   IncidentDetail: { incidentId: string; eventId?: string };
   Relays: undefined;
+  ReportIncident: {
+    sourceTab?: 'Map' | 'Incidents';
+    location?: { latitude: number; longitude: number } | null;
+  };
   Wallet: undefined;
 };
 
 export type AppNavigationParamList = RootStackParamList & {
   Map: undefined;
   Incidents: undefined;
+  Report: undefined;
   Profile: undefined;
 };
 
