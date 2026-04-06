@@ -1,8 +1,9 @@
-import { Pressable, Text } from 'react-native';
+import { Pressable, StyleSheet, Text } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useAppTheme } from '@hooks';
 
 import MapScreen from './screens/MapScreen';
@@ -18,10 +19,19 @@ import { StatusBar } from 'expo-status-bar';
 const Tab = createBottomTabNavigator();
 const Stack = createNativeStackNavigator();
 
+function renderTabIcon(
+  focused: boolean,
+  color: string,
+  activeName: React.ComponentProps<typeof MaterialCommunityIcons>['name'],
+  inactiveName: React.ComponentProps<typeof MaterialCommunityIcons>['name']
+) {
+  return <MaterialCommunityIcons name={focused ? activeName : inactiveName} size={22} color={color} />;
+}
+
 function TabNavigator() {
   const { colors } = useAppTheme();
   const insets = useSafeAreaInsets();
-  const TAB_BAR_BASE_HEIGHT = 60;
+  const TAB_BAR_BASE_HEIGHT = 58;
   const tabBarHeight = TAB_BAR_BASE_HEIGHT + insets.bottom;
 
   return (
@@ -29,15 +39,25 @@ function TabNavigator() {
       initialRouteName="Map"
       screenOptions={{
         headerShown: false,
+        tabBarShowLabel: true,
+        tabBarHideOnKeyboard: true,
         tabBarActiveTintColor: colors.primary,
         tabBarInactiveTintColor: colors.textMuted,
-        tabBarLabelStyle: { fontSize: 12, fontWeight: '600' },
+        tabBarLabelStyle: {
+          fontSize: 11,
+          fontWeight: '600',
+          letterSpacing: 0.2,
+          marginTop: 2,
+        },
+        tabBarItemStyle: {
+          paddingVertical: 4,
+        },
         tabBarStyle: {
           backgroundColor: colors.background,
           height: tabBarHeight,
-          paddingBottom: insets.bottom + 8,
-          paddingTop: 8,
-          borderTopWidth: 1,
+          paddingBottom: Math.max(insets.bottom, 8),
+          paddingTop: 6,
+          borderTopWidth: StyleSheet.hairlineWidth,
           borderTopColor: colors.border,
         },
       }}
@@ -47,7 +67,7 @@ function TabNavigator() {
         component={MapScreen}
         options={{
           tabBarLabel: 'Map',
-          tabBarIcon: ({ color }) => <Text style={{ fontSize: 18, color }}>🗺️</Text>,
+          tabBarIcon: ({ color, focused }) => renderTabIcon(focused, color, 'map', 'map-outline'),
         }}
       />
       <Tab.Screen
@@ -55,7 +75,8 @@ function TabNavigator() {
         component={IncidentFeedScreen}
         options={{
           tabBarLabel: 'Incidents',
-          tabBarIcon: ({ color }) => <Text style={{ fontSize: 18, color }}>📋</Text>,
+          tabBarIcon: ({ color, focused }) =>
+            renderTabIcon(focused, color, 'format-list-bulleted', 'format-list-bulleted-type'),
         }}
       />
       <Tab.Screen
@@ -63,7 +84,7 @@ function TabNavigator() {
         component={ProfileScreen}
         options={{
           tabBarLabel: 'Profile',
-          tabBarIcon: ({ color }) => <Text style={{ fontSize: 18, color }}>👤</Text>,
+          tabBarIcon: ({ color, focused }) => renderTabIcon(focused, color, 'account', 'account-outline'),
         }}
       />
     </Tab.Navigator>
