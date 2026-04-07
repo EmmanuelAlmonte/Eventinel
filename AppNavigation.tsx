@@ -15,6 +15,7 @@ import IncidentFeedScreen from './screens/IncidentFeedScreen';
 import IncidentDetailScreen from './screens/IncidentDetailScreen';
 import ProfileScreen from './screens/ProfileScreen';
 import ReportIncidentScreen from './screens/ReportIncidentScreen';
+import ReportIncidentReviewScreen from './screens/ReportIncidentReviewScreen';
 import RelayConnectScreen from './screens/RelayConnectScreen';
 import WalletScreen from './screens/WalletScreen';
 import { navigationRef } from './lib/navigation';
@@ -100,10 +101,8 @@ function TabNavigator() {
         name="Report"
         component={ReportTriggerScreen}
         options={{
-          tabBarLabel: ({ color }) => (
-            <Text style={[styles.reportTabLabel, { color: colors.primary || color }]}>Report</Text>
-          ),
-          tabBarIcon: () => <MaterialCommunityIcons name="map-marker-plus" size={22} color={colors.primary} />,
+          tabBarLabel: ({ color }) => <Text style={[styles.reportTabLabel, { color }]}>Report</Text>,
+          tabBarIcon: ({ color }) => <MaterialCommunityIcons name="map-marker-plus" size={22} color={color} />,
         }}
         listeners={({ navigation }) => ({
           tabPress: (event) => {
@@ -196,6 +195,26 @@ export function MainNavigation() {
             presentation: 'fullScreenModal',
             headerShown: true,
             headerTitle: 'Report incident',
+            headerStyle: { backgroundColor: colors.background },
+            headerTintColor: colors.text,
+            headerLeft: () => (
+              <Pressable
+                onPress={() => navigation.goBack()}
+                style={{ paddingHorizontal: 16 }}
+                hitSlop={{ top: 11, bottom: 11, left: 8, right: 8 }}
+              >
+                <Text style={{ fontSize: 22, color: colors.text }}>✕</Text>
+              </Pressable>
+            ),
+          })}
+        />
+        <Stack.Screen
+          name="ReportIncidentReview"
+          component={ReportIncidentReviewScreen}
+          options={({ navigation }) => ({
+            presentation: 'fullScreenModal',
+            headerShown: true,
+            headerTitle: 'Review report',
             headerStyle: { backgroundColor: colors.background },
             headerTintColor: colors.text,
             headerLeft: () => (
