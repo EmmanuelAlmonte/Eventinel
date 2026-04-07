@@ -29,6 +29,8 @@ type ReportIncidentScreenProps = NativeStackScreenProps<RootStackParamList, 'Rep
 const MIN_DESCRIPTION_LENGTH = 24;
 const MAP_PREVIEW_ZOOM = 16.2;
 const MAP_PREVIEW_FALLBACK_TIMEOUT_MS = 1800;
+const MAP_PREVIEW_LOGO_POSITION = { bottom: 8, left: 8 };
+const MAP_PREVIEW_ATTRIBUTION_POSITION = { bottom: 8, right: 8 };
 const LOCATION_META_LOADING = 'Finding nearby place details…';
 const REPORT_TYPE_OPTIONS: Array<{
   value: ReportIncidentType;
@@ -187,6 +189,12 @@ function ReportLocationPreview({ colors, location, presentation }: LocationPrevi
             pitchEnabled={false}
             rotateEnabled={false}
             zoomEnabled={false}
+            logoEnabled={true}
+            logoPosition={MAP_PREVIEW_LOGO_POSITION}
+            attributionEnabled={true}
+            attributionPosition={MAP_PREVIEW_ATTRIBUTION_POSITION}
+            compassEnabled={false}
+            scaleBarEnabled={false}
             onDidFinishLoadingMap={() => {
               setIsMapVisible(true);
               setShowFallback(false);
@@ -380,7 +388,7 @@ export default function ReportIncidentScreen({ navigation, route }: ReportIncide
         >
           <View style={styles.header}>
             <Text style={[styles.subtitle, { color: colors.textMuted }]}>
-              Confirm the place, describe what happened, and review the report before it is ready to send.
+              Confirm the place and describe what happened.
             </Text>
           </View>
 
@@ -561,11 +569,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
   },
   header: {
-    marginBottom: 14,
+    marginBottom: 12,
   },
   subtitle: {
-    fontSize: 14,
-    lineHeight: 20,
+    fontSize: 13,
+    lineHeight: 18,
   },
   locationSection: {
     borderRadius: 18,
@@ -605,7 +613,7 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   locationMapShell: {
-    height: 96,
+    height: 116,
     backgroundColor: '#0F172A',
   },
   locationMap: {
@@ -655,9 +663,10 @@ const styles = StyleSheet.create({
     lineHeight: 19,
   },
   locationMeta: {
-    fontSize: 11,
-    lineHeight: 16,
+    fontSize: 10,
+    lineHeight: 14,
     marginTop: 4,
+    opacity: 0.72,
   },
   locationDetail: {
     fontSize: 12,
@@ -719,7 +728,7 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     borderWidth: StyleSheet.hairlineWidth,
     paddingHorizontal: 12,
-    paddingVertical: 10,
+    paddingVertical: 8,
     flexDirection: 'row',
     alignItems: 'flex-start',
     gap: 10,
@@ -728,8 +737,8 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   optionalBody: {
-    fontSize: 11,
-    lineHeight: 16,
+    fontSize: 10,
+    lineHeight: 15,
   },
   footer: {
     borderTopWidth: StyleSheet.hairlineWidth,

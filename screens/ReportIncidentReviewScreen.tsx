@@ -23,6 +23,8 @@ import type {
 type ReportIncidentReviewScreenProps = NativeStackScreenProps<RootStackParamList, 'ReportIncidentReview'>;
 const MAP_PREVIEW_ZOOM = 16.2;
 const MAP_PREVIEW_FALLBACK_TIMEOUT_MS = 1800;
+const MAP_PREVIEW_LOGO_POSITION = { bottom: 8, left: 8 };
+const MAP_PREVIEW_ATTRIBUTION_POSITION = { bottom: 8, right: 8 };
 
 const TYPE_LABELS: Record<ReportIncidentType, string> = {
   violent_crime: 'Crime',
@@ -168,6 +170,12 @@ function ReportLocationPreview({ colors, location, presentation }: LocationPrevi
             pitchEnabled={false}
             rotateEnabled={false}
             zoomEnabled={false}
+            logoEnabled={true}
+            logoPosition={MAP_PREVIEW_LOGO_POSITION}
+            attributionEnabled={true}
+            attributionPosition={MAP_PREVIEW_ATTRIBUTION_POSITION}
+            compassEnabled={false}
+            scaleBarEnabled={false}
             onDidFinishLoadingMap={() => {
               setIsMapVisible(true);
               setShowFallback(false);
@@ -419,7 +427,7 @@ export default function ReportIncidentReviewScreen({
       >
         <View style={styles.header}>
           <Text style={[styles.subtitle, { color: colors.textMuted }]}>
-            Confirm the place and summary before you submit the report.
+            Confirm the place before you submit.
           </Text>
         </View>
 
@@ -465,9 +473,6 @@ export default function ReportIncidentReviewScreen({
           </Text>
         </View>
 
-        <Text style={[styles.reviewNote, { color: colors.textMuted }]}>
-          Review the summary above, then submit the report to your connected relays.
-        </Text>
       </ScrollView>
 
       <View
@@ -483,7 +488,7 @@ export default function ReportIncidentReviewScreen({
         <Text style={[styles.footerMessage, { color: colors.textMuted }]}>
           {connectedRelayCount > 0
             ? `Ready to publish to ${connectedRelayCount} connected relay${connectedRelayCount === 1 ? '' : 's'}.`
-            : 'Connect to a relay before submitting this report.'}
+            : 'Connect a relay to submit.'}
         </Text>
 
           <Pressable
@@ -524,11 +529,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
   },
   header: {
-    marginBottom: 14,
+    marginBottom: 12,
   },
   subtitle: {
-    fontSize: 14,
-    lineHeight: 20,
+    fontSize: 13,
+    lineHeight: 18,
   },
   sectionCard: {
     borderRadius: 18,
@@ -559,7 +564,7 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   locationMapShell: {
-    height: 90,
+    height: 80,
     backgroundColor: '#0F172A',
   },
   locationMap: {
@@ -609,9 +614,10 @@ const styles = StyleSheet.create({
     lineHeight: 19,
   },
   locationMeta: {
-    fontSize: 11,
-    lineHeight: 16,
+    fontSize: 10,
+    lineHeight: 14,
     marginTop: 4,
+    opacity: 0.72,
   },
   locationDetail: {
     fontSize: 12,
@@ -642,30 +648,25 @@ const styles = StyleSheet.create({
     borderWidth: StyleSheet.hairlineWidth,
     borderRadius: 14,
     paddingHorizontal: 12,
-    paddingVertical: 10,
+    paddingVertical: 8,
     flexDirection: 'row',
     alignItems: 'flex-start',
     gap: 10,
   },
   infoText: {
     flex: 1,
-    fontSize: 11,
-    lineHeight: 16,
-  },
-  reviewNote: {
-    fontSize: 12,
-    lineHeight: 18,
-    marginTop: 14,
+    fontSize: 10,
+    lineHeight: 15,
   },
   footer: {
     borderTopWidth: StyleSheet.hairlineWidth,
     paddingHorizontal: 16,
-    paddingTop: 12,
+    paddingTop: 10,
   },
   footerMessage: {
-    fontSize: 12,
-    lineHeight: 18,
-    marginBottom: 10,
+    fontSize: 11,
+    lineHeight: 16,
+    marginBottom: 8,
   },
   primaryButton: {
     minHeight: 52,
