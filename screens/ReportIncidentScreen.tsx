@@ -7,31 +7,22 @@ import {
   StyleSheet,
   View,
 } from 'react-native';
-import Mapbox from '@rnmapbox/maps';
-import * as ExpoLocation from 'expo-location';
 import { Input, Text } from '@rneui/themed';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useAppTheme } from '@hooks';
-import { useSharedLocation } from '@contexts';
-import { MAP_STYLES } from '@lib/map/types';
-import type {
-  ReportIncidentType,
-  ReportLocation,
-  RootStackParamList,
-  ReportSourceTab,
-} from '@lib/navigation';
+import { useReportDraft, useSharedLocation } from '@contexts';
+import { getReportRadiusState } from '@lib/utils/reportLocationRadius';
+import type { ReportIncidentType, RootStackParamList } from '@lib/navigation';
+
+import { ReportLocationPreview } from './reportIncident/ReportLocationPreview';
+import { buildLocationPresentation, useResolvedReportLocation } from './reportIncident/locationPresentation';
 
 type ReportIncidentScreenProps = NativeStackScreenProps<RootStackParamList, 'ReportIncident'>;
 
 const MIN_DESCRIPTION_LENGTH = 24;
-const MAP_PREVIEW_ZOOM = 16.2;
-const MAP_PREVIEW_FALLBACK_TIMEOUT_MS = 1800;
-const MAP_PREVIEW_LOGO_POSITION = { bottom: 8, left: 8 };
-const MAP_PREVIEW_ATTRIBUTION_POSITION = { bottom: 8, right: 8 };
-const LOCATION_META_LOADING = 'Finding nearby place details…';
 const REPORT_TYPE_OPTIONS: Array<{
   value: ReportIncidentType;
   label: string;
@@ -45,326 +36,83 @@ const REPORT_TYPE_OPTIONS: Array<{
   { value: 'other', label: 'Other', icon: 'alert-circle-outline' },
 ];
 
-type LocationPresentation = {
-  primary: string;
-  secondary: string;
-  note?: string | null;
-  tertiary?: string | null;
-};
-
-type LocationPreviewProps = {
-  colors: ReturnType<typeof useAppTheme>['colors'];
-  location: ReportLocation | null;
-  presentation: LocationPresentation;
-};
-
-function formatCoordinateLine(location?: ReportLocation | null) {
-  if (!location) {
-    return null;
-  }
-
-  return `${location.latitude.toFixed(5)}, ${location.longitude.toFixed(5)}`;
-}
-
-function formatSourceContext(sourceTab?: ReportSourceTab, hasLocation?: boolean) {
-  if (sourceTab === 'Map') {
-    return hasLocation ? 'Using current map area' : 'Move the map or enable location before continuing.';
-  }
-
-  if (sourceTab === 'Incidents') {
-    return hasLocation ? 'Using nearby incident context' : 'Move the map or enable location before continuing.';
-  }
-
-  if (hasLocation) {
-    return 'Using current location';
-  }
-
-  return 'Move the map or enable location before continuing.';
-}
-
-function formatBlockLabel(streetNumber?: string | null, street?: string | null) {
-  if (!street) {
-    return null;
-  }
-
-  if (!streetNumber) {
-    return street;
-  }
-
-  const parsedStreetNumber = Number.parseInt(streetNumber, 10);
-  if (!Number.isNaN(parsedStreetNumber) && parsedStreetNumber >= 100) {
-    const blockBase = Math.floor(parsedStreetNumber / 100) * 100;
-    return `${blockBase} block ${street}`;
-  }
-
-  return `${streetNumber} ${street}`;
-}
-
-function buildContextLine(address?: ExpoLocation.LocationGeocodedAddress | null) {
-  if (!address) {
-    return null;
-  }
-
-  const parts = [address.district, address.city, address.region].filter(Boolean);
-  if (parts.length > 0) {
-    return parts.join(', ');
-  }
-
-  return address.subregion ?? address.country ?? null;
-}
-
-function buildLocationPresentation({
-  sourceTab,
-  location,
-  locationNote,
-  resolvedPlaceLabel,
-  resolvedContextLine,
-  isResolvingPlace,
-}: {
-  sourceTab?: ReportSourceTab;
-  location?: ReportLocation | null;
-  locationNote?: string;
-  resolvedPlaceLabel?: string | null;
-  resolvedContextLine?: string | null;
-  isResolvingPlace?: boolean;
-}): LocationPresentation {
-  const trimmedNote = locationNote?.trim();
-  const coordinateLine = formatCoordinateLine(location);
-  const primary =
-    resolvedPlaceLabel ??
-    trimmedNote ??
-    (sourceTab === 'Map'
-      ? 'Current map area'
-      : sourceTab === 'Incidents'
-        ? 'Nearby incident area'
-        : location
-          ? 'Current location'
-          : 'Location unavailable');
-  const secondary =
-    resolvedContextLine ??
-    (isResolvingPlace && location
-      ? LOCATION_META_LOADING
-      : location
-        ? formatSourceContext(sourceTab, true)
-        : 'Move the map or enable location before continuing.');
-
-  return {
-    primary,
-    secondary,
-    note: resolvedPlaceLabel ? trimmedNote || null : null,
-    tertiary: coordinateLine,
-  };
-}
-
-function ReportLocationPreview({ colors, location, presentation }: LocationPreviewProps) {
-  const [isMapVisible, setIsMapVisible] = useState(false);
-  const [showFallback, setShowFallback] = useState(false);
-  const markerCoordinate = useMemo<[number, number] | null>(
-    () => (location ? [location.longitude, location.latitude] : null),
-    [location]
-  );
-
-  useEffect(() => {
-    if (!location) {
-      return undefined;
-    }
-
-    const fallbackTimer = setTimeout(() => {
-      setShowFallback((current) => (isMapVisible ? current : true));
-    }, MAP_PREVIEW_FALLBACK_TIMEOUT_MS);
-
-    return () => clearTimeout(fallbackTimer);
-  }, [isMapVisible, location]);
-
-  return (
-    <View style={[styles.locationPreviewCard, { backgroundColor: colors.background, borderColor: colors.border }]}>
-      {markerCoordinate ? (
-        <View style={styles.locationMapShell}>
-          <Mapbox.MapView
-            style={styles.locationMap}
-            styleURL={MAP_STYLES.DARK}
-            projection="mercator"
-            surfaceView={false}
-            scrollEnabled={false}
-            pitchEnabled={false}
-            rotateEnabled={false}
-            zoomEnabled={false}
-            logoEnabled={true}
-            logoPosition={MAP_PREVIEW_LOGO_POSITION}
-            attributionEnabled={true}
-            attributionPosition={MAP_PREVIEW_ATTRIBUTION_POSITION}
-            compassEnabled={false}
-            scaleBarEnabled={false}
-            onDidFinishLoadingMap={() => {
-              setIsMapVisible(true);
-              setShowFallback(false);
-            }}
-            onMapIdle={() => {
-              setIsMapVisible(true);
-              setShowFallback(false);
-            }}
-          >
-            <Mapbox.Camera
-              zoomLevel={MAP_PREVIEW_ZOOM}
-              centerCoordinate={markerCoordinate}
-              animationDuration={0}
-            />
-            <Mapbox.MarkerView coordinate={markerCoordinate}>
-              <View style={[styles.previewMarker, { backgroundColor: colors.primary }]} />
-            </Mapbox.MarkerView>
-          </Mapbox.MapView>
-
-          {showFallback && !isMapVisible ? (
-            <View style={styles.mapFallback}>
-              <Text style={styles.mapFallbackText}>Map loading</Text>
-            </View>
-          ) : null}
-        </View>
-      ) : null}
-
-      <View style={styles.locationPreviewContent}>
-        <View style={[styles.locationIconBadge, { backgroundColor: colors.surface }]}>
-          <MaterialCommunityIcons name="map-marker-radius-outline" size={20} color={colors.primary} />
-        </View>
-        <View style={styles.locationCopy}>
-          <Text style={[styles.locationTitle, { color: colors.text }]}>{presentation.primary}</Text>
-          <Text style={[styles.locationBody, { color: colors.textMuted }]}>{presentation.secondary}</Text>
-          {presentation.note ? (
-            <Text style={[styles.locationDetail, { color: colors.textMuted }]}>Detail: {presentation.note}</Text>
-          ) : null}
-          {presentation.tertiary ? (
-            <Text style={[styles.locationMeta, { color: colors.textMuted }]}>{presentation.tertiary}</Text>
-          ) : null}
-        </View>
-      </View>
-    </View>
-  );
-}
-
 export default function ReportIncidentScreen({ navigation, route }: ReportIncidentScreenProps) {
   const { colors } = useAppTheme();
   const insets = useSafeAreaInsets();
   const { location: sharedLocation } = useSharedLocation();
-  const [incidentType, setIncidentType] = useState<ReportIncidentType | null>(route.params?.incidentType ?? null);
-  const [description, setDescription] = useState(route.params?.description ?? '');
-  const [locationNote, setLocationNote] = useState(route.params?.locationNote ?? '');
+  const { draft, startDraft, updateDraft, setAdjustEntryMode, resetDraft } = useReportDraft();
   const [hasAttemptedContinue, setHasAttemptedContinue] = useState(false);
   const [descriptionTouched, setDescriptionTouched] = useState(false);
-  const [resolvedPlaceLabel, setResolvedPlaceLabel] = useState<string | null>(null);
-  const [resolvedContextLine, setResolvedContextLine] = useState<string | null>(null);
-  const [isResolvingPlace, setIsResolvingPlace] = useState(false);
-
-  const effectiveLocation = useMemo(() => {
-    if (route.params?.location) {
-      return route.params.location;
-    }
-
-    if (!sharedLocation) {
-      return null;
-    }
-
-    return {
-      longitude: sharedLocation[0],
-      latitude: sharedLocation[1],
-    };
-  }, [route.params?.location, sharedLocation]);
-
-  const trimmedDescription = description.trim();
-  const trimmedLocationNote = locationNote.trim();
+  const currentDeviceLocation = useMemo(
+    () =>
+      sharedLocation
+        ? {
+            longitude: sharedLocation[0],
+            latitude: sharedLocation[1],
+          }
+        : null,
+    [sharedLocation]
+  );
 
   useEffect(() => {
-    let isMounted = true;
+    startDraft(route.params.sessionKey);
+  }, [route.params.sessionKey, startDraft]);
 
-    async function resolvePlaceLabel() {
-      if (!effectiveLocation) {
-        setResolvedPlaceLabel(null);
-        setResolvedContextLine(null);
-        setIsResolvingPlace(false);
-        return;
-      }
-
-      setIsResolvingPlace(true);
-
-      try {
-        const [address] = await ExpoLocation.reverseGeocodeAsync({
-          latitude: effectiveLocation.latitude,
-          longitude: effectiveLocation.longitude,
-        });
-
-        if (!isMounted) {
-          return;
-        }
-
-        setResolvedPlaceLabel(formatBlockLabel(address?.streetNumber, address?.street));
-        setResolvedContextLine(buildContextLine(address));
-      } catch (error) {
-        if (!isMounted) {
-          return;
-        }
-
-        console.warn('[ReportIncident] Failed to resolve place label:', error);
-        setResolvedPlaceLabel(null);
-        setResolvedContextLine(null);
-      } finally {
-        if (isMounted) {
-          setIsResolvingPlace(false);
-        }
-      }
-    }
-
-    void resolvePlaceLabel();
-
+  useEffect(() => {
     return () => {
-      isMounted = false;
+      resetDraft();
     };
-  }, [effectiveLocation?.latitude, effectiveLocation?.longitude]);
+  }, [resetDraft]);
 
+  const { resolvedPlaceLabel, resolvedContextLine, isResolvingPlace } = useResolvedReportLocation(draft.location);
   const locationPresentation = useMemo(
     () =>
       buildLocationPresentation({
-        sourceTab: route.params?.sourceTab,
-        location: effectiveLocation,
-        locationNote: trimmedLocationNote,
+        sourceTab: draft.sourceTab,
+        location: draft.location,
+        locationNote: draft.locationNote,
         resolvedPlaceLabel,
         resolvedContextLine,
         isResolvingPlace,
       }),
-    [effectiveLocation, isResolvingPlace, resolvedContextLine, resolvedPlaceLabel, route.params?.sourceTab, trimmedLocationNote]
+    [
+      draft.location,
+      draft.locationNote,
+      draft.sourceTab,
+      isResolvingPlace,
+      resolvedContextLine,
+      resolvedPlaceLabel,
+    ]
   );
+  const trimmedDescription = draft.description.trim();
   const isDescriptionValid = trimmedDescription.length >= MIN_DESCRIPTION_LENGTH;
-  const hasLocation = Boolean(effectiveLocation);
-  const canContinue = hasLocation && Boolean(incidentType) && isDescriptionValid;
-  const shouldShowTypeError = hasAttemptedContinue && !incidentType;
+  const hasLocation = Boolean(draft.location);
+  const reportRadiusState = useMemo(
+    () => getReportRadiusState(currentDeviceLocation, draft.location),
+    [currentDeviceLocation, draft.location]
+  );
+  const canContinue =
+    hasLocation && reportRadiusState.isWithinRadius && Boolean(draft.incidentType) && isDescriptionValid;
+  const shouldShowTypeError = hasAttemptedContinue && !draft.incidentType;
   const shouldShowDescriptionError =
-    (hasAttemptedContinue || descriptionTouched) && trimmedDescription.length > 0 && !isDescriptionValid;
+    (hasAttemptedContinue || descriptionTouched) &&
+    trimmedDescription.length > 0 &&
+    !isDescriptionValid;
   const shouldShowMissingLocation = hasAttemptedContinue && !hasLocation;
-
-  useEffect(() => {
-    if (route.params?.incidentType !== undefined) {
-      setIncidentType(route.params.incidentType ?? null);
-    }
-
-    if (route.params?.description !== undefined) {
-      setDescription(route.params.description);
-    }
-
-    if (route.params?.locationNote !== undefined) {
-      setLocationNote(route.params.locationNote);
-    }
-  }, [route.params?.description, route.params?.incidentType, route.params?.locationNote]);
 
   function handleContinue() {
     setHasAttemptedContinue(true);
-    if (!canContinue || !incidentType) {
+    if (!canContinue) {
       return;
     }
 
-    navigation.navigate('ReportIncidentReview', {
-      sourceTab: route.params?.sourceTab,
-      location: effectiveLocation,
-      incidentType,
-      description: trimmedDescription,
-      locationNote: trimmedLocationNote || undefined,
+    navigation.navigate('ReportIncidentReview');
+  }
+
+  function handleAdjustLocation() {
+    setAdjustEntryMode('report_edit');
+    navigation.navigate('ReportIncidentAdjustLocation', {
+      origin: 'report_edit',
     });
   }
 
@@ -400,20 +148,53 @@ export default function ReportIncidentScreen({ navigation, route }: ReportIncide
 
             <ReportLocationPreview
               colors={colors}
-              location={effectiveLocation}
+              location={draft.location}
               presentation={locationPresentation}
+              mapHeight={116}
             />
 
             {shouldShowMissingLocation ? (
               <Text style={[styles.validationText, { color: '#F97316' }]}>
                 A location is required before you can continue.
               </Text>
+            ) : !hasLocation ? (
+              <Text style={[styles.validationText, { color: colors.textMuted }]}>
+                Select a nearby incident location on the map before continuing.
+              </Text>
+            ) : hasLocation ? (
+              <Text
+                style={[
+                  styles.validationText,
+                  { color: reportRadiusState.isWithinRadius ? colors.success : colors.warning },
+                ]}
+              >
+                {reportRadiusState.message}
+              </Text>
             ) : null}
+
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Adjust report location on map"
+              onPress={handleAdjustLocation}
+              style={({ pressed }) => [
+                styles.secondaryAction,
+                {
+                  backgroundColor: colors.background,
+                  borderColor: colors.border,
+                },
+                pressed && styles.secondaryActionPressed,
+              ]}
+            >
+              <MaterialCommunityIcons name="crosshairs-gps" size={16} color={colors.text} />
+              <Text style={[styles.secondaryActionText, { color: colors.text }]}>
+                {hasLocation ? 'Adjust on map' : 'Choose on map'}
+              </Text>
+            </Pressable>
 
             <Input
               placeholder="Optional landmark, building, or block detail"
-              value={locationNote}
-              onChangeText={setLocationNote}
+              value={draft.locationNote}
+              onChangeText={(value) => updateDraft({ locationNote: value })}
               autoCapitalize="sentences"
               autoCorrect
               containerStyle={styles.inputContainer}
@@ -438,13 +219,13 @@ export default function ReportIncidentScreen({ navigation, route }: ReportIncide
 
             <View style={styles.typeGrid}>
               {REPORT_TYPE_OPTIONS.map((option) => {
-                const isSelected = incidentType === option.value;
+                const isSelected = draft.incidentType === option.value;
                 return (
                   <Pressable
                     key={option.value}
                     accessibilityRole="button"
                     accessibilityLabel={`Select ${option.label} report type`}
-                    onPress={() => setIncidentType(option.value)}
+                    onPress={() => updateDraft({ incidentType: option.value })}
                     style={({ pressed }) => [
                       styles.typeChip,
                       {
@@ -475,8 +256,8 @@ export default function ReportIncidentScreen({ navigation, route }: ReportIncide
 
             <Input
               placeholder="Describe what happened"
-              value={description}
-              onChangeText={setDescription}
+              value={draft.description}
+              onChangeText={(value) => updateDraft({ description: value })}
               onBlur={() => setDescriptionTouched(true)}
               multiline
               numberOfLines={6}
@@ -524,9 +305,11 @@ export default function ReportIncidentScreen({ navigation, route }: ReportIncide
         >
           {!canContinue ? (
             <Text style={[styles.footerMessage, { color: colors.textMuted }]}>
-              {hasLocation
-                ? 'Choose a type and add a fuller description to continue.'
-                : 'Location is still needed before this report can move to review.'}
+              {!hasLocation
+                ? 'Location is still needed before this report can move to review.'
+                : !reportRadiusState.isWithinRadius
+                  ? reportRadiusState.message
+                  : 'Choose a type and add a fuller description to continue.'}
             </Text>
           ) : (
             <Text style={[styles.footerMessage, { color: colors.textMuted }]}>
@@ -606,72 +389,23 @@ const styles = StyleSheet.create({
     lineHeight: 19,
     marginBottom: 12,
   },
-  locationPreviewCard: {
+  secondaryAction: {
+    minHeight: 44,
     borderRadius: 14,
     borderWidth: 1,
+    paddingHorizontal: 14,
     marginBottom: 12,
-    overflow: 'hidden',
-  },
-  locationMapShell: {
-    height: 116,
-    backgroundColor: '#0F172A',
-  },
-  locationMap: {
-    flex: 1,
-  },
-  mapFallback: {
-    ...StyleSheet.absoluteFillObject,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: 'rgba(8, 16, 28, 0.18)',
-  },
-  mapFallbackText: {
-    color: 'rgba(255,255,255,0.72)',
-    fontSize: 12,
-    fontWeight: '600',
-  },
-  previewMarker: {
-    width: 16,
-    height: 16,
-    borderRadius: 8,
-    borderWidth: 3,
-    borderColor: '#0F172A',
-  },
-  locationPreviewContent: {
-    padding: 12,
     flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 12,
-  },
-  locationIconBadge: {
-    width: 40,
-    height: 40,
-    borderRadius: 12,
     alignItems: 'center',
     justifyContent: 'center',
+    gap: 8,
   },
-  locationCopy: {
-    flex: 1,
+  secondaryActionPressed: {
+    opacity: 0.92,
   },
-  locationTitle: {
-    fontSize: 15,
-    fontWeight: '700',
-    marginBottom: 3,
-  },
-  locationBody: {
-    fontSize: 13,
-    lineHeight: 19,
-  },
-  locationMeta: {
-    fontSize: 10,
-    lineHeight: 14,
-    marginTop: 4,
-    opacity: 0.72,
-  },
-  locationDetail: {
-    fontSize: 12,
-    lineHeight: 17,
-    marginTop: 5,
+  secondaryActionText: {
+    fontSize: 14,
+    fontWeight: '600',
   },
   typeGrid: {
     flexDirection: 'row',

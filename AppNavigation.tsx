@@ -8,12 +8,12 @@ import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useAppTheme } from '@hooks';
-import { useSharedLocation } from '@contexts';
 
 import MapScreen from './screens/MapScreen';
 import IncidentFeedScreen from './screens/IncidentFeedScreen';
 import IncidentDetailScreen from './screens/IncidentDetailScreen';
 import ProfileScreen from './screens/ProfileScreen';
+import ReportIncidentAdjustLocationScreen from './screens/ReportIncidentAdjustLocationScreen';
 import ReportIncidentScreen from './screens/ReportIncidentScreen';
 import ReportIncidentReviewScreen from './screens/ReportIncidentReviewScreen';
 import RelayConnectScreen from './screens/RelayConnectScreen';
@@ -22,6 +22,7 @@ import { navigationRef } from './lib/navigation';
 import type { AppNavigationParamList, RootStackParamList } from './lib/navigation';
 import IncidentNotificationBridge from './components/notifications/IncidentNotificationBridge';
 import { StatusBar } from 'expo-status-bar';
+import { useReportDraft } from '@contexts';
 
 const Tab = createBottomTabNavigator<AppNavigationParamList>();
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -41,16 +42,10 @@ function ReportTriggerScreen() {
 
 function TabNavigator() {
   const { colors } = useAppTheme();
-  const { location } = useSharedLocation();
   const insets = useSafeAreaInsets();
+  const { startDraft } = useReportDraft();
   const TAB_BAR_BASE_HEIGHT = 58;
   const tabBarHeight = TAB_BAR_BASE_HEIGHT + insets.bottom;
-  const reportLocation = location
-    ? {
-        longitude: location[0],
-        latitude: location[1],
-      }
-    : null;
 
   return (
     <Tab.Navigator
@@ -116,9 +111,12 @@ function TabNavigator() {
               return;
             }
 
-            navigationRef.navigate('ReportIncident', {
+            const sessionKey = `report-${Date.now()}`;
+            startDraft(sessionKey, {
               sourceTab,
-              location: reportLocation,
+            });
+            navigationRef.navigate('ReportIncidentAdjustLocation', {
+              origin: 'initial_required',
             });
           },
         })}
@@ -195,6 +193,26 @@ export function MainNavigation() {
             presentation: 'fullScreenModal',
             headerShown: true,
             headerTitle: 'Report incident',
+            headerStyle: { backgroundColor: colors.background },
+            headerTintColor: colors.text,
+            headerLeft: () => (
+              <Pressable
+                onPress={() => navigation.goBack()}
+                style={{ paddingHorizontal: 16 }}
+                hitSlop={{ top: 11, bottom: 11, left: 8, right: 8 }}
+              >
+                <Text style={{ fontSize: 22, color: colors.text }}>✕</Text>
+              </Pressable>
+            ),
+          })}
+        />
+        <Stack.Screen
+          name="ReportIncidentAdjustLocation"
+          component={ReportIncidentAdjustLocationScreen}
+          options={({ navigation }) => ({
+            presentation: 'fullScreenModal',
+            headerShown: true,
+            headerTitle: 'Adjust on map',
             headerStyle: { backgroundColor: colors.background },
             headerTintColor: colors.text,
             headerLeft: () => (

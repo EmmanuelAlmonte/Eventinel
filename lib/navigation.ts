@@ -4,26 +4,19 @@ import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 export type ReportSourceTab = 'Map' | 'Incidents';
 export type ReportLocation = { latitude: number; longitude: number };
 export type ReportIncidentType = 'violent_crime' | 'fire' | 'traffic' | 'medical' | 'suspicious' | 'other';
+export type ReportAdjustOrigin = 'initial_required' | 'report_edit' | 'review_edit';
 
 export type RootStackParamList = {
   Main: undefined;
   IncidentDetail: { incidentId: string; eventId?: string };
   Relays: undefined;
   ReportIncident: {
-    sourceTab?: ReportSourceTab;
-    location?: ReportLocation | null;
-    incidentType?: ReportIncidentType | null;
-    description?: string;
-    locationNote?: string;
-    editTarget?: 'location' | 'details';
+    sessionKey: string;
   };
-  ReportIncidentReview: {
-    sourceTab?: ReportSourceTab;
-    location?: ReportLocation | null;
-    incidentType: ReportIncidentType;
-    description: string;
-    locationNote?: string;
+  ReportIncidentAdjustLocation: {
+    origin: ReportAdjustOrigin;
   };
+  ReportIncidentReview: undefined;
   Wallet: undefined;
 };
 

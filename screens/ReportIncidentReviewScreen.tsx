@@ -1,7 +1,5 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
-import Mapbox from '@rnmapbox/maps';
-import * as ExpoLocation from 'expo-location';
 import { Text } from '@rneui/themed';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
@@ -9,22 +7,17 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNDK, useNDKCurrentPubkey } from '@nostr-dev-kit/mobile';
 
 import { showToast } from '@components/ui';
+import { useReportDraft, useSharedLocation } from '@contexts';
 import { useAppTheme } from '@hooks';
-import { MAP_STYLES } from '@lib/map/types';
 import { createIncidentEvent } from '@lib/nostr/events/incident';
 import { isConnected } from '@lib/relay/status';
-import type {
-  ReportIncidentType,
-  ReportLocation,
-  RootStackParamList,
-  ReportSourceTab,
-} from '@lib/navigation';
+import { getReportRadiusState } from '@lib/utils/reportLocationRadius';
+import type { ReportIncidentType, RootStackParamList } from '@lib/navigation';
+
+import { ReportLocationPreview } from './reportIncident/ReportLocationPreview';
+import { buildLocationPresentation, useResolvedReportLocation } from './reportIncident/locationPresentation';
 
 type ReportIncidentReviewScreenProps = NativeStackScreenProps<RootStackParamList, 'ReportIncidentReview'>;
-const MAP_PREVIEW_ZOOM = 16.2;
-const MAP_PREVIEW_FALLBACK_TIMEOUT_MS = 1800;
-const MAP_PREVIEW_LOGO_POSITION = { bottom: 8, left: 8 };
-const MAP_PREVIEW_ATTRIBUTION_POSITION = { bottom: 8, right: 8 };
 
 const TYPE_LABELS: Record<ReportIncidentType, string> = {
   violent_crime: 'Crime',
@@ -34,193 +27,6 @@ const TYPE_LABELS: Record<ReportIncidentType, string> = {
   suspicious: 'Suspicious',
   other: 'Other',
 };
-
-function formatCoordinateLine(location?: ReportLocation | null) {
-  if (!location) {
-    return null;
-  }
-
-  return `${location.latitude.toFixed(5)}, ${location.longitude.toFixed(5)}`;
-}
-
-function formatSourceContext(sourceTab?: ReportSourceTab, hasLocation?: boolean) {
-  if (sourceTab === 'Map') {
-    return hasLocation ? 'Using current map area' : 'Location unavailable';
-  }
-
-  if (sourceTab === 'Incidents') {
-    return hasLocation ? 'Using nearby incident context' : 'Location unavailable';
-  }
-
-  if (hasLocation) {
-    return 'Using current location';
-  }
-
-  return 'No location available for this draft yet.';
-}
-
-function formatBlockLabel(streetNumber?: string | null, street?: string | null) {
-  if (!street) {
-    return null;
-  }
-
-  if (!streetNumber) {
-    return street;
-  }
-
-  const parsedStreetNumber = Number.parseInt(streetNumber, 10);
-  if (!Number.isNaN(parsedStreetNumber) && parsedStreetNumber >= 100) {
-    const blockBase = Math.floor(parsedStreetNumber / 100) * 100;
-    return `${blockBase} block ${street}`;
-  }
-
-  return `${streetNumber} ${street}`;
-}
-
-function buildContextLine(address?: ExpoLocation.LocationGeocodedAddress | null) {
-  if (!address) {
-    return null;
-  }
-
-  const parts = [address.district, address.city, address.region].filter(Boolean);
-  if (parts.length > 0) {
-    return parts.join(', ');
-  }
-
-  return address.subregion ?? address.country ?? null;
-}
-
-type LocationPresentation = {
-  primary: string;
-  secondary: string;
-  note?: string | null;
-  tertiary?: string | null;
-};
-
-type LocationPreviewProps = {
-  colors: ReturnType<typeof useAppTheme>['colors'];
-  location: ReportLocation | null;
-  presentation: LocationPresentation;
-};
-
-function buildLocationPresentation({
-  sourceTab,
-  location,
-  locationNote,
-  resolvedPlaceLabel,
-  resolvedContextLine,
-}: {
-  sourceTab?: ReportSourceTab;
-  location?: ReportLocation | null;
-  locationNote?: string;
-  resolvedPlaceLabel?: string | null;
-  resolvedContextLine?: string | null;
-}): LocationPresentation {
-  const trimmedNote = locationNote?.trim();
-  const coordinateLine = formatCoordinateLine(location);
-  const primary =
-    resolvedPlaceLabel ??
-    trimmedNote ??
-    (sourceTab === 'Map'
-      ? 'Current map area'
-      : sourceTab === 'Incidents'
-        ? 'Nearby incident area'
-        : location
-          ? 'Current location'
-          : 'Location unavailable');
-
-  return {
-    primary,
-    secondary: resolvedContextLine ?? formatSourceContext(sourceTab, Boolean(location)),
-    note: resolvedPlaceLabel ? trimmedNote || null : null,
-    tertiary: coordinateLine,
-  };
-}
-
-function ReportLocationPreview({ colors, location, presentation }: LocationPreviewProps) {
-  const [isMapVisible, setIsMapVisible] = useState(false);
-  const [showFallback, setShowFallback] = useState(false);
-  const markerCoordinate = useMemo<[number, number] | null>(
-    () => (location ? [location.longitude, location.latitude] : null),
-    [location]
-  );
-
-  useEffect(() => {
-    if (!location) {
-      return undefined;
-    }
-
-    const fallbackTimer = setTimeout(() => {
-      setShowFallback((current) => (isMapVisible ? current : true));
-    }, MAP_PREVIEW_FALLBACK_TIMEOUT_MS);
-
-    return () => clearTimeout(fallbackTimer);
-  }, [isMapVisible, location]);
-
-  return (
-    <View style={[styles.locationPreviewCard, { backgroundColor: colors.background, borderColor: colors.border }]}>
-      {markerCoordinate ? (
-        <View style={styles.locationMapShell}>
-          <Mapbox.MapView
-            style={styles.locationMap}
-            styleURL={MAP_STYLES.DARK}
-            projection="mercator"
-            surfaceView={false}
-            scrollEnabled={false}
-            pitchEnabled={false}
-            rotateEnabled={false}
-            zoomEnabled={false}
-            logoEnabled={true}
-            logoPosition={MAP_PREVIEW_LOGO_POSITION}
-            attributionEnabled={true}
-            attributionPosition={MAP_PREVIEW_ATTRIBUTION_POSITION}
-            compassEnabled={false}
-            scaleBarEnabled={false}
-            onDidFinishLoadingMap={() => {
-              setIsMapVisible(true);
-              setShowFallback(false);
-            }}
-            onMapIdle={() => {
-              setIsMapVisible(true);
-              setShowFallback(false);
-            }}
-          >
-            <Mapbox.Camera
-              zoomLevel={MAP_PREVIEW_ZOOM}
-              centerCoordinate={markerCoordinate}
-              animationDuration={0}
-            />
-            <Mapbox.MarkerView coordinate={markerCoordinate}>
-              <View style={[styles.previewMarker, { backgroundColor: colors.primary }]} />
-            </Mapbox.MarkerView>
-          </Mapbox.MapView>
-
-          {showFallback && !isMapVisible ? (
-            <View style={styles.mapFallback}>
-              <Text style={styles.mapFallbackText}>Map loading</Text>
-            </View>
-          ) : null}
-        </View>
-      ) : null}
-
-      <View style={styles.locationPreviewContent}>
-        <View style={[styles.iconBadge, { backgroundColor: colors.surface }]}>
-          <MaterialCommunityIcons name="map-marker-radius-outline" size={20} color={colors.primary} />
-        </View>
-        <View style={styles.locationCopy}>
-          <Text style={[styles.locationTitle, { color: colors.text }]}>{presentation.primary}</Text>
-          <Text style={[styles.locationContext, { color: colors.textMuted }]}>{presentation.secondary}</Text>
-          {presentation.note ? (
-            <Text style={[styles.locationDetail, { color: colors.textMuted }]}>Detail: {presentation.note}</Text>
-          ) : null}
-          {presentation.tertiary ? (
-            <Text style={[styles.locationMeta, { color: colors.textMuted }]}>{presentation.tertiary}</Text>
-          ) : null}
-        </View>
-      </View>
-    </View>
-  );
-}
 
 const TYPE_SEVERITY: Record<ReportIncidentType, 1 | 2 | 3 | 4 | 5> = {
   violent_crime: 3,
@@ -232,13 +38,17 @@ const TYPE_SEVERITY: Record<ReportIncidentType, 1 | 2 | 3 | 4 | 5> = {
 };
 
 function buildAddress(
-  sourceTab?: ReportSourceTab,
+  sourceTab?: string,
   locationNote?: string,
-  location?: ReportLocation | null,
-  resolvedPlaceLabel?: string | null
+  locationLabel?: string | null,
+  hasLocation?: boolean
 ) {
-  if (resolvedPlaceLabel) {
-    return resolvedPlaceLabel;
+  if (locationLabel) {
+    return locationLabel;
+  }
+
+  if (locationNote?.trim()) {
+    return locationNote.trim();
   }
 
   if (sourceTab === 'Map') {
@@ -249,7 +59,7 @@ function buildAddress(
     return 'Nearby incident area';
   }
 
-  if (location) {
+  if (hasLocation) {
     return 'Current location';
   }
 
@@ -266,62 +76,40 @@ function buildIncidentTitle(incidentType: ReportIncidentType, locationNote?: str
   return `${typeLabel} report`;
 }
 
-export default function ReportIncidentReviewScreen({
-  navigation,
-  route,
-}: ReportIncidentReviewScreenProps) {
+export default function ReportIncidentReviewScreen({ navigation }: ReportIncidentReviewScreenProps) {
   const { colors } = useAppTheme();
   const insets = useSafeAreaInsets();
+  const { location: sharedLocation } = useSharedLocation();
+  const { draft, resetDraft, setAdjustEntryMode } = useReportDraft();
   const { ndk } = useNDK();
   const currentPubkey = useNDKCurrentPubkey();
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [resolvedPlaceLabel, setResolvedPlaceLabel] = useState<string | null>(null);
-  const [resolvedContextLine, setResolvedContextLine] = useState<string | null>(null);
-  const { description, incidentType, location, locationNote, sourceTab } = route.params;
-
-  useEffect(() => {
-    let isMounted = true;
-
-    async function resolvePlaceLabel() {
-      if (!location) {
-        setResolvedPlaceLabel(null);
-        setResolvedContextLine(null);
-        return;
-      }
-
-      try {
-        const [address] = await ExpoLocation.reverseGeocodeAsync({
-          latitude: location.latitude,
-          longitude: location.longitude,
-        });
-
-        if (!isMounted) {
-          return;
-        }
-
-        setResolvedPlaceLabel(formatBlockLabel(address?.streetNumber, address?.street));
-        setResolvedContextLine(buildContextLine(address));
-      } catch (error) {
-        if (!isMounted) {
-          return;
-        }
-
-        console.warn('[ReportIncidentReview] Failed to resolve place label:', error);
-        setResolvedPlaceLabel(null);
-        setResolvedContextLine(null);
-      }
-    }
-
-    void resolvePlaceLabel();
-
-    return () => {
-      isMounted = false;
-    };
-  }, [location?.latitude, location?.longitude]);
-
+  const currentDeviceLocation = useMemo(
+    () =>
+      sharedLocation
+        ? {
+            longitude: sharedLocation[0],
+            latitude: sharedLocation[1],
+          }
+        : null,
+    [sharedLocation]
+  );
+  const { resolvedPlaceLabel, resolvedContextLine } = useResolvedReportLocation(draft.location);
   const locationPresentation = useMemo(
-    () => buildLocationPresentation({ sourceTab, location, locationNote, resolvedPlaceLabel, resolvedContextLine }),
-    [location, locationNote, resolvedContextLine, resolvedPlaceLabel, sourceTab]
+    () =>
+      buildLocationPresentation({
+        sourceTab: draft.sourceTab,
+        location: draft.location,
+        locationNote: draft.locationNote,
+        resolvedPlaceLabel,
+        resolvedContextLine,
+        missingLocationCopy: 'No location available for this draft yet.',
+      }),
+    [draft.location, draft.locationNote, draft.sourceTab, resolvedContextLine, resolvedPlaceLabel]
+  );
+  const reportRadiusState = useMemo(
+    () => getReportRadiusState(currentDeviceLocation, draft.location),
+    [currentDeviceLocation, draft.location]
   );
   const connectedRelayCount = useMemo(() => {
     if (!ndk) {
@@ -332,7 +120,7 @@ export default function ReportIncidentReviewScreen({
   }, [ndk]);
 
   async function handleSubmit() {
-    if (isSubmitting) {
+    if (isSubmitting || !draft.incidentType) {
       return;
     }
 
@@ -346,8 +134,13 @@ export default function ReportIncidentReviewScreen({
       return;
     }
 
-    if (!location) {
+    if (!draft.location) {
       showToast.error('Location required', 'Move the map or enable location, then try again.');
+      return;
+    }
+
+    if (!reportRadiusState.isWithinRadius) {
+      showToast.error('Report too far away', reportRadiusState.message);
       return;
     }
 
@@ -360,27 +153,36 @@ export default function ReportIncidentReviewScreen({
 
     try {
       const event = createIncidentEvent(ndk, {
-        type: incidentType,
-        severity: TYPE_SEVERITY[incidentType],
-        title: buildIncidentTitle(incidentType, locationNote),
-        description,
+        type: draft.incidentType,
+        severity: TYPE_SEVERITY[draft.incidentType],
+        title: buildIncidentTitle(draft.incidentType, draft.locationNote),
+        description: draft.description,
         location: {
-          lat: location.latitude,
-          lng: location.longitude,
-          address: buildAddress(sourceTab, locationNote, location, resolvedPlaceLabel),
+          lat: draft.location.latitude,
+          lng: draft.location.longitude,
+          address: buildAddress(
+            draft.sourceTab,
+            draft.locationNote,
+            resolvedPlaceLabel,
+            Boolean(draft.location)
+          ),
         },
         occurredAt: new Date(),
         source: 'community',
         sourceId: `community-${Date.now()}`,
         metadata: {
-          sourceTab,
+          sourceTab: draft.sourceTab,
           entrypoint: 'report-incident-flow',
-          locationNote: locationNote || undefined,
+          locationNote: draft.locationNote || undefined,
         },
       });
 
       await event.publish();
-      showToast.success('Report submitted', connectedRelayCount > 1 ? `Published to ${connectedRelayCount} relays` : 'Published to 1 relay');
+      resetDraft();
+      showToast.success(
+        'Report submitted',
+        connectedRelayCount > 1 ? `Published to ${connectedRelayCount} relays` : 'Published to 1 relay'
+      );
       navigation.popToTop();
     } catch (error) {
       console.warn('[ReportIncident] Failed to publish report:', error);
@@ -391,25 +193,37 @@ export default function ReportIncidentReviewScreen({
   }
 
   function handleEditLocation() {
-    navigation.navigate('ReportIncident', {
-      sourceTab,
-      location,
-      incidentType,
-      description,
-      locationNote,
-      editTarget: 'location',
+    setAdjustEntryMode('review_edit');
+    navigation.navigate('ReportIncidentAdjustLocation', {
+      origin: 'review_edit',
     });
   }
 
   function handleEditDetails() {
-    navigation.navigate('ReportIncident', {
-      sourceTab,
-      location,
-      incidentType,
-      description,
-      locationNote,
-      editTarget: 'details',
-    });
+    navigation.goBack();
+  }
+
+  if (!draft.incidentType) {
+    return (
+      <View style={[styles.emptyState, { backgroundColor: colors.background }]}>
+        <Text style={[styles.emptyTitle, { color: colors.text }]}>No report draft to review.</Text>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Back to report"
+          onPress={() => navigation.goBack()}
+          style={({ pressed }) => [
+            styles.primaryButton,
+            {
+              backgroundColor: colors.primary,
+              borderColor: colors.primary,
+            },
+            pressed && styles.buttonPressed,
+          ]}
+        >
+          <Text style={styles.primaryButtonText}>Back to report</Text>
+        </Pressable>
+      </View>
+    );
   }
 
   return (
@@ -443,7 +257,20 @@ export default function ReportIncidentReviewScreen({
               <Text style={[styles.editActionText, { color: colors.primary }]}>Edit location</Text>
             </Pressable>
           </View>
-          <ReportLocationPreview colors={colors} location={location ?? null} presentation={locationPresentation} />
+          <ReportLocationPreview
+            colors={colors}
+            location={draft.location}
+            presentation={locationPresentation}
+            mapHeight={80}
+          />
+          <Text
+            style={[
+              styles.locationStatus,
+              { color: reportRadiusState.isWithinRadius ? colors.success : colors.warning },
+            ]}
+          >
+            {reportRadiusState.message}
+          </Text>
         </View>
 
         <View style={[styles.sectionCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
@@ -460,10 +287,10 @@ export default function ReportIncidentReviewScreen({
           </View>
           <View style={styles.typeRow}>
             <View style={[styles.typeBadge, { backgroundColor: colors.primary }]}>
-              <Text style={styles.typeBadgeText}>{TYPE_LABELS[incidentType]}</Text>
+              <Text style={styles.typeBadgeText}>{TYPE_LABELS[draft.incidentType]}</Text>
             </View>
           </View>
-          <Text style={[styles.description, { color: colors.text }]}>{description}</Text>
+          <Text style={[styles.description, { color: colors.text }]}>{draft.description.trim()}</Text>
         </View>
 
         <View style={[styles.infoRow, { backgroundColor: colors.background, borderColor: colors.border }]}>
@@ -472,7 +299,6 @@ export default function ReportIncidentReviewScreen({
             Photos, links, and any extra follow-up context can be added in a later step.
           </Text>
         </View>
-
       </ScrollView>
 
       <View
@@ -484,38 +310,56 @@ export default function ReportIncidentReviewScreen({
             paddingBottom: Math.max(insets.bottom, 16),
           },
         ]}
-        >
+      >
         <Text style={[styles.footerMessage, { color: colors.textMuted }]}>
-          {connectedRelayCount > 0
-            ? `Ready to publish to ${connectedRelayCount} connected relay${connectedRelayCount === 1 ? '' : 's'}.`
-            : 'Connect a relay to submit.'}
+          {!reportRadiusState.isWithinRadius
+            ? reportRadiusState.message
+            : connectedRelayCount > 0
+              ? `Ready to publish to ${connectedRelayCount} connected relay${connectedRelayCount === 1 ? '' : 's'}.`
+              : 'Connect a relay to submit.'}
         </Text>
 
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Submit report"
-            onPress={handleSubmit}
-            disabled={isSubmitting || connectedRelayCount === 0 || !location}
-            style={({ pressed }) => [
-              styles.primaryButton,
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Submit report"
+          onPress={handleSubmit}
+          disabled={
+            isSubmitting || connectedRelayCount === 0 || !draft.location || !reportRadiusState.isWithinRadius
+          }
+          style={({ pressed }) => [
+            styles.primaryButton,
+            {
+              backgroundColor:
+                isSubmitting || connectedRelayCount === 0 || !draft.location || !reportRadiusState.isWithinRadius
+                  ? colors.surface
+                  : colors.primary,
+              borderColor:
+                isSubmitting || connectedRelayCount === 0 || !draft.location || !reportRadiusState.isWithinRadius
+                  ? colors.border
+                  : colors.primary,
+            },
+            pressed &&
+              !isSubmitting &&
+              connectedRelayCount > 0 &&
+              draft.location &&
+              reportRadiusState.isWithinRadius &&
+              styles.buttonPressed,
+          ]}
+        >
+          <Text
+            style={[
+              styles.primaryButtonText,
               {
-                backgroundColor:
-                  isSubmitting || connectedRelayCount === 0 || !location ? colors.surface : colors.primary,
-                borderColor:
-                  isSubmitting || connectedRelayCount === 0 || !location ? colors.border : colors.primary,
+                color:
+                  isSubmitting || connectedRelayCount === 0 || !draft.location || !reportRadiusState.isWithinRadius
+                    ? colors.textMuted
+                    : '#FFFFFF',
               },
-              pressed && !isSubmitting && connectedRelayCount > 0 && location && styles.buttonPressed,
             ]}
           >
-            <Text
-              style={[
-                styles.primaryButtonText,
-                { color: isSubmitting || connectedRelayCount === 0 || !location ? colors.textMuted : '#FFFFFF' },
-              ]}
-            >
-              {isSubmitting ? 'Submitting…' : 'Submit report'}
-            </Text>
-          </Pressable>
+            {isSubmitting ? 'Submitting…' : 'Submit report'}
+          </Text>
+        </Pressable>
       </View>
     </View>
   );
@@ -558,71 +402,10 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '700',
   },
-  locationPreviewCard: {
-    borderWidth: 1,
-    borderRadius: 14,
-    overflow: 'hidden',
-  },
-  locationMapShell: {
-    height: 80,
-    backgroundColor: '#0F172A',
-  },
-  locationMap: {
-    flex: 1,
-  },
-  mapFallback: {
-    ...StyleSheet.absoluteFillObject,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: 'rgba(8, 16, 28, 0.18)',
-  },
-  mapFallbackText: {
-    color: 'rgba(255,255,255,0.72)',
+  locationStatus: {
     fontSize: 12,
-    fontWeight: '600',
-  },
-  previewMarker: {
-    width: 16,
-    height: 16,
-    borderRadius: 8,
-    borderWidth: 3,
-    borderColor: '#0F172A',
-  },
-  locationPreviewContent: {
-    padding: 12,
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 12,
-  },
-  iconBadge: {
-    width: 40,
-    height: 40,
-    borderRadius: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  locationCopy: {
-    flex: 1,
-  },
-  locationTitle: {
-    fontSize: 15,
-    fontWeight: '700',
-    marginBottom: 4,
-  },
-  locationContext: {
-    fontSize: 13,
-    lineHeight: 19,
-  },
-  locationMeta: {
-    fontSize: 10,
-    lineHeight: 14,
-    marginTop: 4,
-    opacity: 0.72,
-  },
-  locationDetail: {
-    fontSize: 12,
-    lineHeight: 17,
-    marginTop: 5,
+    lineHeight: 18,
+    marginTop: 12,
   },
   typeRow: {
     flexDirection: 'row',
@@ -678,9 +461,22 @@ const styles = StyleSheet.create({
   primaryButtonText: {
     fontSize: 15,
     fontWeight: '700',
+    color: '#FFFFFF',
   },
   buttonPressed: {
     opacity: 0.92,
     transform: [{ scale: 0.99 }],
+  },
+  emptyState: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 24,
+    gap: 16,
+  },
+  emptyTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    textAlign: 'center',
   },
 });

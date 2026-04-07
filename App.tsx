@@ -24,6 +24,7 @@ import {
   IncidentHistoryWindowProvider,
   LocationProvider,
   IncidentSubscriptionProvider,
+  ReportDraftProvider,
   RelayStatusProvider,
 } from '@contexts';
 import { ToastProvider, ErrorBoundary } from '@components/ui';
@@ -132,15 +133,17 @@ function AppContent() {
     <LoginWrapper />
   ) : (
     <LocationProvider>
-      <RelayStatusProvider>
-        <IncidentCacheProvider>
-          <IncidentHistoryWindowProvider>
-            <IncidentSubscriptionProvider>
-              <MainNavigation />
-            </IncidentSubscriptionProvider>
-          </IncidentHistoryWindowProvider>
-        </IncidentCacheProvider>
-      </RelayStatusProvider>
+      <ReportDraftProvider>
+        <RelayStatusProvider>
+          <IncidentCacheProvider>
+            <IncidentHistoryWindowProvider>
+              <IncidentSubscriptionProvider>
+                <MainNavigation />
+              </IncidentSubscriptionProvider>
+            </IncidentHistoryWindowProvider>
+          </IncidentCacheProvider>
+        </RelayStatusProvider>
+      </ReportDraftProvider>
     </LocationProvider>
   );
 }
