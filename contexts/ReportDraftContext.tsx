@@ -8,6 +8,7 @@ export type ReportDraft = {
   incidentType: ReportIncidentType | null;
   description: string;
   locationNote: string;
+  stillActive: boolean | null;
 };
 
 export type ReportAdjustEntryMode = 'initial_required' | 'report_edit' | 'review_edit' | null;
@@ -28,6 +29,7 @@ const EMPTY_REPORT_DRAFT: ReportDraft = {
   incidentType: null,
   description: '',
   locationNote: '',
+  stillActive: null,
 };
 
 const ReportDraftContext = createContext<ReportDraftContextValue | null>(null);
@@ -39,6 +41,7 @@ function normalizeDraft(initial?: Partial<ReportDraft>): ReportDraft {
     incidentType: initial?.incidentType ?? null,
     description: initial?.description ?? '',
     locationNote: initial?.locationNote ?? '',
+    stillActive: initial?.stillActive ?? null,
   };
 }
 
@@ -68,6 +71,7 @@ export function ReportDraftProvider({ children }: { children: ReactNode }) {
       incidentType: updates.incidentType !== undefined ? updates.incidentType : currentDraft.incidentType,
       description: updates.description ?? currentDraft.description,
       locationNote: updates.locationNote ?? currentDraft.locationNote,
+      stillActive: updates.stillActive !== undefined ? updates.stillActive : currentDraft.stillActive,
     }));
   }, []);
 

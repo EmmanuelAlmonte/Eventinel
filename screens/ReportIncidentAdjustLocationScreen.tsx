@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useLayoutEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 import Mapbox from '@rnmapbox/maps';
 import { Text } from '@rneui/themed';
@@ -36,8 +36,9 @@ export default function ReportIncidentAdjustLocationScreen({
   const { colors } = useAppTheme();
   const insets = useSafeAreaInsets();
   const { location: sharedLocation, refresh } = useSharedLocation();
-  const { draft, sessionKey, updateDraft, setAdjustEntryMode, resetDraft } = useReportDraft();
+  const { draft, updateDraft, setAdjustEntryMode, resetDraft } = useReportDraft();
   const origin = route.params.origin;
+  const isAdvancingInitialStepRef = useRef(false);
   const currentDeviceLocation = useMemo(
     () =>
       sharedLocation
@@ -92,6 +93,21 @@ export default function ReportIncidentAdjustLocationScreen({
     [currentDeviceLocation]
   );
 
+  useEffect(() => {
+    if (origin !== 'initial_required') {
+      return;
+    }
+
+    const unsubscribe = navigation.addListener('beforeRemove', () => {
+      if (!isAdvancingInitialStepRef.current) {
+        resetDraft();
+        setAdjustEntryMode(null);
+      }
+    });
+
+    return unsubscribe;
+  }, [navigation, origin, resetDraft, setAdjustEntryMode]);
+
   function handleMapPress(feature: GeoJSON.Feature<GeoJSON.Geometry>) {
     const nextLocation = getFeatureCoordinate(feature);
     if (nextLocation) {
@@ -128,8 +144,9 @@ export default function ReportIncidentAdjustLocationScreen({
     updateDraft({ location: candidateLocation });
     setAdjustEntryMode(null);
 
-    if (origin === 'initial_required' && sessionKey) {
-      navigation.replace('ReportIncident', { sessionKey });
+    if (origin === 'initial_required') {
+      isAdvancingInitialStepRef.current = true;
+      navigation.replace('ReportIncident', { sessionKey: route.params.sessionKey });
       return;
     }
 

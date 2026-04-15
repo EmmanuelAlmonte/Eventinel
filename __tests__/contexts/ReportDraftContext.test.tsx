@@ -13,6 +13,7 @@ function ReportDraftProbe() {
       <Text testID="draft-description">{draft.description || 'empty'}</Text>
       <Text testID="draft-location-note">{draft.locationNote || 'empty'}</Text>
       <Text testID="draft-incident-type">{draft.incidentType ?? 'none'}</Text>
+      <Text testID="draft-still-active">{draft.stillActive === null ? 'unset' : String(draft.stillActive)}</Text>
       <Pressable
         testID="start-draft"
         onPress={() =>
@@ -22,6 +23,7 @@ function ReportDraftProbe() {
             description: 'Initial draft',
             locationNote: 'Warehouse entrance',
             location: { latitude: 40.0, longitude: -75.0 },
+            stillActive: true,
           })
         }
       />
@@ -34,12 +36,24 @@ function ReportDraftProbe() {
           })
         }
       />
+      <Pressable testID="set-still-active-false" onPress={() => updateDraft({ stillActive: false })} />
+      <Pressable
+        testID="resume-same-session"
+        onPress={() =>
+          startDraft('session-1', {
+            incidentType: 'medical',
+            description: 'Should not replace current draft',
+            stillActive: true,
+          })
+        }
+      />
       <Pressable
         testID="restart-draft"
         onPress={() =>
           startDraft('session-2', {
             incidentType: 'medical',
             description: 'Fresh draft',
+            stillActive: true,
           })
         }
       />
@@ -65,11 +79,21 @@ describe('ReportDraftContext', () => {
     expect(screen.getByTestId('draft-description').props.children).toBe('Initial draft');
     expect(screen.getByTestId('draft-location-note').props.children).toBe('Warehouse entrance');
     expect(screen.getByTestId('draft-incident-type').props.children).toBe('fire');
+    expect(screen.getByTestId('draft-still-active').props.children).toBe('true');
 
     fireEvent.press(screen.getByTestId('update-draft'));
+    fireEvent.press(screen.getByTestId('set-still-active-false'));
 
     expect(screen.getByTestId('draft-description').props.children).toBe('Updated draft');
     expect(screen.getByTestId('draft-location-note').props.children).toBe('Rear alley');
+    expect(screen.getByTestId('draft-still-active').props.children).toBe('false');
+
+    fireEvent.press(screen.getByTestId('resume-same-session'));
+
+    expect(screen.getByTestId('session-key').props.children).toBe('session-1');
+    expect(screen.getByTestId('draft-description').props.children).toBe('Updated draft');
+    expect(screen.getByTestId('draft-incident-type').props.children).toBe('fire');
+    expect(screen.getByTestId('draft-still-active').props.children).toBe('false');
 
     fireEvent.press(screen.getByTestId('restart-draft'));
 
@@ -77,11 +101,13 @@ describe('ReportDraftContext', () => {
     expect(screen.getByTestId('draft-description').props.children).toBe('Fresh draft');
     expect(screen.getByTestId('draft-location-note').props.children).toBe('empty');
     expect(screen.getByTestId('draft-incident-type').props.children).toBe('medical');
+    expect(screen.getByTestId('draft-still-active').props.children).toBe('true');
 
     fireEvent.press(screen.getByTestId('reset-draft'));
 
     expect(screen.getByTestId('session-key').props.children).toBe('none');
     expect(screen.getByTestId('draft-description').props.children).toBe('empty');
     expect(screen.getByTestId('draft-location-note').props.children).toBe('empty');
+    expect(screen.getByTestId('draft-still-active').props.children).toBe('unset');
   });
 });

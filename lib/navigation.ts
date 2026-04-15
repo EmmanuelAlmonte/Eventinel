@@ -15,8 +15,18 @@ export type RootStackParamList = {
   };
   ReportIncidentAdjustLocation: {
     origin: ReportAdjustOrigin;
+    sessionKey: string;
   };
-  ReportIncidentReview: undefined;
+  ReportIncidentReview: {
+    sessionKey: string;
+  };
+  ReportIncidentSubmitted: {
+    sourceTab?: ReportSourceTab;
+    incidentType: ReportIncidentType;
+    locationLabel: string;
+    relayCount: number;
+    stillActive: boolean;
+  };
   Wallet: undefined;
 };
 

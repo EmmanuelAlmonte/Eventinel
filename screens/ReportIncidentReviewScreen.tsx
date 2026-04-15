@@ -12,7 +12,7 @@ import { useAppTheme } from '@hooks';
 import { createIncidentEvent } from '@lib/nostr/events/incident';
 import { isConnected } from '@lib/relay/status';
 import { getReportRadiusState } from '@lib/utils/reportLocationRadius';
-import type { ReportIncidentType, RootStackParamList } from '@lib/navigation';
+import type { ReportIncidentType, ReportSourceTab, RootStackParamList } from '@lib/navigation';
 
 import { ReportLocationPreview } from './reportIncident/ReportLocationPreview';
 import { buildLocationPresentation, useResolvedReportLocation } from './reportIncident/locationPresentation';
@@ -76,11 +76,23 @@ function buildIncidentTitle(incidentType: ReportIncidentType, locationNote?: str
   return `${typeLabel} report`;
 }
 
-export default function ReportIncidentReviewScreen({ navigation }: ReportIncidentReviewScreenProps) {
+function buildReturnLabel(sourceTab?: ReportSourceTab) {
+  if (sourceTab === 'Incidents') {
+    return 'Back to incidents';
+  }
+
+  if (sourceTab === 'Map') {
+    return 'Back to map';
+  }
+
+  return 'Back to app';
+}
+
+export default function ReportIncidentReviewScreen({ navigation, route }: ReportIncidentReviewScreenProps) {
   const { colors } = useAppTheme();
   const insets = useSafeAreaInsets();
   const { location: sharedLocation } = useSharedLocation();
-  const { draft, resetDraft, setAdjustEntryMode } = useReportDraft();
+  const { draft, sessionKey, resetDraft, setAdjustEntryMode } = useReportDraft();
   const { ndk } = useNDK();
   const currentPubkey = useNDKCurrentPubkey();
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -118,9 +130,16 @@ export default function ReportIncidentReviewScreen({ navigation }: ReportInciden
 
     return Array.from(ndk.pool.relays.values()).filter((relay) => isConnected(relay.status)).length;
   }, [ndk]);
+  const reportAddress = buildAddress(
+    draft.sourceTab,
+    draft.locationNote,
+    resolvedPlaceLabel,
+    Boolean(draft.location)
+  );
+  const returnLabel = buildReturnLabel(draft.sourceTab);
 
   async function handleSubmit() {
-    if (isSubmitting || !draft.incidentType) {
+    if (isSubmitting || !draft.incidentType || draft.stillActive === null) {
       return;
     }
 
@@ -160,12 +179,7 @@ export default function ReportIncidentReviewScreen({ navigation }: ReportInciden
         location: {
           lat: draft.location.latitude,
           lng: draft.location.longitude,
-          address: buildAddress(
-            draft.sourceTab,
-            draft.locationNote,
-            resolvedPlaceLabel,
-            Boolean(draft.location)
-          ),
+          address: reportAddress,
         },
         occurredAt: new Date(),
         source: 'community',
@@ -174,16 +188,21 @@ export default function ReportIncidentReviewScreen({ navigation }: ReportInciden
           sourceTab: draft.sourceTab,
           entrypoint: 'report-incident-flow',
           locationNote: draft.locationNote || undefined,
+          stillActive: draft.stillActive,
+          reportStatus: draft.stillActive ? 'active' : 'not_active',
         },
       });
 
       await event.publish();
+      const nextRoute = {
+        sourceTab: draft.sourceTab,
+        incidentType: draft.incidentType,
+        locationLabel: reportAddress,
+        relayCount: connectedRelayCount,
+        stillActive: draft.stillActive,
+      } as const;
       resetDraft();
-      showToast.success(
-        'Report submitted',
-        connectedRelayCount > 1 ? `Published to ${connectedRelayCount} relays` : 'Published to 1 relay'
-      );
-      navigation.popToTop();
+      navigation.replace('ReportIncidentSubmitted', nextRoute);
     } catch (error) {
       console.warn('[ReportIncident] Failed to publish report:', error);
       showToast.error('Submit failed', error instanceof Error ? error.message : 'Please try again');
@@ -196,6 +215,7 @@ export default function ReportIncidentReviewScreen({ navigation }: ReportInciden
     setAdjustEntryMode('review_edit');
     navigation.navigate('ReportIncidentAdjustLocation', {
       origin: 'review_edit',
+      sessionKey: route.params.sessionKey,
     });
   }
 
@@ -203,14 +223,14 @@ export default function ReportIncidentReviewScreen({ navigation }: ReportInciden
     navigation.goBack();
   }
 
-  if (!draft.incidentType) {
+  if (!draft.incidentType || draft.stillActive === null || sessionKey !== route.params.sessionKey) {
     return (
       <View style={[styles.emptyState, { backgroundColor: colors.background }]}>
         <Text style={[styles.emptyTitle, { color: colors.text }]}>No report draft to review.</Text>
         <Pressable
           accessibilityRole="button"
           accessibilityLabel="Back to report"
-          onPress={() => navigation.goBack()}
+          onPress={() => navigation.popToTop()}
           style={({ pressed }) => [
             styles.primaryButton,
             {
@@ -220,7 +240,7 @@ export default function ReportIncidentReviewScreen({ navigation }: ReportInciden
             pressed && styles.buttonPressed,
           ]}
         >
-          <Text style={styles.primaryButtonText}>Back to report</Text>
+          <Text style={styles.primaryButtonText}>Return to app</Text>
         </Pressable>
       </View>
     );
@@ -289,6 +309,24 @@ export default function ReportIncidentReviewScreen({ navigation }: ReportInciden
             <View style={[styles.typeBadge, { backgroundColor: colors.primary }]}>
               <Text style={styles.typeBadgeText}>{TYPE_LABELS[draft.incidentType]}</Text>
             </View>
+            <View
+              style={[
+                styles.statusBadge,
+                {
+                  backgroundColor: draft.stillActive ? colors.success : colors.background,
+                  borderColor: draft.stillActive ? colors.success : colors.border,
+                },
+              ]}
+            >
+              <Text
+                style={[
+                  styles.statusBadgeText,
+                  { color: draft.stillActive ? '#FFFFFF' : colors.text },
+                ]}
+              >
+                {draft.stillActive ? 'Still active' : 'No longer active'}
+              </Text>
+            </View>
           </View>
           <Text style={[styles.description, { color: colors.text }]}>{draft.description.trim()}</Text>
         </View>
@@ -314,9 +352,11 @@ export default function ReportIncidentReviewScreen({ navigation }: ReportInciden
         <Text style={[styles.footerMessage, { color: colors.textMuted }]}>
           {!reportRadiusState.isWithinRadius
             ? reportRadiusState.message
+            : draft.stillActive === null
+              ? 'Choose whether the incident is still active before submitting.'
             : connectedRelayCount > 0
               ? `Ready to publish to ${connectedRelayCount} connected relay${connectedRelayCount === 1 ? '' : 's'}.`
-              : 'Connect a relay to submit.'}
+              : `Connect a relay to submit. ${returnLabel} is available after send.`}
         </Text>
 
         <Pressable
@@ -324,17 +364,29 @@ export default function ReportIncidentReviewScreen({ navigation }: ReportInciden
           accessibilityLabel="Submit report"
           onPress={handleSubmit}
           disabled={
-            isSubmitting || connectedRelayCount === 0 || !draft.location || !reportRadiusState.isWithinRadius
+            isSubmitting ||
+            connectedRelayCount === 0 ||
+            !draft.location ||
+            draft.stillActive === null ||
+            !reportRadiusState.isWithinRadius
           }
           style={({ pressed }) => [
             styles.primaryButton,
             {
               backgroundColor:
-                isSubmitting || connectedRelayCount === 0 || !draft.location || !reportRadiusState.isWithinRadius
+                isSubmitting ||
+                connectedRelayCount === 0 ||
+                !draft.location ||
+                draft.stillActive === null ||
+                !reportRadiusState.isWithinRadius
                   ? colors.surface
                   : colors.primary,
               borderColor:
-                isSubmitting || connectedRelayCount === 0 || !draft.location || !reportRadiusState.isWithinRadius
+                isSubmitting ||
+                connectedRelayCount === 0 ||
+                !draft.location ||
+                draft.stillActive === null ||
+                !reportRadiusState.isWithinRadius
                   ? colors.border
                   : colors.primary,
             },
@@ -342,6 +394,7 @@ export default function ReportIncidentReviewScreen({ navigation }: ReportInciden
               !isSubmitting &&
               connectedRelayCount > 0 &&
               draft.location &&
+              draft.stillActive !== null &&
               reportRadiusState.isWithinRadius &&
               styles.buttonPressed,
           ]}
@@ -351,7 +404,11 @@ export default function ReportIncidentReviewScreen({ navigation }: ReportInciden
               styles.primaryButtonText,
               {
                 color:
-                  isSubmitting || connectedRelayCount === 0 || !draft.location || !reportRadiusState.isWithinRadius
+                  isSubmitting ||
+                  connectedRelayCount === 0 ||
+                  !draft.location ||
+                  draft.stillActive === null ||
+                  !reportRadiusState.isWithinRadius
                     ? colors.textMuted
                     : '#FFFFFF',
               },
@@ -409,6 +466,8 @@ const styles = StyleSheet.create({
   },
   typeRow: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
     marginBottom: 12,
   },
   typeBadge: {
@@ -420,6 +479,18 @@ const styles = StyleSheet.create({
   },
   typeBadgeText: {
     color: '#FFFFFF',
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  statusBadge: {
+    paddingHorizontal: 12,
+    minHeight: 34,
+    borderRadius: 999,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  statusBadgeText: {
     fontSize: 13,
     fontWeight: '700',
   },

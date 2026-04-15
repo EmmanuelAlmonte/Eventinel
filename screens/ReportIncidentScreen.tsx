@@ -23,6 +23,18 @@ import { buildLocationPresentation, useResolvedReportLocation } from './reportIn
 type ReportIncidentScreenProps = NativeStackScreenProps<RootStackParamList, 'ReportIncident'>;
 
 const MIN_DESCRIPTION_LENGTH = 24;
+const REPORT_ACTIVE_OPTIONS = [
+  {
+    value: true,
+    label: 'Still active',
+    icon: 'broadcast',
+  },
+  {
+    value: false,
+    label: 'No longer active',
+    icon: 'check-decagram-outline',
+  },
+] as const;
 const REPORT_TYPE_OPTIONS: Array<{
   value: ReportIncidentType;
   label: string;
@@ -59,10 +71,13 @@ export default function ReportIncidentScreen({ navigation, route }: ReportIncide
   }, [route.params.sessionKey, startDraft]);
 
   useEffect(() => {
-    return () => {
+    const unsubscribe = navigation.addListener('beforeRemove', () => {
       resetDraft();
-    };
-  }, [resetDraft]);
+      setAdjustEntryMode(null);
+    });
+
+    return unsubscribe;
+  }, [navigation, resetDraft, setAdjustEntryMode]);
 
   const { resolvedPlaceLabel, resolvedContextLine, isResolvingPlace } = useResolvedReportLocation(draft.location);
   const locationPresentation = useMemo(
@@ -92,8 +107,13 @@ export default function ReportIncidentScreen({ navigation, route }: ReportIncide
     [currentDeviceLocation, draft.location]
   );
   const canContinue =
-    hasLocation && reportRadiusState.isWithinRadius && Boolean(draft.incidentType) && isDescriptionValid;
+    hasLocation &&
+    reportRadiusState.isWithinRadius &&
+    Boolean(draft.incidentType) &&
+    draft.stillActive !== null &&
+    isDescriptionValid;
   const shouldShowTypeError = hasAttemptedContinue && !draft.incidentType;
+  const shouldShowStillActiveError = hasAttemptedContinue && draft.stillActive === null;
   const shouldShowDescriptionError =
     (hasAttemptedContinue || descriptionTouched) &&
     trimmedDescription.length > 0 &&
@@ -106,13 +126,16 @@ export default function ReportIncidentScreen({ navigation, route }: ReportIncide
       return;
     }
 
-    navigation.navigate('ReportIncidentReview');
+    navigation.navigate('ReportIncidentReview', {
+      sessionKey: route.params.sessionKey,
+    });
   }
 
   function handleAdjustLocation() {
     setAdjustEntryMode('report_edit');
     navigation.navigate('ReportIncidentAdjustLocation', {
       origin: 'report_edit',
+      sessionKey: route.params.sessionKey,
     });
   }
 
@@ -254,6 +277,52 @@ export default function ReportIncidentScreen({ navigation, route }: ReportIncide
               </Text>
             ) : null}
 
+            <View style={styles.activeStatusSection}>
+              <Text style={[styles.fieldLabel, { color: colors.text }]}>Is it still active?</Text>
+              <View style={styles.activeStatusRow}>
+                {REPORT_ACTIVE_OPTIONS.map((option) => {
+                  const isSelected = draft.stillActive === option.value;
+
+                  return (
+                    <Pressable
+                      key={option.label}
+                      accessibilityRole="button"
+                      accessibilityLabel={`Select ${option.label.toLowerCase()} status`}
+                      onPress={() => updateDraft({ stillActive: option.value })}
+                      style={({ pressed }) => [
+                        styles.activeStatusChip,
+                        {
+                          backgroundColor: isSelected ? colors.primary : colors.background,
+                          borderColor: isSelected ? colors.primary : colors.border,
+                        },
+                        pressed && styles.typeChipPressed,
+                      ]}
+                    >
+                      <MaterialCommunityIcons
+                        name={option.icon}
+                        size={16}
+                        color={isSelected ? '#FFFFFF' : colors.text}
+                      />
+                      <Text
+                        style={[
+                          styles.activeStatusChipText,
+                          { color: isSelected ? '#FFFFFF' : colors.text },
+                        ]}
+                      >
+                        {option.label}
+                      </Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
+            </View>
+
+            {shouldShowStillActiveError ? (
+              <Text style={[styles.validationText, { color: '#F97316' }]}>
+                Choose whether the incident is still active before continuing.
+              </Text>
+            ) : null}
+
             <Input
               placeholder="Describe what happened"
               value={draft.description}
@@ -309,7 +378,11 @@ export default function ReportIncidentScreen({ navigation, route }: ReportIncide
                 ? 'Location is still needed before this report can move to review.'
                 : !reportRadiusState.isWithinRadius
                   ? reportRadiusState.message
-                  : 'Choose a type and add a fuller description to continue.'}
+                  : !draft.incidentType
+                    ? 'Choose a report type to continue.'
+                    : draft.stillActive === null
+                      ? 'Choose whether the incident is still active to continue.'
+                      : 'Add a fuller description to continue.'}
             </Text>
           ) : (
             <Text style={[styles.footerMessage, { color: colors.textMuted }]}>
@@ -429,6 +502,28 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '700',
   },
+  activeStatusSection: {
+    marginBottom: 14,
+  },
+  activeStatusRow: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+  activeStatusChip: {
+    flex: 1,
+    minHeight: 44,
+    borderRadius: 14,
+    borderWidth: 1,
+    paddingHorizontal: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+  },
+  activeStatusChipText: {
+    fontSize: 13,
+    fontWeight: '700',
+  },
   inputContainer: {
     paddingHorizontal: 0,
     marginBottom: 0,
@@ -452,6 +547,11 @@ const styles = StyleSheet.create({
     fontSize: 12,
     lineHeight: 18,
     marginTop: -4,
+  },
+  fieldLabel: {
+    fontSize: 13,
+    fontWeight: '600',
+    marginBottom: 10,
   },
   validationText: {
     fontSize: 12,
