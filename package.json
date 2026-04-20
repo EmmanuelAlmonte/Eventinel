@@ -28,6 +28,7 @@
     "cashu:web:wallet": "node scripts/cashu/mini-wallet-server.mjs",
     "probe:client:incident": "node scripts/client-side-request-probe.js",
     "probe:geohash:single": "node scripts/single-geohash-precision-probe.js",
+    "probe:report:submit": "node scripts/report-submit-probe.js",
     "compact:file": "node scripts/compact-file.js"
   },
   "dependencies": {

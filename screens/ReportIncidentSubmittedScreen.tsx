@@ -41,7 +41,9 @@ export default function ReportIncidentSubmittedScreen({
   const insets = useSafeAreaInsets();
   const { incidentType, locationLabel, relayCount, sourceTab, stillActive } = route.params;
   const relaySummary =
-    relayCount === 1 ? 'Published to 1 connected relay.' : `Published to ${relayCount} connected relays.`;
+    relayCount === 1
+      ? 'Sent using 1 currently connected relay.'
+      : `Sent using ${relayCount} currently connected relays.`;
 
   return (
     <View

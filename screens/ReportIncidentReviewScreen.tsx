@@ -7,10 +7,9 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNDK, useNDKCurrentPubkey } from '@nostr-dev-kit/mobile';
 
 import { showToast } from '@components/ui';
-import { useReportDraft, useSharedLocation } from '@contexts';
+import { useRelayStatus, useReportDraft, useSharedLocation } from '@contexts';
 import { useAppTheme } from '@hooks';
 import { createIncidentEvent } from '@lib/nostr/events/incident';
-import { isConnected } from '@lib/relay/status';
 import { getReportRadiusState } from '@lib/utils/reportLocationRadius';
 import type { ReportIncidentType, ReportSourceTab, RootStackParamList } from '@lib/navigation';
 
@@ -92,6 +91,7 @@ export default function ReportIncidentReviewScreen({ navigation, route }: Report
   const { colors } = useAppTheme();
   const insets = useSafeAreaInsets();
   const { location: sharedLocation } = useSharedLocation();
+  const { stats: relayStats } = useRelayStatus();
   const { draft, sessionKey, resetDraft, setAdjustEntryMode } = useReportDraft();
   const { ndk } = useNDK();
   const currentPubkey = useNDKCurrentPubkey();
@@ -123,13 +123,7 @@ export default function ReportIncidentReviewScreen({ navigation, route }: Report
     () => getReportRadiusState(currentDeviceLocation, draft.location),
     [currentDeviceLocation, draft.location]
   );
-  const connectedRelayCount = useMemo(() => {
-    if (!ndk) {
-      return 0;
-    }
-
-    return Array.from(ndk.pool.relays.values()).filter((relay) => isConnected(relay.status)).length;
-  }, [ndk]);
+  const connectedRelayCount = relayStats.connected;
   const reportAddress = buildAddress(
     draft.sourceTab,
     draft.locationNote,
