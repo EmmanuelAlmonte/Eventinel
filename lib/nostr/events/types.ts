@@ -45,21 +45,26 @@ export interface UnsignedEvent {
  * Required tags:
  * - ['d', '<incident-id>'] - Unique identifier
  * - ['g', '<geohash>'] - Geohash for filtering (NIP-52 standard)
- * - ['location', '<place>'] - Human-readable location (NIP-52 compatible)
  * - ['type', '<type>'] - Incident classification
  * - ['severity', '<1-5>'] - Severity level
  * - ['source', '<source>'] - Data source
+ * - ['address', '<place>'] - Human-readable address/location label
+ * - ['alt', '<summary>'] - Human-readable fallback summary (NIP-31)
+ *
+ * Optional tags:
+ * - ['location', '<place>'] - Human-readable location (NIP-52 compatible)
+ * - ['t', '<hashtag>'] - App/category/type hashtags
  * - ['t', 'eventinel'] - App identifier
  * - ['t', 'incident'] - Category
  */
 export type IncidentEventTags = [
   ['d', string], // Unique incident ID
   ['g', string], // Geohash (NIP-52 standard, filterable)
-  ['location', string], // Human-readable location
   ['type', IncidentType],
   ['severity', string], // "1" - "5"
   ['source', DataSource],
   ['address', string],
+  ['alt', string],
   ['t', 'eventinel'],
   ['t', 'incident'],
   ['t', string], // Type-specific tag

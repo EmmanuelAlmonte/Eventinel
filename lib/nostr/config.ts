@@ -84,6 +84,9 @@ export const TAGS = {
   /** Human-readable address */
   ADDRESS: 'address',
 
+  /** Human-readable summary for custom-kind compatibility (NIP-31) */
+  ALT: 'alt',
+
   /** Generic hashtag */
   HASHTAG: 't',
 } as const;
