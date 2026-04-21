@@ -319,6 +319,144 @@ describe('IncidentNotificationBridge', () => {
     });
   });
 
+  it('does not queue a follow-up toast when the same incident updates while its toast is active', async () => {
+    const { rerender } = render(<IncidentNotificationBridge />);
+    const incidentBv1 = createIncident('b', {
+      eventId: 'event-b-v1',
+      severity: 3,
+      type: 'fire',
+    });
+
+    setSharedIncidentsState({
+      incidents: [createIncident('a'), incidentBv1],
+      updatedIncidents: [incidentBv1],
+    });
+    rerender(<IncidentNotificationBridge />);
+
+    await waitFor(() => {
+      expect(mockShowToastShow).toHaveBeenCalledTimes(1);
+    });
+
+    const incidentBv2 = createIncident('b', {
+      eventId: 'event-b-v2',
+      severity: 4,
+      type: 'fire',
+      title: 'Incident b severity update',
+    });
+
+    setSharedIncidentsState({
+      incidents: [createIncident('a'), incidentBv2],
+      updatedIncidents: [incidentBv2],
+    });
+    rerender(<IncidentNotificationBridge />);
+
+    expect(mockShowToastShow).toHaveBeenCalledTimes(1);
+
+    getShownToast(0)?.onHide?.();
+    await flushToastTurn();
+
+    expect(mockShowToastShow).toHaveBeenCalledTimes(1);
+  });
+
+  it('replaces a queued incident toast with the latest revision before it is shown', async () => {
+    const { rerender } = render(<IncidentNotificationBridge />);
+    const incidentB = createIncident('b', { eventId: 'event-b-v1' });
+    const incidentCv1 = createIncident('c', {
+      eventId: 'event-c-v1',
+      severity: 3,
+      type: 'fire',
+    });
+
+    setSharedIncidentsState({
+      incidents: [createIncident('a'), incidentB, incidentCv1],
+      updatedIncidents: [incidentB, incidentCv1],
+    });
+    rerender(<IncidentNotificationBridge />);
+
+    await waitFor(() => {
+      expect(mockShowToastShow).toHaveBeenCalledTimes(1);
+      expect(mockShowToastShow).toHaveBeenNthCalledWith(
+        1,
+        expect.objectContaining({ text1: 'Incident b' })
+      );
+    });
+
+    const incidentCv2 = createIncident('c', {
+      eventId: 'event-c-v2',
+      severity: 4,
+      type: 'fire',
+      title: 'Incident c latest',
+      address: 'Updated Address c',
+    });
+
+    setSharedIncidentsState({
+      incidents: [createIncident('a'), incidentB, incidentCv2],
+      updatedIncidents: [incidentCv2],
+    });
+    rerender(<IncidentNotificationBridge />);
+
+    getShownToast(0)?.onHide?.();
+    await flushToastTurn();
+
+    await waitFor(() => {
+      expect(mockShowToastShow).toHaveBeenCalledTimes(2);
+      expect(mockShowToastShow).toHaveBeenNthCalledWith(
+        2,
+        expect.objectContaining({
+          text1: 'Incident c latest',
+          text2: 'Updated Address c',
+        })
+      );
+    });
+  });
+
+  it('caps the queued backlog during a distinct-incident burst', async () => {
+    const { rerender } = render(<IncidentNotificationBridge />);
+    const incidents = ['b', 'c', 'd', 'e', 'f', 'g'].map((incidentId, index) =>
+      createIncident(incidentId, {
+        eventId: `event-${incidentId}-v1`,
+        createdAtMs: 2_000 + index,
+      })
+    );
+
+    setSharedIncidentsState({
+      incidents: [createIncident('a'), ...incidents],
+      updatedIncidents: incidents,
+    });
+    rerender(<IncidentNotificationBridge />);
+
+    await waitFor(() => {
+      expect(mockShowToastShow).toHaveBeenCalledTimes(1);
+      expect(mockShowToastShow).toHaveBeenNthCalledWith(
+        1,
+        expect.objectContaining({ text1: 'Incident b' })
+      );
+    });
+
+    for (let index = 0; index < 4; index += 1) {
+      getShownToast(index)?.onHide?.();
+      await flushToastTurn();
+    }
+
+    expect(mockShowToastShow).toHaveBeenCalledTimes(5);
+    expect(mockShowToastShow).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({ text1: 'Incident d' })
+    );
+    expect(mockShowToastShow).toHaveBeenNthCalledWith(
+      3,
+      expect.objectContaining({ text1: 'Incident e' })
+    );
+    expect(mockShowToastShow).toHaveBeenNthCalledWith(
+      4,
+      expect.objectContaining({ text1: 'Incident f' })
+    );
+    expect(mockShowToastShow).toHaveBeenNthCalledWith(
+      5,
+      expect.objectContaining({ text1: 'Incident g' })
+    );
+  });
+
   it('drops queued old-epoch backlog when a new baseline starts but lets the current toast finish', async () => {
     const { rerender } = render(<IncidentNotificationBridge />);
     const incidentB = createIncident('b', { eventId: 'event-b-v1', createdAtMs: 2_000 });

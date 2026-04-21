@@ -55,6 +55,7 @@ type KnownIncidentSnapshot = {
 
 type ToastTriggerSource = 'live-insert' | 'live-update';
 const INCIDENT_TOAST_VISIBILITY_MS = 5000;
+const MAX_QUEUED_INCIDENT_TOASTS = 4;
 
 function logIncidentToastEvent(event: string, details?: Record<string, unknown>) {
   if (!__DEV__) {
@@ -133,7 +134,7 @@ function createKnownSnapshotState(incidents: readonly ProcessedIncident[]) {
 }
 
 function getQueuedToastKey(incident: Pick<ToastableIncident, 'incidentId' | 'eventId'>) {
-  return `${incident.incidentId}:${incident.eventId}`;
+  return incident.incidentId;
 }
 
 function useHandleIncidentNotification() {
@@ -272,6 +273,29 @@ function useLiveIncidentToasts(
     }
   }, []);
 
+  const trimQueuedToastBacklog = useCallback(() => {
+    while (queuedToastOrderRef.current.length > MAX_QUEUED_INCIDENT_TOASTS) {
+      const droppedQueueKey = queuedToastOrderRef.current.shift();
+      if (!droppedQueueKey) {
+        return;
+      }
+
+      const droppedToast = queuedToastsRef.current.get(droppedQueueKey);
+      queuedToastsRef.current.delete(droppedQueueKey);
+
+      if (!droppedToast) {
+        continue;
+      }
+
+      logIncidentToastEvent('drop queued toast due to backlog cap', {
+        queueKey: droppedQueueKey,
+        incidentId: droppedToast.incidentId,
+        eventId: droppedToast.eventId,
+        queuedCountAfterDrop: queuedToastOrderRef.current.length,
+      });
+    }
+  }, []);
+
   const clearQueuedBacklog = useCallback(() => {
     const droppedQueuedCount = queuedToastOrderRef.current.length;
     clearPendingNextToastTimeout();
@@ -361,6 +385,8 @@ function useLiveIncidentToasts(
         eventId: nextToast.eventId,
         epoch: nextToast.epoch,
       };
+      queuedToastsRef.current.delete(queueKey);
+      queuedToastOrderRef.current.shift();
 
       lastNotifiedRevisionByIncidentIdRef.current.set(
         nextToast.incidentId,
@@ -391,22 +417,20 @@ function useLiveIncidentToasts(
         },
         onHide: () => {
           const activeToast = activeToastRef.current;
-          if (!activeToast || activeToast.queueKey !== queueKey) {
+          if (
+            !activeToast ||
+            activeToast.queueKey !== queueKey ||
+            activeToast.eventId !== nextToast.eventId
+          ) {
             return;
           }
 
-          const queuedCountBeforeDelete = queuedToastOrderRef.current.length;
           activeToastRef.current = null;
-          queuedToastsRef.current.delete(queueKey);
-          queuedToastOrderRef.current = queuedToastOrderRef.current.filter(
-            (queuedKey) => queuedKey !== queueKey
-          );
 
           logIncidentToastEvent('active toast cleared', {
             queueKey,
             incidentId: activeToast.incidentId,
-            queuedCountBeforeDelete,
-            queuedCountAfterDelete: queuedToastOrderRef.current.length,
+            queuedCountRemaining: queuedToastOrderRef.current.length,
           });
 
           if (
@@ -442,26 +466,49 @@ function useLiveIncidentToasts(
         titles: incidentsToQueue.map((incident) => incident.title),
       });
 
-      incidentsToQueue.forEach((incident) => {
-        const queueKey = getQueuedToastKey(incident);
-        if (queuedToastsRef.current.has(queueKey)) {
-          return;
-        }
+        incidentsToQueue.forEach((incident) => {
+          const queueKey = getQueuedToastKey(incident);
+          if (activeToastRef.current?.queueKey === queueKey) {
+            logIncidentToastEvent('drop toast update while incident is already active', {
+              queueKey,
+              incidentId: incident.incidentId,
+              activeEventId: activeToastRef.current.eventId,
+              droppedEventId: incident.eventId,
+            });
+            return;
+          }
 
-        const queuedToast: QueuedIncidentToast = {
-          ...incident,
-          queueKey,
-          source,
-          epoch: baselineEpochRef.current,
-        };
+          const queuedToast: QueuedIncidentToast = {
+            ...incident,
+            queueKey,
+            source,
+            epoch: baselineEpochRef.current,
+          };
 
-        queuedToastsRef.current.set(queueKey, queuedToast);
-        queuedToastOrderRef.current.push(queueKey);
-      });
+          const existingQueuedToast = queuedToastsRef.current.get(queueKey);
+          if (existingQueuedToast) {
+            queuedToastsRef.current.set(queueKey, queuedToast);
+            logIncidentToastEvent('collapse queued toast to latest incident revision', {
+              queueKey,
+              incidentId: incident.incidentId,
+              previousEventId: existingQueuedToast.eventId,
+              nextEventId: incident.eventId,
+            });
+            return;
+          }
 
+          queuedToastsRef.current.set(queueKey, queuedToast);
+          queuedToastOrderRef.current.push(queueKey);
+
+          if (activeToastRef.current == null) {
+            showNextQueuedToast();
+          }
+        });
+
+      trimQueuedToastBacklog();
       showNextQueuedToast();
     },
-    [showNextQueuedToast]
+    [showNextQueuedToast, trimQueuedToastBacklog]
   );
 
   useEffect(() => {

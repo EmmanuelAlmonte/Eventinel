@@ -216,7 +216,7 @@ function applyIncidentEventUpdates(
   minCreatedAtUnixSeconds: number | null | undefined
 ): IncidentEventParseResult {
   let nextIncidentMap = incidentMap;
-  const updatedIncidents: ProcessedIncident[] = [];
+  const updatedIncidentMap = new Map<string, ProcessedIncident>();
   let didUpdate = false;
   let parsedEvents = 0;
   let parseFailures = 0;
@@ -261,14 +261,17 @@ function applyIncidentEventUpdates(
 
     metricsInput.replacements += 1;
     nextIncidentMap.set(parsed.incidentId, processed);
-    updatedIncidents.push(processed);
+    if (updatedIncidentMap.has(parsed.incidentId)) {
+      updatedIncidentMap.delete(parsed.incidentId);
+    }
+    updatedIncidentMap.set(parsed.incidentId, processed);
     didUpdate = true;
     metricsInput.updatesApplied += 1;
   }
 
   return {
     incidentMap: nextIncidentMap,
-    updatedIncidents,
+    updatedIncidents: Array.from(updatedIncidentMap.values()),
     didUpdate,
     parsedEvents,
     parseFailures,
