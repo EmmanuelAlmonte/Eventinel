@@ -9,6 +9,10 @@ import { computeHasReceivedHistory } from './reconcile';
 import { useIncidentSubscriptionPlannerController } from './subscriptionPlannerController';
 import { useIncidentSubscriptionStateSyncController } from './subscriptionStateSyncController';
 import {
+  type RelayConfirmationMapRef,
+  pruneUnconfirmedIncidentsForSubscription,
+} from './cacheConfirmation';
+import {
   type HistoryRefreshProgress,
   type IncidentSubscriptionDisplayState,
   type IncomingEventSource,
@@ -32,6 +36,7 @@ export interface SubscriptionControllerArgs {
   sinceDays: number;
   effectiveMaxIncidents: number;
   incidentMapRef: MutableRefObject<Map<string, ProcessedIncident>>;
+  relayConfirmedIncidentIdsBySubscriptionKeyRef: RelayConfirmationMapRef;
   pendingEventsRef: MutableRefObject<QueuedEvent[]>;
   flushTimerRef: MutableRefObject<ReturnType<typeof setTimeout> | null>;
   lastUpdatedRef: MutableRefObject<number | null>;
@@ -49,8 +54,16 @@ export interface SubscriptionControllerArgs {
 export interface SubscriptionController {
   hasReceivedHistory: () => boolean;
   recomputeVisibleState: (updatedIncidents?: ProcessedIncident[]) => void;
+  recomputeVisibleStateWithRemovals: (
+    updatedIncidents?: ProcessedIncident[],
+    removedIncidentIds?: string[]
+  ) => void;
   flushQueuedEvents: () => void;
-  enqueueEvents: (events: NDKEvent[], source: IncomingEventSource) => void;
+  enqueueEvents: (
+    events: NDKEvent[],
+    source: IncomingEventSource,
+    subscriptionKey?: string
+  ) => void;
   startSubscription: (key: string, historyRefreshEpoch?: number | null) => void;
   stopSubscription: (key: string) => void;
   stopAllSubscriptions: () => void;
@@ -92,6 +105,7 @@ export function useIncidentSubscriptionController({
   sinceDays,
   effectiveMaxIncidents,
   incidentMapRef,
+  relayConfirmedIncidentIdsBySubscriptionKeyRef,
   pendingEventsRef,
   flushTimerRef,
   lastUpdatedRef,
@@ -110,8 +124,13 @@ export function useIncidentSubscriptionController({
     });
   }, [enabled, desiredSubscriptionCount, subscriptionRegistry, activeHistoryRefreshRef]);
 
-  const { recomputeVisibleState, flushQueuedEvents, enqueueEvents, clearQueuedEvents } =
-    useIncidentSubscriptionStateSyncController({
+  const {
+    recomputeVisibleState,
+    recomputeVisibleStateWithRemovals,
+    flushQueuedEvents,
+    enqueueEvents,
+    clearQueuedEvents,
+  } = useIncidentSubscriptionStateSyncController({
       enabled,
       stableLocation,
       sinceDays,
@@ -121,24 +140,41 @@ export function useIncidentSubscriptionController({
       flushTimerRef,
       lastUpdatedRef,
       lastTotalEventsRef,
+      relayConfirmedIncidentIdsBySubscriptionKeyRef,
       hasReceivedHistory,
       setState,
     });
+
+  const setHasReceivedHistoryState = useCallback(() => {
+    setState((prev) => ({
+      ...prev,
+      hasReceivedHistory: hasReceivedHistory(),
+    }));
+  }, [hasReceivedHistory, setState]);
 
   const { startSubscription, stopSubscription, stopAllSubscriptions, pruneToDesiredGeohashes } =
     useIncidentSubscriptionPlannerController({
       subscriptionRegistry,
       enqueueEvents,
-      hasReceivedHistory,
+      flushQueuedEvents,
+      recomputeVisibleStateWithRemovals,
       markHistoryRefreshSatisfied,
-      setState,
+      setHasReceivedHistoryState,
       incidentMapRef,
+      pruneUnconfirmedIncidentsForSubscription: (subscriptionKey) =>
+        pruneUnconfirmedIncidentsForSubscription({
+          incidentMapRef,
+          relayConfirmedIncidentIdsBySubscriptionKeyRef,
+          subscriptionKey,
+        }),
+      relayConfirmedIncidentIdsBySubscriptionKeyRef,
       sinceDays,
     });
 
   return {
     hasReceivedHistory,
     recomputeVisibleState,
+    recomputeVisibleStateWithRemovals,
     flushQueuedEvents,
     enqueueEvents,
     startSubscription,

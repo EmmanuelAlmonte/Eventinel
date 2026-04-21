@@ -6,6 +6,7 @@ import { calculateIncidentSinceUnixSeconds } from '@lib/incidentHistoryWindow';
 import { INCIDENT_LIMITS } from '@lib/map/constants';
 import { buildIncidentDisplayState } from './sorting';
 import { applyIncidentEventBatch } from './eventReducer';
+import { markRelayConfirmedIncident, type RelayConfirmationMapRef } from './cacheConfirmation';
 import {
   INCIDENT_KIND,
   SUBSCRIPTION_BUFFER_MS,
@@ -113,12 +114,13 @@ function recomputeVisibleSubscriptionState(
     sinceDays: number;
     stableLocation: [number, number] | null;
     effectiveMaxIncidents: number;
-    lastUpdatedRef: MutableRefObject<number | null>;
-    lastTotalEventsRef: MutableRefObject<number>;
-    hasReceivedHistory: () => boolean;
-    setState: Dispatch<SetStateAction<IncidentSubscriptionDisplayState>>;
+  lastUpdatedRef: MutableRefObject<number | null>;
+  lastTotalEventsRef: MutableRefObject<number>;
+  hasReceivedHistory: () => boolean;
+  setState: Dispatch<SetStateAction<IncidentSubscriptionDisplayState>>;
   },
-  updatedIncidents: ProcessedIncident[] = []
+  updatedIncidents: ProcessedIncident[] = [],
+  removedIncidentIds: string[] = []
 ): void {
   if (!enabled) {
     return;
@@ -137,7 +139,7 @@ function recomputeVisibleSubscriptionState(
     (incident) => incident.occurredAtMs < cutoffMs
   );
 
-  if (updatedIncidents.length > 0) {
+  if (updatedIncidents.length > 0 || removedIncidentIds.length > 0) {
     lastUpdatedRef.current = Date.now();
   }
 
@@ -156,13 +158,17 @@ function recomputeVisibleSubscriptionState(
     })),
   });
 
-  setState({
+  setState((prev) => ({
     incidents,
     severityCounts,
-    updatedIncidents,
+    updatedIncidents:
+      updatedIncidents.length === 0 && removedIncidentIds.length > 0
+        ? prev.updatedIncidents
+        : updatedIncidents,
+    removedIncidentIds,
     totalEventsReceived: lastTotalEventsRef.current,
     hasReceivedHistory: hasReceivedHistory(),
-  });
+  }));
 }
 
 function clearSubscriptionFlushTimer(
@@ -229,6 +235,7 @@ function flushQueuedIncidentEvents(
     ...prev,
     totalEventsReceived: args.lastTotalEventsRef.current,
     updatedIncidents: [],
+    removedIncidentIds: [],
     hasReceivedHistory: args.hasReceivedHistory(),
   }));
 }
@@ -239,7 +246,9 @@ function enqueueIncidentEvents(
   pendingEventsRef: MutableRefObject<QueuedEvent[]>,
   flushTimerRef: MutableRefObject<ReturnType<typeof setTimeout> | null>,
   minCreatedAtUnixSeconds: number,
-  flushQueuedEvents: () => void
+  flushQueuedEvents: () => void,
+  relayConfirmedIncidentIdsBySubscriptionKeyRef: RelayConfirmationMapRef,
+  subscriptionKey?: string
 ): void {
   if (!events || events.length === 0) {
     return;
@@ -255,6 +264,7 @@ function enqueueIncidentEvents(
     const nextQueuedEvent: QueuedEvent = {
       event,
       source,
+      subscriptionKey,
       queueKey: validated.queueKey,
       incidentId: validated.incidentId,
       createdAt: validated.createdAt,
@@ -263,6 +273,14 @@ function enqueueIncidentEvents(
       cacheEventCount: source === 'cache' ? 1 : 0,
       relayEventCount: source === 'relay' ? 1 : 0,
     };
+
+    if (source === 'relay') {
+      markRelayConfirmedIncident(
+        relayConfirmedIncidentIdsBySubscriptionKeyRef,
+        subscriptionKey,
+        validated.incidentId
+      );
+    }
 
     const existingIndex = findQueuedEventIndex(
       pendingEventsRef.current,
@@ -436,6 +454,7 @@ export function useIncidentSubscriptionStateSyncController({
   flushTimerRef,
   lastUpdatedRef,
   lastTotalEventsRef,
+  relayConfirmedIncidentIdsBySubscriptionKeyRef,
   hasReceivedHistory,
   setState,
 }: {
@@ -448,6 +467,7 @@ export function useIncidentSubscriptionStateSyncController({
   flushTimerRef: MutableRefObject<ReturnType<typeof setTimeout> | null>;
   lastUpdatedRef: MutableRefObject<number | null>;
   lastTotalEventsRef: MutableRefObject<number>;
+  relayConfirmedIncidentIdsBySubscriptionKeyRef: RelayConfirmationMapRef;
   hasReceivedHistory: () => boolean;
   setState: Dispatch<SetStateAction<IncidentSubscriptionDisplayState>>;
 }) {
@@ -471,6 +491,36 @@ export function useIncidentSubscriptionStateSyncController({
           setState,
         },
         updatedIncidents
+      ),
+    [
+      enabled,
+      effectiveMaxIncidents,
+      hasReceivedHistory,
+      incidentMapRef,
+      lastUpdatedRef,
+      lastTotalEventsRef,
+      setState,
+      sinceDays,
+      stableLocation,
+    ]
+  );
+
+  const recomputeVisibleStateWithRemovals = useCallback(
+    (updatedIncidents: ProcessedIncident[] = [], removedIncidentIds: string[] = []) =>
+      recomputeVisibleSubscriptionState(
+        {
+          enabled,
+          incidentMapRef,
+          sinceDays,
+          stableLocation,
+          effectiveMaxIncidents,
+          lastUpdatedRef,
+          lastTotalEventsRef,
+          hasReceivedHistory,
+          setState,
+        },
+        updatedIncidents,
+        removedIncidentIds
       ),
     [
       enabled,
@@ -511,19 +561,28 @@ export function useIncidentSubscriptionStateSyncController({
     hasReceivedHistory,
     recomputeVisibleState,
     lastUpdatedRef,
+    relayConfirmedIncidentIdsBySubscriptionKeyRef,
   ]);
 
   const enqueueEvents = useCallback(
-    (events: NDKEvent[], source: IncomingEventSource) =>
+    (events: NDKEvent[], source: IncomingEventSource, subscriptionKey?: string) =>
       enqueueIncidentEvents(
         events,
         source,
         pendingEventsRef,
         flushTimerRef,
         calculateIncidentSinceUnixSeconds(sinceDays),
-        flushQueuedEvents
+        flushQueuedEvents,
+        relayConfirmedIncidentIdsBySubscriptionKeyRef,
+        subscriptionKey
       ),
-    [flushQueuedEvents, flushTimerRef, pendingEventsRef, sinceDays]
+    [
+      flushQueuedEvents,
+      flushTimerRef,
+      pendingEventsRef,
+      relayConfirmedIncidentIdsBySubscriptionKeyRef,
+      sinceDays,
+    ]
   );
 
   const clearQueuedEvents = useCallback(() => {
@@ -533,6 +592,7 @@ export function useIncidentSubscriptionStateSyncController({
 
   return {
     recomputeVisibleState,
+    recomputeVisibleStateWithRemovals,
     flushQueuedEvents,
     enqueueEvents,
     clearQueuedEvents,

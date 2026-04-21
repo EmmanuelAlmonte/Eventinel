@@ -58,6 +58,9 @@ function createHookArgs() {
   const flushTimerRef = createMutableRef<ReturnType<typeof setTimeout> | null>(null);
   const lastUpdatedRef = createMutableRef<number | null>(null);
   const lastTotalEventsRef = createMutableRef(0);
+  const relayConfirmedIncidentIdsBySubscriptionKeyRef = createMutableRef<
+    Map<string, Set<string>>
+  >(new Map());
   const setState = jest.fn();
 
   return {
@@ -77,6 +80,7 @@ function createHookArgs() {
       flushTimerRef,
       lastUpdatedRef,
       lastTotalEventsRef,
+      relayConfirmedIncidentIdsBySubscriptionKeyRef,
       hasReceivedHistory: () => true,
       setState: setState as Dispatch<SetStateAction<IncidentSubscriptionDisplayState>>,
     },

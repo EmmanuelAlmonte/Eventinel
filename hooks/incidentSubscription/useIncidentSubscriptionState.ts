@@ -14,6 +14,7 @@ export interface IncidentSubscriptionCoreState {
   state: IncidentSubscriptionDisplayState;
   setState: Dispatch<SetStateAction<IncidentSubscriptionDisplayState>>;
   incidentMapRef: MutableRefObject<Map<string, ProcessedIncident>>;
+  relayConfirmedIncidentIdsBySubscriptionKeyRef: MutableRefObject<Map<string, Set<string>>>;
   lastUpdatedRef: MutableRefObject<number | null>;
   lastTotalEventsRef: MutableRefObject<number>;
   lastFilterKeyRef: MutableRefObject<string>;
@@ -33,6 +34,9 @@ export interface IncidentSubscriptionCoreState {
 
 export function useIncidentSubscriptionState(): IncidentSubscriptionCoreState {
   const incidentMapRef = useRef<Map<string, ProcessedIncident>>(new Map());
+  const relayConfirmedIncidentIdsBySubscriptionKeyRef = useRef<Map<string, Set<string>>>(
+    new Map()
+  );
   const lastUpdatedRef = useRef<number | null>(null);
   const lastTotalEventsRef = useRef(0);
   const lastFilterKeyRef = useRef<string>('disabled');
@@ -53,6 +57,7 @@ export function useIncidentSubscriptionState(): IncidentSubscriptionCoreState {
     incidents: [],
     severityCounts: EMPTY_SEVERITY_COUNTS,
     updatedIncidents: [],
+    removedIncidentIds: [],
     totalEventsReceived: 0,
     hasReceivedHistory: false,
   });
@@ -61,6 +66,7 @@ export function useIncidentSubscriptionState(): IncidentSubscriptionCoreState {
     state,
     setState,
     incidentMapRef,
+    relayConfirmedIncidentIdsBySubscriptionKeyRef,
     lastUpdatedRef,
     lastTotalEventsRef,
     lastFilterKeyRef,

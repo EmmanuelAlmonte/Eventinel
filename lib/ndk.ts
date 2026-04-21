@@ -10,6 +10,14 @@
 import NDK from '@nostr-dev-kit/mobile';
 import { NDKCacheAdapterSqlite } from '@nostr-dev-kit/mobile';
 
+import { calculateIncidentSinceUnixSeconds } from './incidentHistoryWindow';
+import { INCIDENT_LIMITS } from './map/constants';
+import {
+  deleteIncidentEventsFromSqliteCache,
+  trimIncidentEventsFromSqliteCache,
+  type IncidentCacheDeleteTarget,
+} from './nostr/incidentCacheMaintenance';
+
 const IS_PRODUCTION_BUILD = !__DEV__ && process.env.NODE_ENV === 'production';
 const DEBUG_CACHE_QUERY =
   __DEV__ && process.env.EXPO_PUBLIC_DEBUG_CACHE_QUERY === '1';
@@ -34,6 +42,40 @@ cacheAdapter.initialize(); // Create database tables
 
 // Export cache adapter for debugging
 export { cacheAdapter };
+
+export function deleteIncidentEventsFromNdkCache(
+  targets: readonly IncidentCacheDeleteTarget[]
+): number {
+  try {
+    return deleteIncidentEventsFromSqliteCache(cacheAdapter.db, targets);
+  } catch (error) {
+    if (__DEV__) {
+      console.warn('[NDK Cache] Failed to delete incident cache rows:', error);
+    }
+    return 0;
+  }
+}
+
+export function trimIncidentNdkCache(): void {
+  try {
+    const result = trimIncidentEventsFromSqliteCache(cacheAdapter.db, {
+      maxRows: INCIDENT_LIMITS.MAX_NDK_INCIDENT_CACHE,
+      minCreatedAt: calculateIncidentSinceUnixSeconds(INCIDENT_LIMITS.SINCE_DAYS),
+    });
+
+    if (__DEV__ && (result.removedStale > 0 || result.removedOverflow > 0)) {
+      console.log(
+        `[NDK Cache] Trimmed kind:30911 rows stale:${result.removedStale} overflow:${result.removedOverflow}`
+      );
+    }
+  } catch (error) {
+    if (__DEV__) {
+      console.warn('[NDK Cache] Failed to trim incident cache:', error);
+    }
+  }
+}
+
+trimIncidentNdkCache();
 
 // Debug: Log cache stats on startup (async to avoid blocking)
 if (__DEV__) {

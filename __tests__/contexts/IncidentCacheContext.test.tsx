@@ -471,6 +471,32 @@ describe('IncidentCacheContext', () => {
       expect(cacheApi!.version).toBe(initialVersion);
     });
 
+    it('removes incidents by ID', async () => {
+      let cacheApi: ReturnType<typeof useIncidentCache> | null = null;
+      const incident = createMockIncident('remove-test');
+
+      render(
+        <IncidentCacheProvider>
+          <CacheConsumer
+            onReady={(api) => {
+              cacheApi = api;
+            }}
+          />
+        </IncidentCacheProvider>
+      );
+
+      await act(async () => {
+        cacheApi!.upsertMany([incident]);
+      });
+      expect(cacheApi!.getIncident('remove-test')).toBeDefined();
+
+      await act(async () => {
+        cacheApi!.removeMany(['remove-test']);
+      });
+
+      expect(cacheApi!.getIncident('remove-test')).toBeUndefined();
+    });
+
     it('handles duplicate incidents in same upsert', async () => {
       const incident1 = createMockIncident('dup-test', 1000);
       const incident2 = createMockIncident('dup-test', 2000, {

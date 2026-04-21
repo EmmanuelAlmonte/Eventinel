@@ -126,6 +126,11 @@ export const INCIDENT_LIMITS = {
   MAX_VISIBLE: 200,
 
   /**
+   * Maximum kind:30911 rows retained in the NDK SQLite cache.
+   */
+  MAX_NDK_INCIDENT_CACHE: 1000,
+
+  /**
    * Internal upper bound for candidate incidents kept before pruning/sorting.
    */
   CANDIDATE_RETENTION: 600,

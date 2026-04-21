@@ -24,6 +24,8 @@ export interface IncidentCacheApi {
   getIncident: (incidentId: string) => ProcessedIncident | undefined;
   /** Upsert multiple incidents into the cache */
   upsertMany: (incidents: ProcessedIncident[]) => void;
+  /** Remove incidents that are no longer valid for the active subscription context */
+  removeMany: (incidentIds: string[]) => void;
 }
 
 type IncidentCacheListener = () => void;
@@ -99,14 +101,29 @@ export function IncidentCacheProvider({ children }: { children: React.ReactNode 
     }
   }, [emitChange]);
 
+  const removeMany = useCallback((incidentIds: string[]) => {
+    let didUpdate = false;
+
+    for (const incidentId of incidentIds) {
+      if (cacheRef.current.delete(incidentId)) {
+        didUpdate = true;
+      }
+    }
+
+    if (didUpdate) {
+      emitChange();
+    }
+  }, [emitChange]);
+
   const store = useMemo<IncidentCacheStore>(
     () => ({
       getIncident,
       upsertMany,
+      removeMany,
       getVersion,
       subscribe,
     }),
-    [getIncident, getVersion, subscribe, upsertMany]
+    [getIncident, getVersion, removeMany, subscribe, upsertMany]
   );
 
   return (
@@ -136,6 +153,7 @@ export function useIncidentCacheApi(): IncidentCacheApi {
     () => ({
       getIncident: store.getIncident,
       upsertMany: store.upsertMany,
+      removeMany: store.removeMany,
     }),
     [store]
   );
@@ -164,6 +182,7 @@ export function useIncidentCache(): IncidentCacheApi & { version: number } {
     () => ({
       getIncident: store.getIncident,
       upsertMany: store.upsertMany,
+      removeMany: store.removeMany,
       version,
     }),
     [store, version]
