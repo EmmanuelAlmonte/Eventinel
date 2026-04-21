@@ -26,6 +26,8 @@
     "cashu:cli:balance": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/cashu/cashu-cli.ps1 balance",
     "cashu:cli:smoke": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/cashu/cashu-cli-smoke.ps1",
     "cashu:web:wallet": "node scripts/cashu/mini-wallet-server.mjs",
+    "relay:local:reverse": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/local-relay/setup-adb-reverse.ps1",
+    "relay:local:reverse:clear": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/local-relay/clear-adb-reverse.ps1",
     "probe:client:incident": "node scripts/client-side-request-probe.js",
     "probe:geohash:single": "node scripts/single-geohash-precision-probe.js",
     "probe:report:submit": "node scripts/report-submit-probe.js",

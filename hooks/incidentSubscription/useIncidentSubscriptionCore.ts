@@ -4,7 +4,7 @@
  * Coordinates incident subscriptions and cache/relay event queueing.
  */
 
-import { useEffect } from 'react';
+import { useCallback, useEffect } from 'react';
 
 import { calculateIncidentSinceUnixSeconds } from '@lib/incidentHistoryWindow';
 import { INCIDENT_LIMITS } from '@lib/map/constants';
@@ -104,119 +104,128 @@ export function useIncidentSubscription({
     refreshWatchdogTimerRef,
   } = useIncidentSubscriptionState();
 
-  const clearHistoryRefreshWatchdog = () => {
+  const clearHistoryRefreshWatchdog = useCallback(() => {
     if (refreshWatchdogTimerRef.current) {
       clearTimeout(refreshWatchdogTimerRef.current);
       refreshWatchdogTimerRef.current = null;
     }
-  };
+  }, [refreshWatchdogTimerRef]);
 
-  const completeHistoryRefresh = (
-    epoch: number,
-    reason: 'complete' | 'watchdog'
-  ) => {
-    const activeHistoryRefresh = activeHistoryRefreshRef.current;
-    if (!activeHistoryRefresh || activeHistoryRefresh.epoch !== epoch) {
-      return;
-    }
-
-    const unsatisfiedKeys = Array.from(activeHistoryRefresh.expectedKeys).filter(
-      (key) => !activeHistoryRefresh.satisfiedKeys.has(key)
-    );
-    const stillActiveUnsatisfiedKeys = unsatisfiedKeys.filter((key) =>
-      subscriptionRegistry.subscriptions.has(key)
-    );
-    const removedUnsatisfiedKeys = unsatisfiedKeys.filter(
-      (key) => !subscriptionRegistry.subscriptions.has(key)
-    );
-
-    for (const key of stillActiveUnsatisfiedKeys) {
-      subscriptionRegistry.setHasReceivedHistory(key);
-    }
-
-    clearHistoryRefreshWatchdog();
-    activeHistoryRefreshRef.current = null;
-
-    logHistoryWindowDebugEvent('history-window refresh completed', {
-      epoch,
-      reason,
-      expectedKeyCount: activeHistoryRefresh.expectedKeys.size,
-      satisfiedKeyCount:
-        activeHistoryRefresh.satisfiedKeys.size + stillActiveUnsatisfiedKeys.length,
-      forcedUnsatisfiedKeys: stillActiveUnsatisfiedKeys,
-      skippedRemovedKeys: removedUnsatisfiedKeys,
-    });
-
-    setState((prev) => {
-      if (prev.hasReceivedHistory) {
-        return prev;
+  const completeHistoryRefresh = useCallback(
+    (epoch: number, reason: 'complete' | 'watchdog') => {
+      const activeHistoryRefresh = activeHistoryRefreshRef.current;
+      if (!activeHistoryRefresh || activeHistoryRefresh.epoch !== epoch) {
+        return;
       }
 
-      return {
-        ...prev,
-        hasReceivedHistory: true,
-      };
-    });
-  };
+      const unsatisfiedKeys = Array.from(activeHistoryRefresh.expectedKeys).filter(
+        (key) => !activeHistoryRefresh.satisfiedKeys.has(key)
+      );
+      const stillActiveUnsatisfiedKeys = unsatisfiedKeys.filter((key) =>
+        subscriptionRegistry.subscriptions.has(key)
+      );
+      const removedUnsatisfiedKeys = unsatisfiedKeys.filter(
+        (key) => !subscriptionRegistry.subscriptions.has(key)
+      );
 
-  const markHistoryRefreshSatisfied = (
-    key: string,
-    epoch: number,
-    source: 'cache' | 'eose'
-  ) => {
-    const activeHistoryRefresh = activeHistoryRefreshRef.current;
-    if (!activeHistoryRefresh || activeHistoryRefresh.epoch !== epoch) {
-      logHistoryWindowDebugEvent('history-window satisfaction ignored', {
+      for (const key of stillActiveUnsatisfiedKeys) {
+        subscriptionRegistry.setHasReceivedHistory(key);
+      }
+
+      clearHistoryRefreshWatchdog();
+      activeHistoryRefreshRef.current = null;
+
+      logHistoryWindowDebugEvent('history-window refresh completed', {
+        epoch,
+        reason,
+        expectedKeyCount: activeHistoryRefresh.expectedKeys.size,
+        satisfiedKeyCount:
+          activeHistoryRefresh.satisfiedKeys.size + stillActiveUnsatisfiedKeys.length,
+        forcedUnsatisfiedKeys: stillActiveUnsatisfiedKeys,
+        skippedRemovedKeys: removedUnsatisfiedKeys,
+      });
+
+      setState((prev) => {
+        if (prev.hasReceivedHistory) {
+          return prev;
+        }
+
+        return {
+          ...prev,
+          hasReceivedHistory: true,
+        };
+      });
+    },
+    [
+      activeHistoryRefreshRef,
+      clearHistoryRefreshWatchdog,
+      setState,
+      subscriptionRegistry,
+    ]
+  );
+
+  const markHistoryRefreshSatisfied = useCallback(
+    (key: string, epoch: number, source: 'cache' | 'eose') => {
+      const activeHistoryRefresh = activeHistoryRefreshRef.current;
+      if (!activeHistoryRefresh || activeHistoryRefresh.epoch !== epoch) {
+        logHistoryWindowDebugEvent('history-window satisfaction ignored', {
+          key,
+          epoch,
+          source,
+          activeEpoch: activeHistoryRefresh?.epoch ?? null,
+        });
+        return;
+      }
+
+      if (!activeHistoryRefresh.expectedKeys.has(key)) {
+        logHistoryWindowDebugEvent('history-window satisfaction unexpected key', {
+          key,
+          epoch,
+          source,
+        });
+        return;
+      }
+
+      if (activeHistoryRefresh.satisfiedKeys.has(key)) {
+        return;
+      }
+
+      activeHistoryRefresh.satisfiedKeys.add(key);
+      activeHistoryRefresh.sawDataSignal =
+        activeHistoryRefresh.sawDataSignal || source === 'cache';
+      subscriptionRegistry.setHasReceivedHistory(key);
+
+      logHistoryWindowDebugEvent('history-window satisfaction recorded', {
         key,
         epoch,
         source,
-        activeEpoch: activeHistoryRefresh?.epoch ?? null,
+        satisfiedKeyCount: activeHistoryRefresh.satisfiedKeys.size,
+        expectedKeyCount: activeHistoryRefresh.expectedKeys.size,
       });
-      return;
-    }
 
-    if (!activeHistoryRefresh.expectedKeys.has(key)) {
-      logHistoryWindowDebugEvent('history-window satisfaction unexpected key', {
-        key,
-        epoch,
-        source,
-      });
-      return;
-    }
+      if (
+        activeHistoryRefresh.satisfiedKeys.size >= activeHistoryRefresh.expectedKeys.size
+      ) {
+        completeHistoryRefresh(epoch, 'complete');
+        return;
+      }
 
-    if (activeHistoryRefresh.satisfiedKeys.has(key)) {
-      return;
-    }
-
-    activeHistoryRefresh.satisfiedKeys.add(key);
-    activeHistoryRefresh.sawDataSignal =
-      activeHistoryRefresh.sawDataSignal || source === 'cache';
-    subscriptionRegistry.setHasReceivedHistory(key);
-
-    logHistoryWindowDebugEvent('history-window satisfaction recorded', {
-      key,
-      epoch,
-      source,
-      satisfiedKeyCount: activeHistoryRefresh.satisfiedKeys.size,
-      expectedKeyCount: activeHistoryRefresh.expectedKeys.size,
-    });
-
-    if (
-      activeHistoryRefresh.satisfiedKeys.size >= activeHistoryRefresh.expectedKeys.size
-    ) {
-      completeHistoryRefresh(epoch, 'complete');
-      return;
-    }
-
-    setState((prev) =>
-      prev.hasReceivedHistory
-        ? {
-            ...prev,
-            hasReceivedHistory: false,
-          }
-        : prev
-    );
-  };
+      setState((prev) =>
+        prev.hasReceivedHistory
+          ? {
+              ...prev,
+              hasReceivedHistory: false,
+            }
+          : prev
+      );
+    },
+    [
+      activeHistoryRefreshRef,
+      completeHistoryRefresh,
+      setState,
+      subscriptionRegistry,
+    ]
+  );
 
   const {
     hasReceivedHistory,
@@ -454,15 +463,20 @@ export function useIncidentSubscription({
       pendingEventsRef.current.push(...bufferedQueuedEvents);
     }
 
-    if (historyWindowChanged && pendingEventsRef.current.length > 0) {
-      flushQueuedEvents();
-    }
-
     if (reconcilePlan.shouldPruneByCell) {
       const didPrune = pruneToDesiredGeohashes(reconcilePlan.desiredKeys);
       if (didPrune) {
         recomputeVisibleState([]);
       }
+    }
+
+    if (
+      pendingEventsRef.current.length > 0 &&
+      (historyWindowChanged ||
+        reconcilePlan.toAdd.length > 0 ||
+        reconcilePlan.toRemove.length > 0)
+    ) {
+      flushQueuedEvents();
     }
 
     if (
@@ -510,6 +524,8 @@ export function useIncidentSubscription({
     refreshEpochRef,
     activeHistoryRefreshRef,
     refreshWatchdogTimerRef,
+    clearHistoryRefreshWatchdog,
+    completeHistoryRefresh,
   ]);
 
   // Resort existing incidents on location/max changes.
@@ -529,7 +545,13 @@ export function useIncidentSubscription({
       activeHistoryRefreshRef.current = null;
       subscriptionRegistry.clear();
     };
-  }, [clearQueuedEvents, stopAllSubscriptions, subscriptionRegistry]);
+  }, [
+    activeHistoryRefreshRef,
+    clearHistoryRefreshWatchdog,
+    clearQueuedEvents,
+    stopAllSubscriptions,
+    subscriptionRegistry,
+  ]);
 
   return {
     incidents: state.incidents,

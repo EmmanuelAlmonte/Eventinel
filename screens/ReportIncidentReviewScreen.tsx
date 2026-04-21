@@ -196,7 +196,13 @@ export default function ReportIncidentReviewScreen({ navigation, route }: Report
         stillActive: draft.stillActive,
       } as const;
       resetDraft();
-      navigation.replace('ReportIncidentSubmitted', nextRoute);
+      navigation.reset({
+        index: 1,
+        routes: [
+          { name: 'Main' },
+          { name: 'ReportIncidentSubmitted', params: nextRoute },
+        ],
+      });
     } catch (error) {
       console.warn('[ReportIncident] Failed to publish report:', error);
       showToast.error('Submit failed', error instanceof Error ? error.message : 'Please try again');

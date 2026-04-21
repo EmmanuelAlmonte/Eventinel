@@ -8,8 +8,13 @@
  */
 
 import type { NDKEvent } from '@nostr-dev-kit/mobile';
+import { INCIDENT_LIMITS } from '../../../lib/map/constants';
 import type { ParsedIncident } from '../../../lib/nostr/events/types';
-import { applyIncidentEventBatch } from '../../../hooks/incidentSubscription/eventReducer';
+import {
+  applyIncidentEventBatch,
+  getIncidentEventReducerMetrics,
+  resetIncidentEventReducerMetrics,
+} from '../../../hooks/incidentSubscription/eventReducer';
 import type { QueuedEvent } from '../../../hooks/incidentSubscription/types';
 
 const mockParseIncidentEvent = jest.fn();
@@ -63,6 +68,7 @@ function createQueuedEvent(incidentId: string, eventId: string, createdAt: numbe
 describe('applyIncidentEventBatch', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    resetIncidentEventReducerMetrics();
   });
 
   it('collapses multiple accepted revisions of the same incident to the latest batch delta', () => {
@@ -120,5 +126,51 @@ describe('applyIncidentEventBatch', () => {
 
     expect(result.updatedIncidents.map((incident) => incident.eventId)).toEqual(['event-a-v2']);
     expect(result.incidentMap.get('incident-a')?.eventId).toBe('event-a-v2');
+  });
+
+  it('caps parse candidates before parsing oversized batches', () => {
+    const overflowCount = INCIDENT_LIMITS.MAX_PARSE_CANDIDATES + 5;
+    const parsedByEventId = new Map(
+      Array.from({ length: overflowCount }, (_, index) => {
+        const createdAt = 100 + index;
+        const incidentId = `incident-${index}`;
+        const eventId = `event-${index}`;
+
+        return [eventId, createParsedIncident(incidentId, eventId, createdAt)];
+      })
+    );
+
+    mockParseIncidentEvent.mockImplementation((event: { id: string }) => {
+      return parsedByEventId.get(event.id) ?? null;
+    });
+
+    const queuedEvents = Array.from({ length: overflowCount }, (_, index) =>
+      createQueuedEvent(`incident-${index}`, `event-${index}`, 100 + index)
+    );
+
+    const result = applyIncidentEventBatch({
+      queuedEvents,
+      incidentMap: new Map(),
+      maxCandidateRetention: INCIDENT_LIMITS.CANDIDATE_RETENTION,
+      maxParseCandidates: INCIDENT_LIMITS.MAX_PARSE_CANDIDATES,
+      location: null,
+      minCreatedAtUnixSeconds: null,
+    });
+
+    expect(mockParseIncidentEvent).toHaveBeenCalledTimes(
+      INCIDENT_LIMITS.MAX_PARSE_CANDIDATES
+    );
+    expect(result.updatedIncidents).toHaveLength(INCIDENT_LIMITS.MAX_PARSE_CANDIDATES);
+    expect(
+      result.updatedIncidents.some((incident) => incident.incidentId === 'incident-0')
+    ).toBe(false);
+    expect(
+      result.updatedIncidents.some(
+        (incident) => incident.incidentId === `incident-${overflowCount - 1}`
+      )
+    ).toBe(true);
+    expect(getIncidentEventReducerMetrics().parseCandidateDrops).toBe(
+      overflowCount - INCIDENT_LIMITS.MAX_PARSE_CANDIDATES
+    );
   });
 });

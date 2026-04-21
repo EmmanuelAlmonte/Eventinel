@@ -10,6 +10,13 @@ export const EARTH_RADIUS_METERS = 6371000;
 export interface QueuedEvent {
   event: NDKEvent;
   source: IncomingEventSource;
+  queueKey?: string;
+  incidentId?: string | null;
+  createdAt?: number;
+  eventId?: string;
+  rawEventCount?: number;
+  cacheEventCount?: number;
+  relayEventCount?: number;
 }
 
 export type IncomingEventSource = 'cache' | 'relay';
@@ -91,6 +98,7 @@ export interface EventBatchInput {
   queuedEvents: readonly QueuedEvent[];
   incidentMap: Map<string, ProcessedIncident>;
   maxCandidateRetention: number;
+  maxParseCandidates?: number;
   location: [number, number] | null;
   minCreatedAtUnixSeconds?: number | null;
 }

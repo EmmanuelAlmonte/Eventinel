@@ -3,9 +3,10 @@
  */
 
 import React from 'react';
-import { render } from '@testing-library/react-native';
+import { fireEvent, render, waitFor } from '@testing-library/react-native';
 
 import ReportIncidentReviewScreen from '../../screens/ReportIncidentReviewScreen';
+import { createIncidentEvent } from '../../lib/nostr/events/incident';
 
 const mockDraft = {
   sourceTab: 'Map',
@@ -18,6 +19,8 @@ const mockDraft = {
   locationNote: 'LOCAL RELAY QA 1776709409',
   stillActive: true,
 };
+const mockResetDraft = jest.fn();
+const mockSetAdjustEntryMode = jest.fn();
 
 const mockUseRelayStatus = jest.fn<any, []>(() => ({
   relays: [],
@@ -40,8 +43,8 @@ jest.mock('@contexts', () => ({
   useReportDraft: () => ({
     draft: mockDraft,
     sessionKey: 'session-1',
-    resetDraft: jest.fn(),
-    setAdjustEntryMode: jest.fn(),
+    resetDraft: mockResetDraft,
+    setAdjustEntryMode: mockSetAdjustEntryMode,
   }),
 }));
 
@@ -143,6 +146,7 @@ function buildProps() {
   return {
     navigation: {
       replace: jest.fn(),
+      reset: jest.fn(),
       navigate: jest.fn(),
       goBack: jest.fn(),
       popToTop: jest.fn(),
@@ -206,5 +210,56 @@ describe('ReportIncidentReviewScreen', () => {
 
     expect(screen.getByText('Ready to publish to 1 connected relay.')).toBeTruthy();
     expect(screen.getByLabelText('Submit report').props.accessibilityState?.disabled).not.toBe(true);
+  });
+
+  it('resets the report stack to main plus submitted after successful submit', async () => {
+    const publish = jest.fn().mockResolvedValue(undefined);
+    jest.mocked(createIncidentEvent).mockReturnValue({ publish } as any);
+    mockUseRelayStatus.mockReturnValue({
+      relays: [
+        {
+          url: 'ws://10.0.2.2:8085',
+          status: 'connected',
+          rawStatus: 5,
+          isConnected: true,
+        },
+      ] as any[],
+      stats: {
+        total: 1,
+        connected: 1,
+        connecting: 0,
+        disconnected: 0,
+      },
+      hasConnectedRelay: true,
+      hasRelays: true,
+      isConnecting: false,
+    });
+    const props = buildProps();
+
+    const screen = render(<ReportIncidentReviewScreen {...props} />);
+    fireEvent.press(screen.getByLabelText('Submit report'));
+
+    await waitFor(() => {
+      expect(publish).toHaveBeenCalledTimes(1);
+    });
+
+    expect(mockResetDraft).toHaveBeenCalledTimes(1);
+    expect(props.navigation.replace).not.toHaveBeenCalled();
+    expect(props.navigation.reset).toHaveBeenCalledWith({
+      index: 1,
+      routes: [
+        { name: 'Main' },
+        {
+          name: 'ReportIncidentSubmitted',
+          params: {
+            incidentType: 'fire',
+            locationLabel: '3100 block Princeton Avenue',
+            relayCount: 1,
+            sourceTab: 'Map',
+            stillActive: true,
+          },
+        },
+      ],
+    });
   });
 });

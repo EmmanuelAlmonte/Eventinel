@@ -691,7 +691,11 @@ describe('useIncidentSubscription', () => {
       const { result, rerender } = renderHook(
         (props: UseIncidentSubscriptionOptions) => useIncidentSubscription(props),
         {
-          initialProps: { location: [-75.1652, 39.9526], sinceDays: 365 },
+          initialProps: {
+            location: [-75.1652, 39.9526],
+            subscriptionLocation: [-75.1652, 39.9526],
+            sinceDays: 365,
+          },
         }
       );
 
@@ -699,7 +703,11 @@ describe('useIncidentSubscription', () => {
         expect(result.current.incidents[0].incidentId).toBe('incident-philly');
       });
 
-      rerender({ location: [-74.006, 40.7128], sinceDays: 365 });
+      rerender({
+        location: [-74.006, 40.7128],
+        subscriptionLocation: [-75.1652, 39.9526],
+        sinceDays: 365,
+      });
 
       await waitFor(() => {
         expect(result.current.incidents[0].incidentId).toBe('incident-nyc');
