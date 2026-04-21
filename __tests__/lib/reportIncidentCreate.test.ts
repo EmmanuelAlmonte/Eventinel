@@ -1,4 +1,5 @@
 import { createIncidentEvent } from '../../lib/nostr/events/incident';
+import { INCIDENT_LIMITS } from '../../lib/map/constants';
 import type { CreateIncidentInput } from '../../lib/nostr/events/types';
 
 class MockNDK {
@@ -58,6 +59,36 @@ describe('createIncidentEvent report metadata', () => {
     const altTag = event.tags.find((tag) => tag[0] === 'alt')?.[1];
 
     expect(altTag).toBe('Incident report: Structure Fire near warehouse');
+  });
+
+  it('caps generated alt tags to the intake tag-value contract', () => {
+    const longTitle = `Fire near ${'warehouse access note '.repeat(20)}`;
+    const input: CreateIncidentInput = {
+      incidentId: 'community-test-long-alt',
+      type: 'fire',
+      severity: 4,
+      title: longTitle,
+      description: 'Smoke visible from loading dock.',
+      location: {
+        lat: 39.9526,
+        lng: -75.1652,
+        address: '1200 Warehouse Row',
+      },
+      occurredAt: new Date('2026-04-20T19:01:25Z'),
+      source: 'community',
+      sourceId: 'community-test-long-alt',
+    };
+
+    const firstEvent = createIncidentEvent(new MockNDK() as any, input);
+    const secondEvent = createIncidentEvent(new MockNDK() as any, input);
+    const altTag = firstEvent.tags.find((tag) => tag[0] === 'alt')?.[1];
+    const repeatedAltTag = secondEvent.tags.find((tag) => tag[0] === 'alt')?.[1];
+    const content = JSON.parse(firstEvent.content);
+
+    expect(content.title).toBe(longTitle);
+    expect(altTag).toHaveLength(INCIDENT_LIMITS.MAX_EVENT_TAG_VALUE_LENGTH);
+    expect(altTag).toBe(repeatedAltTag);
+    expect(altTag).toBe(`Incident report: ${longTitle}`.slice(0, INCIDENT_LIMITS.MAX_EVENT_TAG_VALUE_LENGTH));
   });
 
   it('falls back to getRandomValues when randomUUID is unavailable', () => {

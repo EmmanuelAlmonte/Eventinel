@@ -1,5 +1,7 @@
 import geohash from 'ngeohash';
 
+import { INCIDENT_LIMITS } from '@lib/map/constants';
+
 import {
   TAGS,
   EVENTINEL_TAGS,
@@ -45,7 +47,12 @@ function createIncidentId(): string {
 }
 
 function buildIncidentAlt(input: CreateIncidentInput): string {
-  return `Incident report: ${input.title}`;
+  const alt = `Incident report: ${input.title}`;
+  if (alt.length <= INCIDENT_LIMITS.MAX_EVENT_TAG_VALUE_LENGTH) {
+    return alt;
+  }
+
+  return alt.slice(0, INCIDENT_LIMITS.MAX_EVENT_TAG_VALUE_LENGTH);
 }
 
 export function buildIncidentTags(input: CreateIncidentInput): string[][] {
