@@ -1,0 +1,119 @@
+/**
+ * @jest-environment jsdom
+ */
+
+import { renderHook, waitFor } from '@testing-library/react-native';
+
+import { useMapScreenState } from '../../../screens/map/useMapScreenState';
+
+const mockNavigate = jest.fn();
+const mockFocusCoordinate = jest.fn();
+let mockRouteParams: Record<string, unknown> | undefined;
+
+jest.mock('@react-navigation/native', () => {
+  const actual = jest.requireActual('@react-navigation/native');
+  return {
+    ...actual,
+    useNavigation: () => ({
+      navigate: mockNavigate,
+    }),
+    useRoute: () => ({
+      params: mockRouteParams,
+    }),
+    useIsFocused: () => true,
+  };
+});
+
+jest.mock('@hooks', () => ({
+  useAppTheme: () => ({
+    colors: {
+      background: '#111827',
+      border: '#374151',
+      primary: '#2563eb',
+      surface: '#1F2937',
+      text: '#F9FAFB',
+      textMuted: '#9CA3AF',
+    },
+  }),
+}));
+
+jest.mock('@contexts', () => ({
+  useIncidentHistoryWindow: () => ({
+    historyWindowDays: 7,
+    isReady: true,
+    setHistoryWindowDays: jest.fn().mockResolvedValue(undefined),
+  }),
+  useRelayStatus: () => ({
+    hasConnectedRelay: true,
+    hasRelays: true,
+    isConnecting: false,
+    relays: [{ url: 'wss://relay.eventinel.com' }],
+  }),
+  useSharedIncidents: () => ({
+    incidents: [],
+    hasReceivedHistory: true,
+    setMapFocused: jest.fn(),
+    setMapSubscriptionAnchor: jest.fn(),
+    setMapSubscriptionViewport: jest.fn(),
+  }),
+  useSharedLocation: () => ({
+    location: [-73.935242, 40.73061],
+    isLoading: false,
+    source: 'fresh',
+    permission: 'granted',
+    refresh: jest.fn(),
+  }),
+}));
+
+jest.mock('../../../screens/map/useMapCamera', () => ({
+  useMapCamera: () => ({
+    mapReady: true,
+    setMapReady: jest.fn(),
+    cameraCenter: null,
+    animationMode: 'none',
+    animationDuration: 0,
+    followUser: true,
+    setFollowUser: jest.fn(),
+    isAnimating: false,
+    cameraRef: { current: null },
+    shapeSourceRef: { current: null },
+    lastCameraZoomRef: { current: 14 },
+    clearAutoResumeTimer: jest.fn(),
+    scheduleAutoResume: jest.fn(),
+    focusCoordinate: mockFocusCoordinate,
+    handleFlyToUser: jest.fn(),
+    handleCameraChanged: jest.fn(),
+  }),
+}));
+
+jest.mock('../../../screens/map/useMapViewportSubscription', () => ({
+  useMapViewportSubscription: () => ({
+    handleMapIdle: jest.fn(),
+    isViewportCoveredBySubscriptionGrid: true,
+  }),
+}));
+
+describe('useMapScreenState route focus', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockRouteParams = undefined;
+  });
+
+  it('focuses the map camera on the incident passed through route params', async () => {
+    mockRouteParams = {
+      focusIncident: {
+        incidentId: 'test-incident-id',
+        eventId: 'test-event-id',
+        title: 'Major Fire on Broadway',
+        coordinate: [-73.985565, 40.756795],
+        requestedAt: 1,
+      },
+    };
+
+    renderHook(() => useMapScreenState());
+
+    await waitFor(() => {
+      expect(mockFocusCoordinate).toHaveBeenCalledWith([-73.985565, 40.756795]);
+    });
+  });
+});

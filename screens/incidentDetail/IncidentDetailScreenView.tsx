@@ -51,6 +51,7 @@ type IncidentDetailScreenViewProps = {
   currentUser: { pubkey: string } | null;
   comments: IncidentDetailCommentsController;
   onBack: () => void;
+  onViewOnMap: () => void;
   onShare: () => Promise<void>;
 };
 
@@ -61,6 +62,7 @@ export function IncidentDetailScreenView({
   currentUser,
   comments,
   onBack,
+  onViewOnMap,
   onShare,
 }: IncidentDetailScreenViewProps) {
   const { height: screenHeight } = useWindowDimensions();
@@ -108,6 +110,7 @@ export function IncidentDetailScreenView({
             typeConfig={typeConfig}
             typeIconSource={typeIconSource}
             severityColor={severityColor}
+            onViewOnMap={onViewOnMap}
             onShare={() => void onShare()}
           />
 

@@ -141,6 +141,25 @@ export default function IncidentDetailScreen() {
     }
   }, [incident]);
 
+  const handleViewOnMap = useCallback(() => {
+    if (!incident) {
+      return;
+    }
+
+    navigation.navigate('Main', {
+      screen: 'Map',
+      params: {
+        focusIncident: {
+          incidentId: incident.incidentId,
+          eventId: incident.eventId,
+          title: incident.title,
+          coordinate: [incident.location.lng, incident.location.lat],
+          requestedAt: Date.now(),
+        },
+      },
+    });
+  }, [incident, navigation]);
+
   if (!incident) {
     return (
       <IncidentDetailLoadingState
@@ -160,6 +179,7 @@ export default function IncidentDetailScreen() {
       currentUser={currentUserIdentity}
       comments={comments}
       onBack={() => navigation.goBack()}
+      onViewOnMap={handleViewOnMap}
       onShare={handleShare}
     />
   );

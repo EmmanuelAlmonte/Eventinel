@@ -20,12 +20,12 @@ import ReportIncidentSubmittedScreen from './screens/ReportIncidentSubmittedScre
 import RelayConnectScreen from './screens/RelayConnectScreen';
 import WalletScreen from './screens/WalletScreen';
 import { navigationRef } from './lib/navigation';
-import type { AppNavigationParamList, RootStackParamList } from './lib/navigation';
+import type { MainTabParamList, RootStackParamList } from './lib/navigation';
 import IncidentNotificationBridge from './components/notifications/IncidentNotificationBridge';
 import { StatusBar } from 'expo-status-bar';
 import { useReportDraft } from '@contexts';
 
-const Tab = createBottomTabNavigator<AppNavigationParamList>();
+const Tab = createBottomTabNavigator<MainTabParamList>();
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
 function renderTabIcon(

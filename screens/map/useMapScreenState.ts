@@ -6,10 +6,10 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { LayoutChangeEvent } from 'react-native';
-import { useIsFocused, useNavigation } from '@react-navigation/native';
+import { useIsFocused, useNavigation, useRoute, type RouteProp } from '@react-navigation/native';
 import { useSafeAreaInsets, type EdgeInsets } from 'react-native-safe-area-context';
 
-import { type AppNavigation } from '@lib/navigation';
+import { type AppNavigation, type MainTabParamList, type MapIncidentFocus } from '@lib/navigation';
 import {
   useIncidentHistoryWindow,
   useRelayStatus,
@@ -122,8 +122,17 @@ function getClusterCenterFromFeature(
   return getPointCoordinates(geometry.coordinates);
 }
 
+function getValidFocusCoordinate(focusIncident?: MapIncidentFocus): [number, number] | null {
+  if (!focusIncident) {
+    return null;
+  }
+
+  return getPointCoordinates(focusIncident.coordinate);
+}
+
 export function useMapScreenState(): MapScreenState {
   const navigation = useNavigation<AppNavigation>();
+  const route = useRoute<RouteProp<MainTabParamList, 'Map'>>();
   const isFocused = useIsFocused();
   const insets = useSafeAreaInsets();
   const { colors } = useAppTheme();
@@ -204,6 +213,20 @@ export function useMapScreenState(): MapScreenState {
     setMapSubscriptionAnchor,
     setMapSubscriptionViewport,
   });
+  const focusIncident = route.params?.focusIncident;
+  const focusCoordinate = getValidFocusCoordinate(focusIncident);
+
+  useEffect(() => {
+    if (!focusIncident || !focusCoordinate) {
+      return;
+    }
+
+    camera.focusCoordinate(focusCoordinate);
+  }, [
+    camera.focusCoordinate,
+    focusCoordinate,
+    focusIncident,
+  ]);
 
   const visibleIncidents = incidents;
   const incidentFeatureCollection = useMemo(

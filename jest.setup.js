@@ -61,6 +61,9 @@ jest.mock('@rnmapbox/maps', () => ({
     MapView: 'MapView',
     Camera: 'Camera',
     Images: 'Images',
+    FillExtrusionLayer: 'FillExtrusionLayer',
+    FillLayer: 'FillLayer',
+    LineLayer: 'LineLayer',
   },
   MapView: 'MapView',
   Camera: 'Camera',
@@ -70,6 +73,9 @@ jest.mock('@rnmapbox/maps', () => ({
   ShapeSource: 'ShapeSource',
   SymbolLayer: 'SymbolLayer',
   CircleLayer: 'CircleLayer',
+  FillExtrusionLayer: 'FillExtrusionLayer',
+  FillLayer: 'FillLayer',
+  LineLayer: 'LineLayer',
   setAccessToken: jest.fn(),
 }));
 

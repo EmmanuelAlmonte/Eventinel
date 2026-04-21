@@ -6,6 +6,7 @@ import IncidentDetailScreen from '../../screens/IncidentDetailScreen';
 import type { ParsedIncident } from '../../lib/nostr/events/types';
 import type { UseIncidentCommentsResult } from '../../hooks/useIncidentComments';
 
+const mockNavigate = jest.fn();
 const mockGoBack = jest.fn();
 const mockRouteParams = { incidentId: 'test-incident-id' };
 
@@ -14,7 +15,7 @@ jest.mock('@react-navigation/native', () => {
   return {
     ...actual,
     useNavigation: () => ({
-      navigate: jest.fn(),
+      navigate: mockNavigate,
       goBack: mockGoBack,
     }),
     useRoute: () => ({
@@ -113,8 +114,8 @@ jest.mock('@lib/nostr/config', () => ({
     5: '#ef4444',
   },
   TYPE_CONFIG: {
-    fire: { icon: 'local-fire-department', color: '#ef4444', gradient: ['#ef4444', '#dc2626'], glyph: '🔥' },
-    other: { icon: 'warning', color: '#6b7280', gradient: ['#6b7280', '#4b5563'], glyph: '⚠️' },
+    fire: { icon: 'local-fire-department', color: '#ef4444', gradient: ['#ef4444', '#dc2626'], glyph: '🔥', label: 'Fire' },
+    other: { icon: 'warning', color: '#6b7280', gradient: ['#6b7280', '#4b5563'], glyph: '⚠️', label: 'Other' },
   },
 }));
 
@@ -221,28 +222,29 @@ describe('IncidentDetailScreen', () => {
   });
 
   afterEach(() => {
-    jest.runOnlyPendingTimers();
-    jest.clearAllTimers();
+    act(() => {
+      jest.runOnlyPendingTimers();
+      jest.clearAllTimers();
+    });
   });
 
   it('renders core incident details from cache', () => {
     const { getByText } = render(<IncidentDetailScreen />);
     expect(getByText('Major Fire on Broadway')).toBeTruthy();
     expect(getByText(/A large fire has broken out/)).toBeTruthy();
-    expect(getByText('FIRE')).toBeTruthy();
-    expect(getByText('Severity 4')).toBeTruthy();
+    expect(getByText('Fire')).toBeTruthy();
+    expect(getByText('Verified')).toBeTruthy();
     expect(getByText('1500 Broadway')).toBeTruthy();
-    expect(getByText('New York, NY')).toBeTruthy();
-    expect(getByText('LIVE')).toBeTruthy();
+    expect(getByText('30 minutes ago · New York, NY · Community')).toBeTruthy();
   });
 
   it('shares the incident from the action bar', async () => {
     const shareSpy = jest.spyOn(Share, 'share').mockResolvedValue({ action: 'sharedAction' });
     mockCurrentUser = null;
-    const { getByTestId } = render(<IncidentDetailScreen />);
+    const { getByText } = render(<IncidentDetailScreen />);
 
     await act(async () => {
-      fireEvent.press(getByTestId('button-share'));
+      fireEvent.press(getByText('Share'));
     });
 
     expect(shareSpy).toHaveBeenCalledWith({
@@ -250,6 +252,25 @@ describe('IncidentDetailScreen', () => {
       title: 'Major Fire on Broadway',
     });
     shareSpy.mockRestore();
+  });
+
+  it('opens the in-app map focused on the incident', () => {
+    const { getByText } = render(<IncidentDetailScreen />);
+
+    fireEvent.press(getByText('View on map'));
+
+    expect(mockNavigate).toHaveBeenCalledWith('Main', {
+      screen: 'Map',
+      params: {
+        focusIncident: {
+          incidentId: 'test-incident-id',
+          eventId: 'test-event-id',
+          title: 'Major Fire on Broadway',
+          coordinate: [-73.985565, 40.756795],
+          requestedAt: expect.any(Number),
+        },
+      },
+    });
   });
 
   it('shows not found after cache miss timeout', () => {

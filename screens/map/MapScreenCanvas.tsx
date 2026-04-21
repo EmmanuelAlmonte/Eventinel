@@ -108,7 +108,7 @@ export function MapScreenCanvas({
   onFlyToUser,
 }: MapScreenLayoutProps) {
   const effectiveCameraCenter = camera.cameraCenter || userLocation || DEFAULT_CAMERA.centerCoordinate;
-  const cameraCenterCoordinate = camera.followUser ? effectiveCameraCenter : undefined;
+  const cameraCenterCoordinate = camera.followUser || camera.isAnimating ? effectiveCameraCenter : undefined;
 
   return (
     <View style={styles.container}>

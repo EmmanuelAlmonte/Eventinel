@@ -22,6 +22,7 @@ type IncidentDetailInfoCardsProps = {
   typeConfig: TypeConfig;
   typeIconSource: ImageSourcePropType;
   severityColor: string;
+  onViewOnMap: () => void;
   onShare: () => void;
 };
 
@@ -31,6 +32,7 @@ export function IncidentDetailInfoCards({
   typeConfig,
   typeIconSource,
   severityColor,
+  onViewOnMap,
   onShare,
 }: IncidentDetailInfoCardsProps) {
   const trustLabel = incident.isVerified ? 'Verified' : 'Community report';
@@ -96,7 +98,7 @@ export function IncidentDetailInfoCards({
 
       <View style={styles.actionRow}>
         <Pressable
-          onPress={() => {}}
+          onPress={onViewOnMap}
           accessibilityRole="button"
           accessibilityLabel="View on map"
           style={[styles.actionButton, styles.primaryActionButton, { backgroundColor: colors.text }]}
