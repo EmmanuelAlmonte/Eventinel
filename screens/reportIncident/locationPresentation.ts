@@ -13,6 +13,12 @@ export type LocationPresentation = {
 const LOCATION_META_LOADING = 'Finding nearby place details…';
 const locationResolutionCache = new Map<string, { placeLabel: string | null; contextLine: string | null }>();
 
+type LocationResolution = {
+  cacheKey: string;
+  placeLabel: string | null;
+  contextLine: string | null;
+};
+
 function buildCacheKey(location?: ReportLocation | null): string | null {
   if (!location) {
     return null;
@@ -131,31 +137,34 @@ export function useResolvedReportLocation(
   }
 ) {
   const debounceMs = options?.debounceMs ?? 0;
-  const [resolvedPlaceLabel, setResolvedPlaceLabel] = useState<string | null>(null);
-  const [resolvedContextLine, setResolvedContextLine] = useState<string | null>(null);
-  const [isResolvingPlace, setIsResolvingPlace] = useState(false);
+  const [resolution, setResolution] = useState<LocationResolution | null>(null);
+  const [resolvingCacheKey, setResolvingCacheKey] = useState<string | null>(null);
   const cacheKey = useMemo(() => buildCacheKey(location), [location]);
+  const currentResolution = resolution?.cacheKey === cacheKey ? resolution : null;
 
   useEffect(() => {
     let isMounted = true;
 
     async function resolvePlaceLabel() {
       if (!location || !cacheKey) {
-        setResolvedPlaceLabel(null);
-        setResolvedContextLine(null);
-        setIsResolvingPlace(false);
+        setResolution(null);
+        setResolvingCacheKey(null);
         return;
       }
 
       const cached = locationResolutionCache.get(cacheKey);
       if (cached) {
-        setResolvedPlaceLabel(cached.placeLabel);
-        setResolvedContextLine(cached.contextLine);
-        setIsResolvingPlace(false);
+        setResolution({
+          cacheKey,
+          placeLabel: cached.placeLabel,
+          contextLine: cached.contextLine,
+        });
+        setResolvingCacheKey(null);
         return;
       }
 
-      setIsResolvingPlace(true);
+      setResolution((current) => (current?.cacheKey === cacheKey ? current : null));
+      setResolvingCacheKey(cacheKey);
 
       try {
         const [address] = await ExpoLocation.reverseGeocodeAsync({
@@ -174,19 +183,21 @@ export function useResolvedReportLocation(
           placeLabel: nextResolvedPlaceLabel,
           contextLine: nextResolvedContextLine,
         });
-        setResolvedPlaceLabel(nextResolvedPlaceLabel);
-        setResolvedContextLine(nextResolvedContextLine);
+        setResolution({
+          cacheKey,
+          placeLabel: nextResolvedPlaceLabel,
+          contextLine: nextResolvedContextLine,
+        });
       } catch (error) {
         if (!isMounted) {
           return;
         }
 
         console.warn('[ReportLocation] Failed to resolve place label:', error);
-        setResolvedPlaceLabel(null);
-        setResolvedContextLine(null);
+        setResolution((current) => (current?.cacheKey === cacheKey ? null : current));
       } finally {
         if (isMounted) {
-          setIsResolvingPlace(false);
+          setResolvingCacheKey((currentKey) => (currentKey === cacheKey ? null : currentKey));
         }
       }
     }
@@ -202,8 +213,8 @@ export function useResolvedReportLocation(
   }, [cacheKey, debounceMs, location]);
 
   return {
-    resolvedPlaceLabel,
-    resolvedContextLine,
-    isResolvingPlace,
+    resolvedPlaceLabel: currentResolution?.placeLabel ?? null,
+    resolvedContextLine: currentResolution?.contextLine ?? null,
+    isResolvingPlace: Boolean(cacheKey) && resolvingCacheKey === cacheKey,
   };
 }

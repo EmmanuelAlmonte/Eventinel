@@ -210,6 +210,10 @@ export const watchPositionAsync = jest.fn(
   }
 );
 
+export const reverseGeocodeAsync = jest.fn<Promise<any[]>, [{ latitude: number; longitude: number }]>(
+  async () => []
+);
+
 // =============================================================================
 // TYPE EXPORTS
 // =============================================================================
@@ -234,4 +238,5 @@ export default {
   getLastKnownPositionAsync,
   getCurrentPositionAsync,
   watchPositionAsync,
+  reverseGeocodeAsync,
 };

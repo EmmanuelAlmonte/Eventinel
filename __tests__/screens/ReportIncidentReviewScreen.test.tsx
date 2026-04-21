@@ -8,7 +8,7 @@ import { fireEvent, render, waitFor } from '@testing-library/react-native';
 import ReportIncidentReviewScreen from '../../screens/ReportIncidentReviewScreen';
 import { createIncidentEvent } from '../../lib/nostr/events/incident';
 
-const mockDraft = {
+const defaultMockDraft = {
   sourceTab: 'Map',
   location: {
     latitude: 40.03836,
@@ -18,6 +18,16 @@ const mockDraft = {
   description: 'LOCAL RELAY QA 1776709409 smoke from rowhome on alley side',
   locationNote: 'LOCAL RELAY QA 1776709409',
   stillActive: true,
+};
+let mockDraft = { ...defaultMockDraft };
+let mockResolvedReportLocation: {
+  resolvedPlaceLabel: string | null;
+  resolvedContextLine: string | null;
+  isResolvingPlace: boolean;
+} = {
+  resolvedPlaceLabel: '3100 block Princeton Avenue',
+  resolvedContextLine: 'Philadelphia, Pennsylvania',
+  isResolvingPlace: false,
 };
 const mockResetDraft = jest.fn();
 const mockSetAdjustEntryMode = jest.fn();
@@ -98,10 +108,7 @@ jest.mock('./../../screens/reportIncident/locationPresentation', () => ({
     subtitle: 'Philadelphia, Pennsylvania',
     tertiary: 'LOCAL RELAY QA 1776709409',
   }),
-  useResolvedReportLocation: () => ({
-    resolvedPlaceLabel: '3100 block Princeton Avenue',
-    resolvedContextLine: 'Philadelphia, Pennsylvania',
-  }),
+  useResolvedReportLocation: () => mockResolvedReportLocation,
 }));
 
 jest.mock('./../../screens/reportIncident/ReportLocationPreview', () => ({
@@ -164,6 +171,12 @@ function buildProps() {
 describe('ReportIncidentReviewScreen', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    mockDraft = { ...defaultMockDraft };
+    mockResolvedReportLocation = {
+      resolvedPlaceLabel: '3100 block Princeton Avenue',
+      resolvedContextLine: 'Philadelphia, Pennsylvania',
+      isResolvingPlace: false,
+    };
   });
 
   it('shows the no-relay footer state when nothing is connected', () => {
@@ -261,5 +274,60 @@ describe('ReportIncidentReviewScreen', () => {
         },
       ],
     });
+  });
+
+  it('does not submit a stale resolved place label when the current location has no valid resolution yet', async () => {
+    const publish = jest.fn().mockResolvedValue(undefined);
+    jest.mocked(createIncidentEvent).mockReturnValue({ publish } as any);
+    mockResolvedReportLocation = {
+      resolvedPlaceLabel: null,
+      resolvedContextLine: null,
+      isResolvingPlace: true,
+    };
+    mockDraft = {
+      ...defaultMockDraft,
+      location: {
+        latitude: 40.04111,
+        longitude: -75.06111,
+      },
+      locationNote: 'Fresh user-entered landmark',
+    };
+    mockUseRelayStatus.mockReturnValue({
+      relays: [
+        {
+          url: 'ws://10.0.2.2:8085',
+          status: 'connected',
+          rawStatus: 5,
+          isConnected: true,
+        },
+      ] as any[],
+      stats: {
+        total: 1,
+        connected: 1,
+        connecting: 0,
+        disconnected: 0,
+      },
+      hasConnectedRelay: true,
+      hasRelays: true,
+      isConnecting: false,
+    });
+
+    const screen = render(<ReportIncidentReviewScreen {...buildProps()} />);
+    fireEvent.press(screen.getByLabelText('Submit report'));
+
+    await waitFor(() => {
+      expect(publish).toHaveBeenCalledTimes(1);
+    });
+
+    expect(createIncidentEvent).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        location: {
+          lat: 40.04111,
+          lng: -75.06111,
+          address: 'Fresh user-entered landmark',
+        },
+      })
+    );
   });
 });
