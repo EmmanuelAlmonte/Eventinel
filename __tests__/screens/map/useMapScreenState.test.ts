@@ -4,11 +4,16 @@
 
 import { renderHook, waitFor } from '@testing-library/react-native';
 
+import { INCIDENT_LIMITS } from '../../../lib/map/constants';
 import { useMapScreenState } from '../../../screens/map/useMapScreenState';
 
 const mockNavigate = jest.fn();
 const mockFocusCoordinate = jest.fn();
 let mockRouteParams: Record<string, unknown> | undefined;
+let mockSharedIncidentsState: {
+  incidents: any[];
+  hasReceivedHistory: boolean;
+};
 
 jest.mock('@react-navigation/native', () => {
   const actual = jest.requireActual('@react-navigation/native');
@@ -50,8 +55,8 @@ jest.mock('@contexts', () => ({
     relays: [{ url: 'wss://relay.eventinel.com' }],
   }),
   useSharedIncidents: () => ({
-    incidents: [],
-    hasReceivedHistory: true,
+    incidents: mockSharedIncidentsState.incidents,
+    hasReceivedHistory: mockSharedIncidentsState.hasReceivedHistory,
     setMapFocused: jest.fn(),
     setMapSubscriptionAnchor: jest.fn(),
     setMapSubscriptionViewport: jest.fn(),
@@ -97,6 +102,10 @@ describe('useMapScreenState route focus', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockRouteParams = undefined;
+    mockSharedIncidentsState = {
+      incidents: [],
+      hasReceivedHistory: true,
+    };
   });
 
   it('focuses the map camera on the incident passed through route params', async () => {
@@ -115,5 +124,56 @@ describe('useMapScreenState route focus', () => {
     await waitFor(() => {
       expect(mockFocusCoordinate).toHaveBeenCalledWith([-73.985565, 40.756795]);
     });
+  });
+
+  it('caps map feature rendering while initial incident history is loading', () => {
+    mockSharedIncidentsState = {
+      hasReceivedHistory: false,
+      incidents: Array.from(
+        { length: INCIDENT_LIMITS.COLD_START_MAP_FEATURE_LIMIT + 25 },
+        (_, index) => ({
+          incidentId: `incident-${index}`,
+          location: {
+            lat: 40 + index * 0.001,
+            lng: -75 - index * 0.001,
+          },
+          severity: 3,
+          type: 'disturbance',
+        })
+      ),
+    };
+
+    const { result } = renderHook(() => useMapScreenState());
+
+    expect(result.current.visibleIncidents).toHaveLength(
+      INCIDENT_LIMITS.COLD_START_MAP_FEATURE_LIMIT + 25
+    );
+    expect(result.current.incidentFeatureCollection.features).toHaveLength(
+      INCIDENT_LIMITS.COLD_START_MAP_FEATURE_LIMIT
+    );
+  });
+
+  it('renders the full map feature set after initial incident history completes', () => {
+    mockSharedIncidentsState = {
+      hasReceivedHistory: true,
+      incidents: Array.from(
+        { length: INCIDENT_LIMITS.COLD_START_MAP_FEATURE_LIMIT + 25 },
+        (_, index) => ({
+          incidentId: `incident-${index}`,
+          location: {
+            lat: 40 + index * 0.001,
+            lng: -75 - index * 0.001,
+          },
+          severity: 3,
+          type: 'disturbance',
+        })
+      ),
+    };
+
+    const { result } = renderHook(() => useMapScreenState());
+
+    expect(result.current.incidentFeatureCollection.features).toHaveLength(
+      INCIDENT_LIMITS.COLD_START_MAP_FEATURE_LIMIT + 25
+    );
   });
 });

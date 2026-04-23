@@ -4,7 +4,7 @@
  * Composes shared-map state, handlers, and memoized incident data for the map screen.
  */
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react';
 import type { LayoutChangeEvent } from 'react-native';
 import { useIsFocused, useNavigation, useRoute, type RouteProp } from '@react-navigation/native';
 import { useSafeAreaInsets, type EdgeInsets } from 'react-native-safe-area-context';
@@ -17,6 +17,7 @@ import {
   useSharedLocation,
 } from '@contexts';
 import { useAppTheme, type ProcessedIncident } from '@hooks';
+import { INCIDENT_LIMITS } from '@lib/map/constants';
 import { incidentsToFeatureCollection } from '@lib/map/types';
 import {
   formatIncidentHistoryWindowLabel,
@@ -229,9 +230,13 @@ export function useMapScreenState(): MapScreenState {
   ]);
 
   const visibleIncidents = incidents;
+  const mapFeatureIncidents = hasReceivedHistory
+    ? visibleIncidents
+    : visibleIncidents.slice(0, INCIDENT_LIMITS.COLD_START_MAP_FEATURE_LIMIT);
+  const deferredMapFeatureIncidents = useDeferredValue(mapFeatureIncidents);
   const incidentFeatureCollection = useMemo(
-    () => incidentsToFeatureCollection(visibleIncidents),
-    [visibleIncidents]
+    () => incidentsToFeatureCollection(deferredMapFeatureIncidents),
+    [deferredMapFeatureIncidents]
   );
 
   const handleIncidentPress = useCallback(

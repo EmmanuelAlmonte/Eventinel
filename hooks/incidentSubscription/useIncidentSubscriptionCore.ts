@@ -23,7 +23,9 @@ import type {
 const DEBUG_CACHE =
   __DEV__ && process.env.EXPO_PUBLIC_DEBUG_INCIDENT_SUBSCRIPTION === '1';
 const DEBUG_HISTORY_WINDOW =
-  __DEV__ && (globalThis as Record<string, unknown>).describe == null;
+  __DEV__ &&
+  process.env.EXPO_PUBLIC_DEBUG_INCIDENT_HISTORY_WINDOW === '1' &&
+  (globalThis as Record<string, unknown>).describe == null;
 const HISTORY_REFRESH_WATCHDOG_MS = 6000;
 
 function logHistoryWindowDebugEvent(
@@ -98,6 +100,7 @@ export function useIncidentSubscription({
     lastFilterKeyRef,
     pendingEventsRef,
     flushTimerRef,
+    flushTimerDelayMsRef,
     subscriptionRegistry,
     lastRefreshMetaRef,
     refreshEpochRef,
@@ -247,6 +250,7 @@ export function useIncidentSubscription({
     relayConfirmedIncidentIdsBySubscriptionKeyRef,
     pendingEventsRef,
     flushTimerRef,
+    flushTimerDelayMsRef,
     lastUpdatedRef,
     lastTotalEventsRef,
     setState,
@@ -474,12 +478,9 @@ export function useIncidentSubscription({
       }
     }
 
-    if (
-      pendingEventsRef.current.length > 0 &&
-      (historyWindowChanged ||
-        reconcilePlan.toAdd.length > 0 ||
-        reconcilePlan.toRemove.length > 0)
-    ) {
+    // Initial CACHE_FIRST callbacks already schedule a flush. Only force buffered
+    // replay work when a history-window change cleared and rebuilt the queue.
+    if (pendingEventsRef.current.length > 0 && historyWindowChanged) {
       flushQueuedEvents();
     }
 

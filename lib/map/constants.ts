@@ -126,6 +126,12 @@ export const INCIDENT_LIMITS = {
   MAX_VISIBLE: 200,
 
   /**
+   * Marker feature cap while initial history is still loading.
+   * Keeps cold-start map rendering light enough for navigation taps to stay responsive.
+   */
+  COLD_START_MAP_FEATURE_LIMIT: 50,
+
+  /**
    * Maximum kind:30911 rows retained in the NDK SQLite cache.
    */
   MAX_NDK_INCIDENT_CACHE: 1000,

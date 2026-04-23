@@ -29,6 +29,7 @@ jest.mock('../../../hooks/incidentSubscription/useIncidentSubscriptionState', ()
         incidents: [],
         severityCounts: { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 },
         updatedIncidents: [],
+        removedIncidentIds: [],
         totalEventsReceived: 0,
         hasReceivedHistory: false,
       });
@@ -55,6 +56,7 @@ jest.mock('../../../hooks/incidentSubscription/useIncidentSubscriptionState', ()
         lastFilterKeyRef: React.useRef('disabled'),
         pendingEventsRef: React.useRef([]),
         flushTimerRef: React.useRef(null),
+        flushTimerDelayMsRef: React.useRef(null),
         subscriptionRegistry: registryRef.current,
         lastRefreshMetaRef: React.useRef({
           filterKey: 'disabled',

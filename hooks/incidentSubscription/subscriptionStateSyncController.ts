@@ -1,4 +1,4 @@
-import { useCallback } from 'react';
+import { startTransition, useCallback } from 'react';
 import type { Dispatch, MutableRefObject, SetStateAction } from 'react';
 import type { NDKEvent } from '@nostr-dev-kit/mobile';
 
@@ -8,6 +8,7 @@ import { buildIncidentDisplayState } from './sorting';
 import { applyIncidentEventBatch } from './eventReducer';
 import { markRelayConfirmedIncident, type RelayConfirmationMapRef } from './cacheConfirmation';
 import {
+  INITIAL_HISTORY_RELAY_BUFFER_MS,
   INCIDENT_KIND,
   SUBSCRIPTION_BUFFER_MS,
 } from './types';
@@ -22,7 +23,9 @@ import type {
 const DEBUG_CACHE =
   __DEV__ && process.env.EXPO_PUBLIC_DEBUG_INCIDENT_SUBSCRIPTION === '1';
 const DEBUG_HISTORY_WINDOW =
-  __DEV__ && (globalThis as Record<string, unknown>).describe == null;
+  __DEV__ &&
+  process.env.EXPO_PUBLIC_DEBUG_INCIDENT_HISTORY_WINDOW === '1' &&
+  (globalThis as Record<string, unknown>).describe == null;
 
 type IncidentIntakeMetrics = {
   droppedInvalidKind: number;
@@ -114,10 +117,10 @@ function recomputeVisibleSubscriptionState(
     sinceDays: number;
     stableLocation: [number, number] | null;
     effectiveMaxIncidents: number;
-  lastUpdatedRef: MutableRefObject<number | null>;
-  lastTotalEventsRef: MutableRefObject<number>;
-  hasReceivedHistory: () => boolean;
-  setState: Dispatch<SetStateAction<IncidentSubscriptionDisplayState>>;
+    lastUpdatedRef: MutableRefObject<number | null>;
+    lastTotalEventsRef: MutableRefObject<number>;
+    hasReceivedHistory: () => boolean;
+    setState: Dispatch<SetStateAction<IncidentSubscriptionDisplayState>>;
   },
   updatedIncidents: ProcessedIncident[] = [],
   removedIncidentIds: string[] = []
@@ -158,26 +161,51 @@ function recomputeVisibleSubscriptionState(
     })),
   });
 
-  setState((prev) => ({
-    incidents,
-    severityCounts,
-    updatedIncidents:
-      updatedIncidents.length === 0 && removedIncidentIds.length > 0
-        ? prev.updatedIncidents
-        : updatedIncidents,
-    removedIncidentIds,
-    totalEventsReceived: lastTotalEventsRef.current,
-    hasReceivedHistory: hasReceivedHistory(),
-  }));
+  startTransition(() => {
+    setState((prev) => ({
+      incidents,
+      severityCounts,
+      updatedIncidents:
+        updatedIncidents.length === 0 && removedIncidentIds.length > 0
+          ? prev.updatedIncidents
+          : updatedIncidents,
+      removedIncidentIds,
+      totalEventsReceived: lastTotalEventsRef.current,
+      hasReceivedHistory: hasReceivedHistory(),
+    }));
+  });
 }
 
 function clearSubscriptionFlushTimer(
-  flushTimerRef: MutableRefObject<ReturnType<typeof setTimeout> | null>
+  flushTimerRef: MutableRefObject<ReturnType<typeof setTimeout> | null>,
+  flushTimerDelayMsRef: MutableRefObject<number | null>
 ): void {
   if (flushTimerRef.current) {
     clearTimeout(flushTimerRef.current);
     flushTimerRef.current = null;
   }
+  flushTimerDelayMsRef.current = null;
+}
+
+function scheduleSubscriptionFlushTimer(
+  flushTimerRef: MutableRefObject<ReturnType<typeof setTimeout> | null>,
+  flushTimerDelayMsRef: MutableRefObject<number | null>,
+  flushQueuedEvents: () => void,
+  requestedDelayMs: number
+): void {
+  const currentDelayMs = flushTimerDelayMsRef.current;
+  if (flushTimerRef.current && currentDelayMs != null && currentDelayMs >= requestedDelayMs) {
+    return;
+  }
+
+  clearSubscriptionFlushTimer(flushTimerRef, flushTimerDelayMsRef);
+
+  flushTimerDelayMsRef.current = requestedDelayMs;
+  flushTimerRef.current = setTimeout(() => {
+    flushTimerRef.current = null;
+    flushTimerDelayMsRef.current = null;
+    flushQueuedEvents();
+  }, requestedDelayMs);
 }
 
 function flushQueuedIncidentEvents(
@@ -187,6 +215,7 @@ function flushQueuedIncidentEvents(
     incidentMapRef: MutableRefObject<Map<string, ProcessedIncident>>;
     pendingEventsRef: MutableRefObject<QueuedEvent[]>;
     flushTimerRef: MutableRefObject<ReturnType<typeof setTimeout> | null>;
+    flushTimerDelayMsRef: MutableRefObject<number | null>;
     lastTotalEventsRef: MutableRefObject<number>;
     lastUpdatedRef: MutableRefObject<number | null>;
     setState: Dispatch<SetStateAction<IncidentSubscriptionDisplayState>>;
@@ -194,7 +223,7 @@ function flushQueuedIncidentEvents(
   },
   updatedStateCallback: (updatedIncidents: ProcessedIncident[]) => void
 ): void {
-  clearSubscriptionFlushTimer(args.flushTimerRef);
+  clearSubscriptionFlushTimer(args.flushTimerRef, args.flushTimerDelayMsRef);
 
   const queued = args.pendingEventsRef.current;
   if (queued.length === 0) {
@@ -245,9 +274,11 @@ function enqueueIncidentEvents(
   source: IncomingEventSource,
   pendingEventsRef: MutableRefObject<QueuedEvent[]>,
   flushTimerRef: MutableRefObject<ReturnType<typeof setTimeout> | null>,
+  flushTimerDelayMsRef: MutableRefObject<number | null>,
   minCreatedAtUnixSeconds: number,
   flushQueuedEvents: () => void,
   relayConfirmedIncidentIdsBySubscriptionKeyRef: RelayConfirmationMapRef,
+  getBufferDelayMs: (source: IncomingEventSource) => number,
   subscriptionKey?: string
 ): void {
   if (!events || events.length === 0) {
@@ -334,9 +365,12 @@ function enqueueIncidentEvents(
     }
   }
 
-  if (!flushTimerRef.current) {
-    flushTimerRef.current = setTimeout(flushQueuedEvents, SUBSCRIPTION_BUFFER_MS);
-  }
+  scheduleSubscriptionFlushTimer(
+    flushTimerRef,
+    flushTimerDelayMsRef,
+    flushQueuedEvents,
+    getBufferDelayMs(source)
+  );
 }
 
 function getIncidentIdFromTags(tags: NDKEvent['tags']): string | null {
@@ -452,6 +486,7 @@ export function useIncidentSubscriptionStateSyncController({
   incidentMapRef,
   pendingEventsRef,
   flushTimerRef,
+  flushTimerDelayMsRef,
   lastUpdatedRef,
   lastTotalEventsRef,
   relayConfirmedIncidentIdsBySubscriptionKeyRef,
@@ -465,6 +500,7 @@ export function useIncidentSubscriptionStateSyncController({
   incidentMapRef: MutableRefObject<Map<string, ProcessedIncident>>;
   pendingEventsRef: MutableRefObject<QueuedEvent[]>;
   flushTimerRef: MutableRefObject<ReturnType<typeof setTimeout> | null>;
+  flushTimerDelayMsRef: MutableRefObject<number | null>;
   lastUpdatedRef: MutableRefObject<number | null>;
   lastTotalEventsRef: MutableRefObject<number>;
   relayConfirmedIncidentIdsBySubscriptionKeyRef: RelayConfirmationMapRef;
@@ -472,8 +508,8 @@ export function useIncidentSubscriptionStateSyncController({
   setState: Dispatch<SetStateAction<IncidentSubscriptionDisplayState>>;
 }) {
   const clearFlushTimer = useCallback(
-    () => clearSubscriptionFlushTimer(flushTimerRef),
-    [flushTimerRef]
+    () => clearSubscriptionFlushTimer(flushTimerRef, flushTimerDelayMsRef),
+    [flushTimerDelayMsRef, flushTimerRef]
   );
 
   const recomputeVisibleState = useCallback(
@@ -543,6 +579,7 @@ export function useIncidentSubscriptionStateSyncController({
         incidentMapRef,
         pendingEventsRef,
         flushTimerRef,
+        flushTimerDelayMsRef,
         lastTotalEventsRef,
         lastUpdatedRef,
         setState,
@@ -556,6 +593,7 @@ export function useIncidentSubscriptionStateSyncController({
     incidentMapRef,
     pendingEventsRef,
     flushTimerRef,
+    flushTimerDelayMsRef,
     lastTotalEventsRef,
     setState,
     hasReceivedHistory,
@@ -571,14 +609,21 @@ export function useIncidentSubscriptionStateSyncController({
         source,
         pendingEventsRef,
         flushTimerRef,
+        flushTimerDelayMsRef,
         calculateIncidentSinceUnixSeconds(sinceDays),
         flushQueuedEvents,
         relayConfirmedIncidentIdsBySubscriptionKeyRef,
+        (eventSource) =>
+          !hasReceivedHistory() && eventSource === 'relay'
+            ? INITIAL_HISTORY_RELAY_BUFFER_MS
+            : SUBSCRIPTION_BUFFER_MS,
         subscriptionKey
       ),
     [
       flushQueuedEvents,
       flushTimerRef,
+      flushTimerDelayMsRef,
+      hasReceivedHistory,
       pendingEventsRef,
       relayConfirmedIncidentIdsBySubscriptionKeyRef,
       sinceDays,

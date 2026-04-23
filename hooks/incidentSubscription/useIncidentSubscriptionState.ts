@@ -20,6 +20,7 @@ export interface IncidentSubscriptionCoreState {
   lastFilterKeyRef: MutableRefObject<string>;
   pendingEventsRef: MutableRefObject<QueuedEvent[]>;
   flushTimerRef: MutableRefObject<ReturnType<typeof setTimeout> | null>;
+  flushTimerDelayMsRef: MutableRefObject<number | null>;
   subscriptionRegistry: ReturnType<typeof createSubscriptionRegistry>;
   lastRefreshMetaRef: MutableRefObject<{
     filterKey: string;
@@ -42,6 +43,7 @@ export function useIncidentSubscriptionState(): IncidentSubscriptionCoreState {
   const lastFilterKeyRef = useRef<string>('disabled');
   const pendingEventsRef = useRef<QueuedEvent[]>([]);
   const flushTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const flushTimerDelayMsRef = useRef<number | null>(null);
   const subscriptionRegistry = useRef(createSubscriptionRegistry()).current;
   const lastRefreshMetaRef = useRef({
     filterKey: 'disabled',
@@ -72,6 +74,7 @@ export function useIncidentSubscriptionState(): IncidentSubscriptionCoreState {
     lastFilterKeyRef,
     pendingEventsRef,
     flushTimerRef,
+    flushTimerDelayMsRef,
     subscriptionRegistry,
     lastRefreshMetaRef,
     refreshEpochRef,

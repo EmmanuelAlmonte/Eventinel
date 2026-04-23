@@ -19,6 +19,10 @@ import {
   mockNDKHooks,
 } from '../../__mocks__/@nostr-dev-kit/mobile';
 import { INCIDENT_LIMITS } from '../../lib/map/constants';
+import {
+  INITIAL_HISTORY_RELAY_BUFFER_MS,
+  SUBSCRIPTION_BUFFER_MS,
+} from '../../hooks/incidentSubscription/types';
 
 // Mock ngeohash
 jest.mock('ngeohash', () => ({
@@ -1971,6 +1975,154 @@ describe('useIncidentSubscription', () => {
 
       // Should not throw
       expect(mockNDKHooks.getNDK().subscribe).toHaveBeenCalled();
+    });
+
+    it('buffers relay-driven cold-start events before publishing them to consumers', async () => {
+      jest.useFakeTimers();
+
+      try {
+        mockSubscription.setEvents([]);
+        mockSubscription.setEose(false);
+
+        const relayEvent = createMockIncidentEvent({
+          incidentId: 'cold-start-relay',
+          title: 'Cold Start Relay Event',
+        });
+
+        const { result } = renderHook(() =>
+          useIncidentSubscription({
+            location: [-75.1652, 39.9526],
+          })
+        );
+
+        await act(async () => {
+          await Promise.resolve();
+        });
+        expect(getSubscribeCalls().length).toBeGreaterThan(0);
+
+        act(() => {
+          mockSubscription.addEvent(relayEvent);
+        });
+
+        expect(result.current.incidents).toEqual([]);
+
+        await act(async () => {
+          jest.advanceTimersByTime(INITIAL_HISTORY_RELAY_BUFFER_MS - 1);
+          await Promise.resolve();
+        });
+
+        expect(result.current.incidents).toEqual([]);
+
+        await act(async () => {
+          jest.advanceTimersByTime(1);
+          await Promise.resolve();
+        });
+
+        expect(result.current.incidents.map((incident) => incident.incidentId)).toEqual([
+          'cold-start-relay',
+        ]);
+      } finally {
+        jest.useRealTimers();
+      }
+    });
+
+    it('upgrades a cache-first cold-start flush when relay events arrive before the cache timer fires', async () => {
+      jest.useFakeTimers();
+
+      try {
+        const cacheEvent = createMockIncidentEvent({
+          incidentId: 'cold-start-cache-first',
+          title: 'Cold Start Cache Event',
+        });
+        const relayEvent = createMockIncidentEvent({
+          incidentId: 'cold-start-relay-before-cache-flush',
+          title: 'Cold Start Relay Event',
+        });
+
+        mockSubscription.setEvents([cacheEvent]);
+        mockSubscription.setEose(false);
+
+        const { result } = renderHook(() =>
+          useIncidentSubscription({
+            location: [-75.1652, 39.9526],
+          })
+        );
+
+        await act(async () => {
+          await Promise.resolve();
+        });
+        expect(getSubscribeCalls().length).toBeGreaterThan(0);
+
+        act(() => {
+          mockSubscription.addEvent(relayEvent);
+        });
+
+        await act(async () => {
+          jest.advanceTimersByTime(SUBSCRIPTION_BUFFER_MS);
+          await Promise.resolve();
+        });
+
+        expect(result.current.incidents).toEqual([]);
+
+        await act(async () => {
+          jest.advanceTimersByTime(
+            INITIAL_HISTORY_RELAY_BUFFER_MS - SUBSCRIPTION_BUFFER_MS - 1
+          );
+          await Promise.resolve();
+        });
+
+        expect(result.current.incidents).toEqual([]);
+
+        await act(async () => {
+          jest.advanceTimersByTime(1);
+          await Promise.resolve();
+        });
+
+        expect(result.current.incidents.map((incident) => incident.incidentId).sort()).toEqual([
+          'cold-start-cache-first',
+          'cold-start-relay-before-cache-flush',
+        ]);
+      } finally {
+        jest.useRealTimers();
+      }
+    });
+
+    it('flushes buffered relay cold-start events immediately when EOSE arrives', async () => {
+      jest.useFakeTimers();
+
+      try {
+        mockSubscription.setEvents([]);
+        mockSubscription.setEose(false);
+
+        const relayEvent = createMockIncidentEvent({
+          incidentId: 'cold-start-eose',
+          title: 'Cold Start EOSE Event',
+        });
+
+        const { result } = renderHook(() =>
+          useIncidentSubscription({
+            location: [-75.1652, 39.9526],
+          })
+        );
+
+        act(() => {
+          mockSubscription.addEvent(relayEvent);
+        });
+
+        expect(result.current.incidents).toEqual([]);
+
+        await act(async () => {
+          mockSubscription.setEose(true);
+          await Promise.resolve();
+        });
+
+        expect(result.current.incidents.map((incident) => incident.incidentId)).toEqual([
+          'cold-start-eose',
+        ]);
+        expect(result.current.hasReceivedHistory).toBe(true);
+      } finally {
+        jest.useRealTimers();
+      }
     });
   });
 });

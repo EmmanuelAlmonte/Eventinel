@@ -39,6 +39,7 @@ export interface SubscriptionControllerArgs {
   relayConfirmedIncidentIdsBySubscriptionKeyRef: RelayConfirmationMapRef;
   pendingEventsRef: MutableRefObject<QueuedEvent[]>;
   flushTimerRef: MutableRefObject<ReturnType<typeof setTimeout> | null>;
+  flushTimerDelayMsRef: MutableRefObject<number | null>;
   lastUpdatedRef: MutableRefObject<number | null>;
   lastTotalEventsRef: MutableRefObject<number>;
   setState: Dispatch<SetStateAction<IncidentSubscriptionDisplayState>>;
@@ -108,6 +109,7 @@ export function useIncidentSubscriptionController({
   relayConfirmedIncidentIdsBySubscriptionKeyRef,
   pendingEventsRef,
   flushTimerRef,
+  flushTimerDelayMsRef,
   lastUpdatedRef,
   lastTotalEventsRef,
   setState,
@@ -138,6 +140,7 @@ export function useIncidentSubscriptionController({
       incidentMapRef,
       pendingEventsRef,
       flushTimerRef,
+      flushTimerDelayMsRef,
       lastUpdatedRef,
       lastTotalEventsRef,
       relayConfirmedIncidentIdsBySubscriptionKeyRef,

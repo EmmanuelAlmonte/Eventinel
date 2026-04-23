@@ -56,6 +56,7 @@ function createHookArgs() {
   const incidentMapRef = createMutableRef<Map<string, ProcessedIncident>>(new Map());
   const pendingEventsRef = createMutableRef<QueuedEvent[]>([]);
   const flushTimerRef = createMutableRef<ReturnType<typeof setTimeout> | null>(null);
+  const flushTimerDelayMsRef = createMutableRef<number | null>(null);
   const lastUpdatedRef = createMutableRef<number | null>(null);
   const lastTotalEventsRef = createMutableRef(0);
   const relayConfirmedIncidentIdsBySubscriptionKeyRef = createMutableRef<
@@ -67,6 +68,7 @@ function createHookArgs() {
     incidentMapRef,
     pendingEventsRef,
     flushTimerRef,
+    flushTimerDelayMsRef,
     lastUpdatedRef,
     lastTotalEventsRef,
     setState,
@@ -78,6 +80,7 @@ function createHookArgs() {
       incidentMapRef,
       pendingEventsRef,
       flushTimerRef,
+      flushTimerDelayMsRef,
       lastUpdatedRef,
       lastTotalEventsRef,
       relayConfirmedIncidentIdsBySubscriptionKeyRef,
