@@ -1,119 +1,99 @@
-# Repository Guidelines
+# Eventinel App Repo Guidelines
 
-## Agent Task Protocol (MCP-First)
-This repository follows a strict, repeatable task execution flow for agents.
+This is the nested React Native/Expo app repo inside the outer Eventinel workspace. The outer workspace `AGENTS.md` is the primary behavior layer for task selection, MCP execution tracking, git safety, Android lifecycle evidence, secrets, and handoffs.
 
-### Execution Mode
-- Default mode is sequential: one MCP task at a time.
-- Parallel mode is allowed only for independent tasks with no conflict of interest.
-- Do not start another task in parallel unless all of the following are true:
-  - Dependency-safe: neither task depends on the other (directly or transitively).
-  - Scope-safe: planned file/module touch sets do not overlap.
-  - Validation-safe: each task still has clear, attributable validation evidence.
-  - Ownership-safe: each task has separate MCP status tracking and completion notes.
-- If overlap/conflict is discovered mid-task, pause one lane immediately and continue with a single active lane until resolved.
-- Use MCP as the source of truth for task status, dependencies, and completion notes.
-- Respect dependency order from MCP tasks before starting implementation.
+## Task And Execution State
 
-### Required MCP Workflow
-1. Select next task
-   - Check active goal (`planning.current`).
-   - List pending tasks (`todo.list`).
-   - Read task details/dependencies (`todo.get`).
-   - If proposing parallel work, perform and record a dependency/scope conflict check first.
-2. Start task
-   - Set MCP status to `in_progress` (`todo.status`).
-   - Confirm acceptance criteria and validation commands from the task description.
-   - For parallel lanes, set each independent task to `in_progress` separately and track notes per task.
-3. Implement
-   - Make focused, scoped changes for the selected task only.
-   - Avoid unrelated file changes unless required for correctness.
-   - Do not touch shared files across active parallel lanes.
-4. Validate
-   - Run required task-specific checks.
-   - Minimum default: `npx tsc --noEmit`.
-   - Keep validation output attributable to each task.
-5. Complete task
-   - If blocked: set MCP status to `blocked` with concrete reason and evidence.
-   - If complete: set MCP status to `completed` with short completion notes.
+- Use Software Planning MCP execution trackers as canonical live task state.
+- Follow the outer workspace MCP flow before starting, validating, committing, or handing off work.
+- Use local tracking files only when Software Planning MCP execution tools are unavailable, and record the MCP-unavailable note required by the outer workspace guide.
+- Keep changes scoped to the selected todo. Do not bundle unrelated app work into docs/tooling commits or vice versa.
+- Minimum validation for app code changes is `npx tsc --noEmit`, plus task-relevant Jest or Android evidence when behavior requires it.
 
-### Mobile Verification Standard (No Web/Playwright Assumption)
-- Do not require Playwright/web-localhost checks for this repo.
-- Use React Native/Expo-appropriate validation:
-  - `npx tsc --noEmit` (default type check)
-  - Task-relevant Jest suites (`npm test -- <path>` or scoped scripts)
-  - Manual verification notes for UI/lifecycle-sensitive flows (map, auth, notifications, navigation) when touched.
-- For the Eventinel Android dev-launch flow, use this verified recovery sequence when Expo opens an overlay before the app UI:
-  - Start the Android app/session using the currently approved launch workflow.
-  - Wait for the Expo developer popup/menu to appear on the device.
-  - Tap `Continue`.
-  - Find the current tap target for the top-right close `X` from the live UI hierarchy and tap it.
-  - Confirm the real Eventinel app opens cleanly with no error and that the screen is no longer inside the Expo dev application.
-  - Use the current launch/session metadata source when needed, use direct `adb` for device-side log evidence, and end the session explicitly when the run should be closed.
+## Architecture Standard
 
-### Commit Convention for MCP Tasks
-- Follow Conventional Commits (`feat:`, `fix:`, `refactor:`, `chore:`, `test:`).
-- When a task ID exists, prefer:
-  - `<type>(task:<first-8-task-id>): <summary>`
-- Keep commits scoped to one task only (never mix multiple task IDs in one commit).
+The app standard is feature-sliced UI, pure domain core, isolated native/Nostr adapters. See `../docs/agent-friendly-codebase-plan.md` for the current detailed architecture, LOC, testing, documentation, and refactor rules.
 
-### Definition of Done (Per Task)
-- Scoped implementation is complete.
-- Required validation commands pass.
-- Any required manual mobile checks are recorded in task notes.
-- MCP task status is updated accurately (`completed` or `blocked`).
-- No unrelated work is bundled into the task.
+Dependency direction:
 
-## Project Structure & Module Organization
-- `App.tsx` boots the app, handles NDK init, and wires navigation; `index.ts` is the Expo entrypoint.
-- UI lives in `screens/` (Home, Map, IncidentFeed, IncidentDetail, Profile, RelayConnect, Login, Menu) with shared primitives in `components/ui` (ScreenContainer, ErrorBoundary, Toast) plus `components/map`, `components/incident`, and `components/notifications` widgets.
-- Domain/data: `lib/ndk.ts` defines the NDK singleton + SQLite cache; `lib/nostr/` holds Nostr config/events; `lib/relay/` tracks relay persistence/status; `lib/map/` stores map constants/types; `lib/notifications/` handles notification helpers; `lib/utils/` holds shared helpers (time formatting, etc.); `lib/theme` and `lib/brand` provide tokens; `hooks/` host subscriptions/theme/location hooks; `contexts/` expose incident cache and location providers.
-- Assets live in `assets/`; Expo config in `app.config.js`; scripts/templates in `scripts/` and `templates/DeveloperProtocol.md`.
-- Tests live in `__tests__` with supporting mocks in `__mocks__`; build outputs in `dist/` (exclude from commits).
+```text
+UI screens/components -> hooks/application services -> domain + adapters
+```
 
-## Build, Test, and Development Commands
-- `npm install` – install dependencies.
-- `npx tsc --noEmit` – TypeScript type-check.
-- `npm test`, `npm run test:watch`, `npm run test:coverage`, `npm run test:auth` – Jest (jest-expo) suites; `test:auth` scopes to auth flows.
+- Screens and feature folders own UI flow only: compose state, render, handle user intent, and call hooks/application services.
+- Product rules belong in `domain/`: incident taxonomy, severity, freshness, replacement policy, report eligibility, trust rules, notification eligibility, and performance budgets.
+- External mechanics belong in `adapters/`: NDK, relay subscriptions, Mapbox, Expo notifications, SecureStore, SQLite/cache, native permissions, and wire formats.
+- Hooks orchestrate effects. They should not become product-rule warehouses.
+- Screens should not publish Nostr events, define severity policy, own map/relay lifecycles, or directly encode durable product decisions.
+
+## Project Structure
+
+- `App.tsx` boots the app and wires providers/navigation; `index.ts` is the Expo entrypoint.
+- UI lives in `screens/`, screen feature subfolders, and shared component folders under `components/`.
+- Current domain and adapter logic still lives mostly under `lib/`, `hooks/`, and `contexts/`; move it incrementally toward `domain/`, `adapters/`, `features/`, `state/`, `ui/`, and `testing/` as described in the plan doc.
+- Tests live in `__tests__` with supporting mocks in `__mocks__`.
+- Build outputs and generated artifacts such as `dist/`, `android/`, `ios/`, coverage, screenshots, and runtime evidence should not be committed unless a task explicitly requires a reviewed artifact.
+
+## Coding Style
+
+- TypeScript with strict mode; prefer functional components and hooks.
+- Use 2-space indentation consistent with existing files.
+- Respect path aliases defined in `tsconfig.json` and `babel.config.js`.
+- NDK rules: import only from `@nostr-dev-kit/mobile`; keep `react-native-get-random-values` as the first import; use the module-level `ndk` from `lib/ndk.ts`; timestamps in seconds and hex pubkeys; `login(signer, true)`; avoid web-only patterns such as `NDKHeadless`, `NDKNip07Signer`, and `localStorage`.
+- UI rules: pull RNE components from `@rneui/themed`, theme via `useAppTheme`, and keep reusable UI in shared components when it is used by more than one feature.
+- Naming: components/screens in PascalCase `.tsx`; utilities/hooks in `camelCase.ts`; tests as `*.test.ts(x)` inside `__tests__`; mocks mirror module names in `__mocks__`.
+
+## File Size Guardrails
+
+Use `../docs/agent-friendly-codebase-plan.md` as the source of truth. Current practical guardrails:
+
+- Screens: target 200 LOC, hard cap 325 LOC.
+- Components/sections: target 120 LOC, hard cap 220 LOC.
+- Hooks: target 150 LOC, hard cap 250 LOC.
+- Context/providers: target 160 LOC, hard cap 275 LOC.
+- Domain/services/adapters: target 180 LOC, hard cap 325 LOC.
+- Tests: target 250 LOC, hard cap 400 LOC.
+- Docs: target 120 lines, hard cap 200 lines.
+- Functions: target 30 LOC, hard cap 60 LOC.
+
+Files over 400 LOC are review-trigger territory. Files over 500 LOC need a named split target. Files over 700 LOC are urgent split candidates. Do not add new behavior to oversized files unless the same change extracts code or records an explicit exception/split plan.
+
+## Testing Guidelines
+
+- Framework: Jest with `jest-expo` and `@testing-library/react-native`; setup/mocks live in `jest.setup.js` and `__mocks__/`.
+- Prefer behavior-first test files over giant implementation-file suites.
+- Use shared builders for incidents, Nostr events, relay state, map viewport, report drafts, auth/session, and location state once a setup pattern repeats.
+- Run `npm run test:auth` when touching auth code.
+- Run task-relevant focused suites for changed hooks, screens, adapters, and domain logic.
+- For cold-start, Mapbox, permissions, navigation, push notifications, or input responsiveness, TypeScript/Jest are not enough; capture Android runtime evidence using the outer workspace guide and tools.
+
+## Build, Test, And Development Commands
+
+- `npm install` - install dependencies.
+- `npx tsc --noEmit` - TypeScript type-check.
+- `npm test` - Jest suites.
+- `npm run test:watch` - Jest watch mode.
+- `npm run test:coverage` - Jest coverage.
+- `npm run test:auth` - auth-focused tests.
+
+For app launch, recovery, screenshots, UI hierarchy, logcat, Maestro, and Android lifecycle flows, follow the outer workspace `AGENTS.md` and `mobile-app-agent-usage-guides/` from the outer workspace. Prefer Eventinel MCP lifecycle tools before direct launch fallbacks.
 
 ## Patch-package Notes
+
 - Prefer generating patches via `npx patch-package <pkg>` rather than hand-editing.
-- If a patch fails to parse, check hunk headers (`@@ -a,b +c,d @@`) match the exact number of context/deletion/insertion lines.
+- If a patch fails to parse, check hunk headers match the exact number of context/deletion/insertion lines.
 - Quick sanity check:
   - `node -e "const fs=require('fs');const {parsePatchFile}=require('patch-package/dist/patch/parse');parsePatchFile(fs.readFileSync('patches/<file>.patch','utf8'));console.log('ok')"`
 
-## Coding Style & Naming Conventions
-- TypeScript with strict mode; prefer functional components + hooks. Use 2-space indentation consistent with existing files.
-- Respect path aliases (`@components`, `@hooks`, `@lib`, etc.) defined in `tsconfig.json`/`babel.config.js`.
-- NDK rules: import only from `@nostr-dev-kit/mobile`; keep `react-native-get-random-values` as the first import; use the module-level `ndk` from `lib/ndk.ts`; timestamps in seconds and hex pubkeys; `login(signer, true)`; avoid web-only patterns (`NDKHeadless`, `NDKNip07Signer`, `localStorage`).
-- UI: pull RNE components from `@rneui/themed`, theme via `useAppTheme`, wrap screens in `ScreenContainer` for layout/padding.
-- Naming: components/screens in PascalCase `.tsx`; utilities/hooks in `camelCase.ts`; tests as `*.test.ts(x)` inside `__tests__`; mocks mirror module names in `__mocks__`.
-- Programming Standard B (size guardrails):
-  - Target file size: 300 lines max per file (soft), 400 lines hard stop.
-  - Target function size: 40 lines max (soft), 80 lines hard stop.
-  - Cyclomatic complexity: aim ≤10, hard stop at 15.
-  - If a file or function exceeds hard stops, split extraction before adding new behavior in that area.
-- Complexity-first refactors are preferred when a file grows too broad; avoid “one-file mega” patterns.
+## Commits And PRs
 
-## Testing Guidelines
-- Framework: Jest with `jest-expo` + `@testing-library/react-native`; setup/mocks live in `jest.setup.js` and `__mocks__/`.
-- Coverage targets: global 50% minimum; `screens/LoginScreen.tsx` enforces 70% (branches/functions/lines/statements).
-- Prefer render + assert patterns from Testing Library; rely on existing mocks for RN/NDK heavy modules instead of ad-hoc stubs.
-- Run `npm run test:auth` when touching auth code, and `npm run test:coverage` before PRs that modify screens/lib/App.
-- Agent reporting rule: run `npx tsc --noEmit` as the default type check and report executed commands/results directly (for example, `npx tsc --noEmit: pass`), instead of generic "Verification" summaries.
+- Follow Conventional Commits: `feat:`, `fix:`, `chore:`, `refactor:`, `test:`.
+- When a task ID exists, prefer `<type>(task:<first-8-task-id>): <summary>`.
+- Keep commits scoped to one task only.
+- PRs should include summary, linked issue/task, commands/tests run, and screenshots or screen recordings for UI-visible changes.
 
-## Commit & Pull Request Guidelines
-- Follow Conventional Commit style seen in history (`feat:`, `fix:`, `chore:`, `refactor:`, `test:`). Example: `feat: add relay reconnect banner`.
-- PRs should include a brief summary, linked issue, commands/tests run, and screenshots or screen recordings for UI-visible changes. Call out adherence to NDK mobile rules and any env vars touched.
-- Keep changes focused; update docs or templates (e.g., `templates/DeveloperProtocol.md`) when altering workflows.
+## Security
 
-## Project Memory Policy
-- Keep project-specific durable knowledge in `.codex/MEMORY.md`.
-- Keep daily project notes in `.codex/memory/YYYY-MM-DD.md`.
-- Search `.codex/MEMORY.md` and `.codex/memory/*.md` before answering project-history questions.
-- If asked to "remember this", write to disk immediately.
-- Do not store secrets, tokens, API keys, or credentials in memory files.
-
-## Security & Configuration Tips
-- Copy `.env.example` to `.env.local` for local development and to `.env` for production builds; keep secrets out of VCS. `app.config.js` loads `.env.local` in dev and `.env` in production and requires `MAPBOX_ACCESS_TOKEN` for Mapbox.
-- Sensitive data persists via `expo-secure-store`; never use browser-only storage. Avoid committing build artifacts from `dist/`, `android/`, or `ios/`.
+- Keep secrets out of tracked files, logs, screenshots, memory files, commits, and pushed artifacts.
+- `app.config.js` loads `.env.local` in dev and `.env` in production and requires `MAPBOX_ACCESS_TOKEN` for Mapbox.
+- Sensitive data persists via `expo-secure-store`; never use browser-only storage.
