@@ -1,6 +1,8 @@
 const { getDefaultConfig } = require('expo/metro-config');
 const config = getDefaultConfig(__dirname);
 
+config.maxWorkers = Number(process.env.METRO_MAX_WORKERS ?? 4);
+
 // Often needed when deps ship .cjs files
 config.resolver.sourceExts.push('cjs');
 
