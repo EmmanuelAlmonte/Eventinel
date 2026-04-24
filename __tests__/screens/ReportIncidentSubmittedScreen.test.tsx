@@ -6,6 +6,7 @@ import React from 'react';
 import { fireEvent, render } from '@testing-library/react-native';
 
 import ReportIncidentSubmittedScreen from '../../screens/ReportIncidentSubmittedScreen';
+import { buildReportSubmittedScreenProps } from '../fixtures/report/buildReportScreenProps';
 
 const mockPopToTop = jest.fn();
 
@@ -51,33 +52,19 @@ jest.mock('@expo/vector-icons', () => ({
   },
 }));
 
-function buildProps(routeParamOverrides: Record<string, unknown> = {}) {
-  return {
-    navigation: {
-      popToTop: mockPopToTop,
-    },
-    route: {
-      key: 'ReportIncidentSubmitted-key',
-      name: 'ReportIncidentSubmitted',
-      params: {
-        incidentType: 'fire',
-        locationLabel: '123 Main St, New York, NY',
-        relayCount: 2,
-        stillActive: true,
-        sourceTab: 'Map',
-        ...routeParamOverrides,
-      },
-    },
-  } as any;
-}
-
 describe('ReportIncidentSubmittedScreen', () => {
   beforeEach(() => {
     jest.clearAllMocks();
   });
 
   it('uses send-oriented relay copy instead of claiming publish confirmation', () => {
-    const screen = render(<ReportIncidentSubmittedScreen {...buildProps()} />);
+    const screen = render(
+      <ReportIncidentSubmittedScreen
+        {...buildReportSubmittedScreenProps({
+          navigation: { popToTop: mockPopToTop },
+        })}
+      />
+    );
 
     expect(screen.getByText('Report sent')).toBeTruthy();
     expect(screen.getByText(/Sent using 2 currently connected relays\./)).toBeTruthy();
@@ -87,12 +74,15 @@ describe('ReportIncidentSubmittedScreen', () => {
   it('returns to the incidents tab label when launched from incidents', () => {
     const screen = render(
       <ReportIncidentSubmittedScreen
-        {...buildProps({
-          sourceTab: 'Incidents',
-          relayCount: 1,
-          stillActive: false,
+        {...buildReportSubmittedScreenProps({
+          navigation: { popToTop: mockPopToTop },
+          params: {
+            sourceTab: 'Incidents',
+            relayCount: 1,
+            stillActive: false,
+          },
         })}
-      />,
+      />
     );
 
     fireEvent.press(screen.getByLabelText('Back to incidents'));

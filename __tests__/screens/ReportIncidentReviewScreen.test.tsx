@@ -9,6 +9,7 @@ import ReportIncidentReviewScreen from '../../screens/ReportIncidentReviewScreen
 import { createIncidentEvent } from '../../lib/nostr/events/incident';
 import { buildReportDraft } from '../fixtures/report/buildReportDraft';
 import { buildReportLocation, buildResolvedReportLocation } from '../fixtures/report/buildReportLocation';
+import { buildReportReviewScreenProps } from '../fixtures/report/buildReportScreenProps';
 import { buildRelayInfo, buildRelayStatus } from '../fixtures/report/buildRelayStatus';
 
 const defaultMockDraft = buildReportDraft();
@@ -123,25 +124,6 @@ jest.mock('@expo/vector-icons', () => ({
   },
 }));
 
-function buildProps() {
-  return {
-    navigation: {
-      replace: jest.fn(),
-      reset: jest.fn(),
-      navigate: jest.fn(),
-      goBack: jest.fn(),
-      popToTop: jest.fn(),
-    },
-    route: {
-      key: 'ReportIncidentReview-key',
-      name: 'ReportIncidentReview',
-      params: {
-        sessionKey: 'session-1',
-      },
-    },
-  } as any;
-}
-
 describe('ReportIncidentReviewScreen', () => {
   beforeEach(() => {
     jest.clearAllMocks();
@@ -164,7 +146,7 @@ describe('ReportIncidentReviewScreen', () => {
       })
     );
 
-    const screen = render(<ReportIncidentReviewScreen {...buildProps()} />);
+    const screen = render(<ReportIncidentReviewScreen {...buildReportReviewScreenProps()} />);
 
     expect(screen.getByText('Connect a relay to submit. Back to map is available after send.')).toBeTruthy();
   });
@@ -176,7 +158,7 @@ describe('ReportIncidentReviewScreen', () => {
       })
     );
 
-    const screen = render(<ReportIncidentReviewScreen {...buildProps()} />);
+    const screen = render(<ReportIncidentReviewScreen {...buildReportReviewScreenProps()} />);
 
     expect(screen.getByText('Ready to publish to 1 connected relay.')).toBeTruthy();
     expect(screen.getByLabelText('Submit report').props.accessibilityState?.disabled).not.toBe(true);
@@ -190,7 +172,7 @@ describe('ReportIncidentReviewScreen', () => {
         relays: [buildRelayInfo()],
       })
     );
-    const props = buildProps();
+    const props = buildReportReviewScreenProps();
 
     const screen = render(<ReportIncidentReviewScreen {...props} />);
     fireEvent.press(screen.getByLabelText('Submit report'));
@@ -240,7 +222,7 @@ describe('ReportIncidentReviewScreen', () => {
       })
     );
 
-    const screen = render(<ReportIncidentReviewScreen {...buildProps()} />);
+    const screen = render(<ReportIncidentReviewScreen {...buildReportReviewScreenProps()} />);
     fireEvent.press(screen.getByLabelText('Submit report'));
 
     await waitFor(() => {
