@@ -5,6 +5,7 @@
 import { act, renderHook } from '@testing-library/react-native';
 import { reverseGeocodeAsync } from '../../../__mocks__/expo-location';
 import { useResolvedReportLocation } from '../../../screens/reportIncident/locationPresentation';
+import { buildReportLocation, buildReverseGeocodeResult } from '../../fixtures/report/buildReportLocation';
 
 async function flushLocationResolutionTimer() {
   await act(async () => {
@@ -25,20 +26,15 @@ describe('useResolvedReportLocation', () => {
   });
 
   it('does not expose a resolved place from previous coordinates while a new cache miss is pending', async () => {
-    const previousLocation = { latitude: 40.03836, longitude: -75.05134 };
-    const nextLocation = { latitude: 40.04111, longitude: -75.06111 };
+    const previousLocation = buildReportLocation();
+    const nextLocation = buildReportLocation({
+      latitude: 40.04111,
+      longitude: -75.06111,
+    });
     let resolveNextLocation: (value: any[]) => void = () => undefined;
 
     jest.mocked(reverseGeocodeAsync)
-      .mockResolvedValueOnce([
-        {
-          streetNumber: '3127',
-          street: 'Princeton Avenue',
-          district: null,
-          city: 'Philadelphia',
-          region: 'PA',
-        },
-      ] as any)
+      .mockResolvedValueOnce([buildReverseGeocodeResult()] as any)
       .mockImplementationOnce(
         () =>
           new Promise<any[]>((resolve) => {
@@ -67,13 +63,10 @@ describe('useResolvedReportLocation', () => {
 
     await act(async () => {
       resolveNextLocation([
-        {
+        buildReverseGeocodeResult({
           streetNumber: '210',
           street: 'Market Street',
-          district: null,
-          city: 'Philadelphia',
-          region: 'PA',
-        },
+        }),
       ]);
     });
 

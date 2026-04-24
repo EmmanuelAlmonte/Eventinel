@@ -23,6 +23,7 @@ import {
 } from '../../contexts/IncidentCacheContext';
 import type { ProcessedIncident } from '../../hooks/useIncidentSubscription';
 import { INCIDENT_LIMITS } from '../../lib/map/constants';
+import { buildProcessedIncident } from '../fixtures/incident/buildIncident';
 
 // =============================================================================
 // TEST UTILITIES
@@ -37,14 +38,11 @@ function createMockIncident(
   overrides: Partial<ProcessedIncident> = {}
 ): ProcessedIncident {
   const occurredAt = new Date(createdAt * 1000);
-  return {
-    incidentId: id,
+  return buildProcessedIncident(id, {
     eventId: `event_${id}`,
     pubkey: 'test_pubkey_123',
     title: `Test Incident ${id}`,
     description: `Description for incident ${id}`,
-    type: 'fire',
-    severity: 3,
     createdAt,
     createdAtMs: createdAt * 1000,
     occurredAt,
@@ -57,11 +55,9 @@ function createMockIncident(
       state: 'NY',
       geohash: 'dr5r',
     },
-    source: 'community',
     sourceId: `source_${id}`,
-    isVerified: false,
     ...overrides,
-  };
+  });
 }
 
 /**

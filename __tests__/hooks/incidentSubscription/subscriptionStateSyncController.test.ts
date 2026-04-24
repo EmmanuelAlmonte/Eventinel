@@ -9,11 +9,11 @@
 
 import { renderHook, act } from '@testing-library/react-native';
 import type { Dispatch, MutableRefObject, SetStateAction } from 'react';
-import type { NDKEvent } from '@nostr-dev-kit/mobile';
 
 import { INCIDENT_LIMITS } from '../../../lib/map/constants';
 import { calculateIncidentSinceUnixSeconds } from '../../../lib/incidentHistoryWindow';
 import { createIncidentEvent } from '../../../lib/nostr/events/incident';
+import { buildIncidentNdkEvent } from '../../fixtures/incident/buildIncident';
 import {
   getIncidentIntakeMetrics,
   resetIncidentIntakeMetrics,
@@ -31,25 +31,6 @@ class MockNDK {
 
 function createMutableRef<T>(value: T): MutableRefObject<T> {
   return { current: value };
-}
-
-function createEvent(
-  incidentId: string,
-  createdAt: number,
-  overrides: Partial<{
-    eventId: string;
-    content: string;
-    tags: string[][];
-    kind: number;
-  }> = {}
-): NDKEvent {
-  return {
-    id: overrides.eventId ?? `event-${incidentId}-${createdAt}`,
-    kind: overrides.kind ?? 30911,
-    created_at: createdAt,
-    content: overrides.content ?? '{"title":"Test","description":"ok"}',
-    tags: overrides.tags ?? [['d', incidentId]],
-  } as unknown as NDKEvent;
 }
 
 function createHookArgs() {
@@ -114,7 +95,7 @@ describe('useIncidentSubscriptionStateSyncController', () => {
     act(() => {
       result.current.enqueueEvents(
         [
-          createEvent('oversize', Math.floor(nowMs / 1000), {
+          buildIncidentNdkEvent('oversize', Math.floor(nowMs / 1000), {
             content: 'x'.repeat(INCIDENT_LIMITS.MAX_EVENT_CONTENT_LENGTH + 1),
           }),
         ],
@@ -157,13 +138,11 @@ describe('useIncidentSubscriptionStateSyncController', () => {
     act(() => {
       result.current.enqueueEvents(
         [
-          {
-            id: 'event-self-long-alt',
-            kind: 30911,
-            created_at: Math.floor(nowMs / 1000),
+          buildIncidentNdkEvent('self-long-alt', Math.floor(nowMs / 1000), {
+            eventId: 'event-self-long-alt',
             content: generatedEvent.content,
             tags: generatedEvent.tags,
-          } as unknown as NDKEvent,
+          }),
         ],
         'relay'
       );
@@ -188,7 +167,7 @@ describe('useIncidentSubscriptionStateSyncController', () => {
     act(() => {
       result.current.enqueueEvents(
         [
-          createEvent('external-oversize-tag', Math.floor(nowMs / 1000), {
+          buildIncidentNdkEvent('external-oversize-tag', Math.floor(nowMs / 1000), {
             tags: [
               ['d', 'external-oversize-tag'],
               ['alt', 'x'.repeat(INCIDENT_LIMITS.MAX_EVENT_TAG_VALUE_LENGTH + 1)],
@@ -216,11 +195,11 @@ describe('useIncidentSubscriptionStateSyncController', () => {
 
     act(() => {
       result.current.enqueueEvents(
-        [createEvent('incident-a', Math.floor(nowMs / 1000) - 1, { eventId: 'event-a-v1' })],
+        [buildIncidentNdkEvent('incident-a', Math.floor(nowMs / 1000) - 1, { eventId: 'event-a-v1' })],
         'relay'
       );
       result.current.enqueueEvents(
-        [createEvent('incident-a', Math.floor(nowMs / 1000), { eventId: 'event-a-v2' })],
+        [buildIncidentNdkEvent('incident-a', Math.floor(nowMs / 1000), { eventId: 'event-a-v2' })],
         'relay'
       );
     });
@@ -244,7 +223,7 @@ describe('useIncidentSubscriptionStateSyncController', () => {
     const events = Array.from(
       { length: INCIDENT_LIMITS.MAX_PENDING_QUEUE + 5 },
       (_, index) =>
-        createEvent(`incident-${index}`, calculateIncidentSinceUnixSeconds(30, nowMs) + index + 1, {
+        buildIncidentNdkEvent(`incident-${index}`, calculateIncidentSinceUnixSeconds(30, nowMs) + index + 1, {
           eventId: `event-${index}`,
         })
     );

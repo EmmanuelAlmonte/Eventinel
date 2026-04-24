@@ -7,63 +7,22 @@
  * @jest-environment jsdom
  */
 
-import type { NDKEvent } from '@nostr-dev-kit/mobile';
 import { INCIDENT_LIMITS } from '../../../lib/map/constants';
-import type { ParsedIncident } from '../../../lib/nostr/events/types';
 import {
   applyIncidentEventBatch,
   getIncidentEventReducerMetrics,
   resetIncidentEventReducerMetrics,
 } from '../../../hooks/incidentSubscription/eventReducer';
-import type { QueuedEvent } from '../../../hooks/incidentSubscription/types';
+import {
+  buildParsedIncident,
+  buildQueuedIncidentEvent,
+} from '../../fixtures/incident/buildIncident';
 
 const mockParseIncidentEvent = jest.fn();
 
 jest.mock('../../../lib/nostr/events/incident', () => ({
   parseIncidentEvent: (...args: unknown[]) => mockParseIncidentEvent(...args),
 }));
-
-function createParsedIncident(
-  incidentId: string,
-  eventId: string,
-  createdAt: number,
-  overrides: Partial<ParsedIncident> = {}
-): ParsedIncident {
-  return {
-    eventId,
-    incidentId,
-    pubkey: 'test-pubkey',
-    createdAt,
-    type: 'fire',
-    severity: 3,
-    title: `Incident ${incidentId}`,
-    description: `Description ${incidentId}`,
-    location: {
-      lat: 39.9526,
-      lng: -75.1652,
-      address: `Address ${incidentId}`,
-      geohash: 'dr4e3f',
-    },
-    occurredAt: new Date(createdAt * 1000),
-    source: 'community',
-    sourceId: `${incidentId}-source`,
-    isVerified: false,
-    ...overrides,
-  };
-}
-
-function createQueuedEvent(incidentId: string, eventId: string, createdAt: number): QueuedEvent {
-  return {
-    source: 'relay' as const,
-    event: {
-      id: eventId,
-      kind: 30911,
-      created_at: createdAt,
-      tags: [['d', incidentId]],
-      content: '{}',
-    } as unknown as NDKEvent,
-  };
-}
 
 describe('applyIncidentEventBatch', () => {
   beforeEach(() => {
@@ -73,9 +32,16 @@ describe('applyIncidentEventBatch', () => {
 
   it('collapses multiple accepted revisions of the same incident to the latest batch delta', () => {
     const parsedByEventId = new Map([
-      ['event-a-v1', createParsedIncident('incident-a', 'event-a-v1', 100)],
-      ['event-b-v1', createParsedIncident('incident-b', 'event-b-v1', 101)],
-      ['event-a-v2', createParsedIncident('incident-a', 'event-a-v2', 102, { severity: 4 })],
+      ['event-a-v1', buildParsedIncident('incident-a', { eventId: 'event-a-v1', createdAt: 100 })],
+      ['event-b-v1', buildParsedIncident('incident-b', { eventId: 'event-b-v1', createdAt: 101 })],
+      [
+        'event-a-v2',
+        buildParsedIncident('incident-a', {
+          eventId: 'event-a-v2',
+          createdAt: 102,
+          severity: 4,
+        }),
+      ],
     ]);
 
     mockParseIncidentEvent.mockImplementation((event: { id: string }) => {
@@ -84,9 +50,9 @@ describe('applyIncidentEventBatch', () => {
 
     const result = applyIncidentEventBatch({
       queuedEvents: [
-        createQueuedEvent('incident-a', 'event-a-v1', 100),
-        createQueuedEvent('incident-b', 'event-b-v1', 101),
-        createQueuedEvent('incident-a', 'event-a-v2', 102),
+        buildQueuedIncidentEvent('incident-a', 100, { eventId: 'event-a-v1' }),
+        buildQueuedIncidentEvent('incident-b', 101, { eventId: 'event-b-v1' }),
+        buildQueuedIncidentEvent('incident-a', 102, { eventId: 'event-a-v2' }),
       ],
       incidentMap: new Map(),
       maxCandidateRetention: 1000,
@@ -105,8 +71,8 @@ describe('applyIncidentEventBatch', () => {
 
   it('does not emit an older later-in-batch revision after a newer one already won', () => {
     const parsedByEventId = new Map([
-      ['event-a-v2', createParsedIncident('incident-a', 'event-a-v2', 102)],
-      ['event-a-v1', createParsedIncident('incident-a', 'event-a-v1', 101)],
+      ['event-a-v2', buildParsedIncident('incident-a', { eventId: 'event-a-v2', createdAt: 102 })],
+      ['event-a-v1', buildParsedIncident('incident-a', { eventId: 'event-a-v1', createdAt: 101 })],
     ]);
 
     mockParseIncidentEvent.mockImplementation((event: { id: string }) => {
@@ -115,8 +81,8 @@ describe('applyIncidentEventBatch', () => {
 
     const result = applyIncidentEventBatch({
       queuedEvents: [
-        createQueuedEvent('incident-a', 'event-a-v2', 102),
-        createQueuedEvent('incident-a', 'event-a-v1', 101),
+        buildQueuedIncidentEvent('incident-a', 102, { eventId: 'event-a-v2' }),
+        buildQueuedIncidentEvent('incident-a', 101, { eventId: 'event-a-v1' }),
       ],
       incidentMap: new Map(),
       maxCandidateRetention: 1000,
@@ -136,7 +102,7 @@ describe('applyIncidentEventBatch', () => {
         const incidentId = `incident-${index}`;
         const eventId = `event-${index}`;
 
-        return [eventId, createParsedIncident(incidentId, eventId, createdAt)];
+        return [eventId, buildParsedIncident(incidentId, { eventId, createdAt })];
       })
     );
 
@@ -145,7 +111,9 @@ describe('applyIncidentEventBatch', () => {
     });
 
     const queuedEvents = Array.from({ length: overflowCount }, (_, index) =>
-      createQueuedEvent(`incident-${index}`, `event-${index}`, 100 + index)
+      buildQueuedIncidentEvent(`incident-${index}`, 100 + index, {
+        eventId: `event-${index}`,
+      })
     );
 
     const result = applyIncidentEventBatch({

@@ -3,12 +3,17 @@ import {
   REPORT_RADIUS_METERS,
   REPORT_RADIUS_MILES,
 } from '@lib/utils/reportLocationRadius';
+import {
+  buildNearbyReportLocation,
+  buildOutOfRangeReportLocation,
+  buildReportLocation,
+} from '../../fixtures/report/buildReportLocation';
 
 describe('lib/utils/reportLocationRadius', () => {
   it('allows reports within the half-mile radius', () => {
     const state = getReportRadiusState(
-      { latitude: 40.03836, longitude: -75.05134 },
-      { latitude: 40.04436, longitude: -75.05134 }
+      buildReportLocation(),
+      buildNearbyReportLocation()
     );
 
     expect(state.isWithinRadius).toBe(true);
@@ -19,8 +24,8 @@ describe('lib/utils/reportLocationRadius', () => {
 
   it('blocks reports outside the half-mile radius', () => {
     const state = getReportRadiusState(
-      { latitude: 40.03836, longitude: -75.05134 },
-      { latitude: 40.08836, longitude: -75.05134 }
+      buildReportLocation(),
+      buildOutOfRangeReportLocation()
     );
 
     expect(state.isWithinRadius).toBe(false);
@@ -30,7 +35,7 @@ describe('lib/utils/reportLocationRadius', () => {
   });
 
   it('blocks reports when the current device location is unavailable', () => {
-    const state = getReportRadiusState(null, { latitude: 40.03836, longitude: -75.05134 });
+    const state = getReportRadiusState(null, buildReportLocation());
 
     expect(state.isWithinRadius).toBe(false);
     expect(state.status).toBe('missing_device_location');

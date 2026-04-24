@@ -30,6 +30,7 @@ import {
 } from '../../contexts/IncidentCacheContext';
 import type { ProcessedIncident } from '../../hooks/useIncidentSubscription';
 import type { Severity } from '../../lib/nostr/config';
+import { buildProcessedIncident } from '../fixtures/incident/buildIncident';
 
 // =============================================================================
 // MOCK SETUP
@@ -82,13 +83,11 @@ function createMockIncident(
 ): ProcessedIncident {
   const createdAt = Math.floor(Date.now() / 1000);
   const occurredAt = new Date(createdAt * 1000);
-  return {
-    incidentId: id,
+  return buildProcessedIncident(id, {
     eventId: `event_${id}`,
     pubkey: 'test_pubkey_123',
     title: `Test Incident ${id}`,
     description: `Description for incident ${id}`,
-    type: 'fire',
     severity,
     createdAt,
     createdAtMs: createdAt * 1000,
@@ -102,11 +101,9 @@ function createMockIncident(
       state: 'NY',
       geohash: 'dr5r',
     },
-    source: 'community',
     sourceId: `source_${id}`,
-    isVerified: false,
     ...overrides,
-  };
+  });
 }
 
 /**
