@@ -7,43 +7,17 @@ import { fireEvent, render, waitFor } from '@testing-library/react-native';
 
 import ReportIncidentReviewScreen from '../../screens/ReportIncidentReviewScreen';
 import { createIncidentEvent } from '../../lib/nostr/events/incident';
+import { buildReportDraft } from '../fixtures/report/buildReportDraft';
+import { buildReportLocation, buildResolvedReportLocation } from '../fixtures/report/buildReportLocation';
+import { buildRelayInfo, buildRelayStatus } from '../fixtures/report/buildRelayStatus';
 
-const defaultMockDraft = {
-  sourceTab: 'Map',
-  location: {
-    latitude: 40.03836,
-    longitude: -75.05134,
-  },
-  incidentType: 'fire',
-  description: 'LOCAL RELAY QA 1776709409 smoke from rowhome on alley side',
-  locationNote: 'LOCAL RELAY QA 1776709409',
-  stillActive: true,
-};
-let mockDraft = { ...defaultMockDraft };
-let mockResolvedReportLocation: {
-  resolvedPlaceLabel: string | null;
-  resolvedContextLine: string | null;
-  isResolvingPlace: boolean;
-} = {
-  resolvedPlaceLabel: '3100 block Princeton Avenue',
-  resolvedContextLine: 'Philadelphia, Pennsylvania',
-  isResolvingPlace: false,
-};
+const defaultMockDraft = buildReportDraft();
+let mockDraft = buildReportDraft();
+let mockResolvedReportLocation = buildResolvedReportLocation();
 const mockResetDraft = jest.fn();
 const mockSetAdjustEntryMode = jest.fn();
 
-const mockUseRelayStatus = jest.fn<any, []>(() => ({
-  relays: [],
-  stats: {
-    total: 0,
-    connected: 0,
-    connecting: 0,
-    disconnected: 0,
-  },
-  hasConnectedRelay: false,
-  hasRelays: false,
-  isConnecting: false,
-}));
+const mockUseRelayStatus = jest.fn<any, []>(() => buildRelayStatus());
 
 jest.mock('@contexts', () => ({
   useSharedLocation: () => ({
@@ -171,27 +145,24 @@ function buildProps() {
 describe('ReportIncidentReviewScreen', () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    mockDraft = { ...defaultMockDraft };
-    mockResolvedReportLocation = {
-      resolvedPlaceLabel: '3100 block Princeton Avenue',
-      resolvedContextLine: 'Philadelphia, Pennsylvania',
-      isResolvingPlace: false,
-    };
+    mockDraft = buildReportDraft(defaultMockDraft);
+    mockResolvedReportLocation = buildResolvedReportLocation();
   });
 
   it('shows the no-relay footer state when nothing is connected', () => {
-    mockUseRelayStatus.mockReturnValue({
-      relays: [],
-      stats: {
-        total: 1,
-        connected: 0,
-        connecting: 1,
-        disconnected: 0,
-      },
-      hasConnectedRelay: false,
-      hasRelays: true,
-      isConnecting: true,
-    });
+    mockUseRelayStatus.mockReturnValue(
+      buildRelayStatus({
+        stats: {
+          total: 1,
+          connected: 0,
+          connecting: 1,
+          disconnected: 0,
+        },
+        hasConnectedRelay: false,
+        hasRelays: true,
+        isConnecting: true,
+      })
+    );
 
     const screen = render(<ReportIncidentReviewScreen {...buildProps()} />);
 
@@ -199,25 +170,11 @@ describe('ReportIncidentReviewScreen', () => {
   });
 
   it('uses live relay status to enable the ready-to-publish state', () => {
-    mockUseRelayStatus.mockReturnValue({
-      relays: [
-        {
-          url: 'ws://10.0.2.2:8085',
-          status: 'connected',
-          rawStatus: 5,
-          isConnected: true,
-        },
-      ] as any[],
-      stats: {
-        total: 1,
-        connected: 1,
-        connecting: 0,
-        disconnected: 0,
-      },
-      hasConnectedRelay: true,
-      hasRelays: true,
-      isConnecting: false,
-    });
+    mockUseRelayStatus.mockReturnValue(
+      buildRelayStatus({
+        relays: [buildRelayInfo()],
+      })
+    );
 
     const screen = render(<ReportIncidentReviewScreen {...buildProps()} />);
 
@@ -228,25 +185,11 @@ describe('ReportIncidentReviewScreen', () => {
   it('resets the report stack to main plus submitted after successful submit', async () => {
     const publish = jest.fn().mockResolvedValue(undefined);
     jest.mocked(createIncidentEvent).mockReturnValue({ publish } as any);
-    mockUseRelayStatus.mockReturnValue({
-      relays: [
-        {
-          url: 'ws://10.0.2.2:8085',
-          status: 'connected',
-          rawStatus: 5,
-          isConnected: true,
-        },
-      ] as any[],
-      stats: {
-        total: 1,
-        connected: 1,
-        connecting: 0,
-        disconnected: 0,
-      },
-      hasConnectedRelay: true,
-      hasRelays: true,
-      isConnecting: false,
-    });
+    mockUseRelayStatus.mockReturnValue(
+      buildRelayStatus({
+        relays: [buildRelayInfo()],
+      })
+    );
     const props = buildProps();
 
     const screen = render(<ReportIncidentReviewScreen {...props} />);
@@ -279,38 +222,23 @@ describe('ReportIncidentReviewScreen', () => {
   it('does not submit a stale resolved place label when the current location has no valid resolution yet', async () => {
     const publish = jest.fn().mockResolvedValue(undefined);
     jest.mocked(createIncidentEvent).mockReturnValue({ publish } as any);
-    mockResolvedReportLocation = {
+    mockResolvedReportLocation = buildResolvedReportLocation({
       resolvedPlaceLabel: null,
       resolvedContextLine: null,
       isResolvingPlace: true,
-    };
-    mockDraft = {
-      ...defaultMockDraft,
-      location: {
+    });
+    mockDraft = buildReportDraft({
+      location: buildReportLocation({
         latitude: 40.04111,
         longitude: -75.06111,
-      },
+      }),
       locationNote: 'Fresh user-entered landmark',
-    };
-    mockUseRelayStatus.mockReturnValue({
-      relays: [
-        {
-          url: 'ws://10.0.2.2:8085',
-          status: 'connected',
-          rawStatus: 5,
-          isConnected: true,
-        },
-      ] as any[],
-      stats: {
-        total: 1,
-        connected: 1,
-        connecting: 0,
-        disconnected: 0,
-      },
-      hasConnectedRelay: true,
-      hasRelays: true,
-      isConnecting: false,
     });
+    mockUseRelayStatus.mockReturnValue(
+      buildRelayStatus({
+        relays: [buildRelayInfo()],
+      })
+    );
 
     const screen = render(<ReportIncidentReviewScreen {...buildProps()} />);
     fireEvent.press(screen.getByLabelText('Submit report'));
