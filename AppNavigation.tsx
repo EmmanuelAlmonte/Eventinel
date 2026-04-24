@@ -23,7 +23,8 @@ import { navigationRef } from './lib/navigation';
 import type { MainTabParamList, RootStackParamList } from './lib/navigation';
 import IncidentNotificationBridge from './components/notifications/IncidentNotificationBridge';
 import { StatusBar } from 'expo-status-bar';
-import { useReportDraft } from '@contexts';
+import { useReportDraft, useStartupNavigationInteraction } from '@contexts';
+import { automationTestID } from '@lib/utils';
 
 const Tab = createBottomTabNavigator<MainTabParamList>();
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -45,14 +46,17 @@ function TabNavigator() {
   const { colors } = useAppTheme();
   const insets = useSafeAreaInsets();
   const { startDraft } = useReportDraft();
+  const { markStartupTabInteraction } = useStartupNavigationInteraction();
   const TAB_BAR_BASE_HEIGHT = 58;
   const tabBarHeight = TAB_BAR_BASE_HEIGHT + insets.bottom;
 
   return (
     <Tab.Navigator
       initialRouteName="Map"
+      detachInactiveScreens={false}
       screenOptions={{
         headerShown: false,
+        lazy: false,
         tabBarShowLabel: true,
         tabBarHideOnKeyboard: true,
         tabBarActiveTintColor: colors.primary,
@@ -81,7 +85,13 @@ function TabNavigator() {
         component={MapScreen}
         options={{
           tabBarLabel: 'Map',
+          tabBarButtonTestID: automationTestID('tab-map'),
           tabBarIcon: ({ color, focused }) => renderTabIcon(focused, color, 'map', 'map-outline'),
+        }}
+        listeners={{
+          tabPress: () => {
+            markStartupTabInteraction('Map');
+          },
         }}
       />
       <Tab.Screen
@@ -89,8 +99,14 @@ function TabNavigator() {
         component={IncidentFeedScreen}
         options={{
           tabBarLabel: 'Incidents',
+          tabBarButtonTestID: automationTestID('tab-incidents'),
           tabBarIcon: ({ color, focused }) =>
             renderTabIcon(focused, color, 'format-list-bulleted', 'format-list-bulleted-type'),
+        }}
+        listeners={{
+          tabPress: () => {
+            markStartupTabInteraction('Incidents');
+          },
         }}
       />
       <Tab.Screen
@@ -98,11 +114,13 @@ function TabNavigator() {
         component={ReportTriggerScreen}
         options={{
           tabBarLabel: ({ color }) => <Text style={[styles.reportTabLabel, { color }]}>Report</Text>,
+          tabBarButtonTestID: automationTestID('tab-report'),
           tabBarIcon: ({ color }) => <MaterialCommunityIcons name="map-marker-plus" size={22} color={color} />,
         }}
         listeners={({ navigation }) => ({
           tabPress: (event) => {
             event.preventDefault();
+            markStartupTabInteraction('Report');
 
             const state = navigation.getState();
             const activeRouteName = state.routes[state.index]?.name;
@@ -128,7 +146,13 @@ function TabNavigator() {
         component={ProfileScreen}
         options={{
           tabBarLabel: 'Profile',
+          tabBarButtonTestID: automationTestID('tab-profile'),
           tabBarIcon: ({ color, focused }) => renderTabIcon(focused, color, 'account', 'account-outline'),
+        }}
+        listeners={{
+          tabPress: () => {
+            markStartupTabInteraction('Profile');
+          },
         }}
       />
     </Tab.Navigator>

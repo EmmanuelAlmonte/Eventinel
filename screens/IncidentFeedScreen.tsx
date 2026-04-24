@@ -4,12 +4,13 @@
  * List view of nearby incidents using the shared subscription context.
  */
 
-import { useCallback, useEffect } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { View } from 'react-native';
 import { Text } from '@rneui/themed';
 import { useIsFocused, useNavigation } from '@react-navigation/native';
 
 import { type AppNavigation } from '@lib/navigation';
+import { automationTestID } from '@lib/utils';
 import { useAppTheme } from '@hooks';
 import type { ProcessedIncident } from '@hooks';
 import { useRelayStatus, useSharedLocation, useSharedIncidents } from '@contexts';
@@ -25,6 +26,7 @@ import { buildRelayBannerStatus, formatRelayList } from './incidentFeed/helpers'
 import { incidentFeedStyles as styles } from './incidentFeed/styles';
 
 const EMPTY_INCIDENTS: ProcessedIncident[] = [];
+const FOCUS_LIST_ACTIVATION_DELAY_MS = 250;
 
 export default function IncidentFeedScreen() {
   const navigation = useNavigation<AppNavigation>();
@@ -33,13 +35,31 @@ export default function IncidentFeedScreen() {
   const { hasConnectedRelay, hasRelays, isConnecting, relays } = useRelayStatus();
   const { location: userLocation, isLoading: isLoadingLocation, permission, refresh } = useSharedLocation();
   const { incidents, hasReceivedHistory, setFeedFocused } = useSharedIncidents();
+  const [isIncidentListActive, setIsIncidentListActive] = useState(false);
 
   useEffect(() => {
     setFeedFocused(isFocused);
     return () => setFeedFocused(false);
   }, [isFocused, setFeedFocused]);
 
-  const visibleIncidents = isFocused ? incidents : EMPTY_INCIDENTS;
+  useEffect(() => {
+    if (!isFocused) {
+      setIsIncidentListActive(false);
+      return;
+    }
+
+    setIsIncidentListActive(false);
+    const timer = setTimeout(() => {
+      setIsIncidentListActive(true);
+    }, FOCUS_LIST_ACTIVATION_DELAY_MS);
+
+    return () => {
+      clearTimeout(timer);
+    };
+  }, [isFocused]);
+
+  const visibleIncidents = isFocused && isIncidentListActive ? incidents : EMPTY_INCIDENTS;
+  const feedHasReceivedHistory = isIncidentListActive ? hasReceivedHistory : false;
   const handleIncidentPress = useCallback(
     (incidentId: string) => {
       startIncidentNavTrace({
@@ -80,7 +100,7 @@ export default function IncidentFeedScreen() {
 
   if (isLoadingLocation) {
     return (
-      <ScreenContainer>
+      <ScreenContainer testID={automationTestID('screen-incidents')}>
         <View style={styles.header}>
           <Text h2 style={[styles.title, { color: colors.text }]}>Incidents</Text>
           <Text style={[styles.subtitle, { color: colors.textMuted }]}>
@@ -94,18 +114,18 @@ export default function IncidentFeedScreen() {
 
   if (!userLocation) {
     return (
-      <ScreenContainer>
+      <ScreenContainer testID={automationTestID('screen-incidents')}>
         <LocationRequiredEmpty permission={permission} onRetry={() => void refresh()} />
       </ScreenContainer>
     );
   }
 
   return (
-    <ScreenContainer>
+    <ScreenContainer testID={automationTestID('screen-incidents')}>
       <IncidentFeedContent
         colors={colors}
         visibleIncidents={visibleIncidents}
-        hasReceivedHistory={hasReceivedHistory}
+        hasReceivedHistory={feedHasReceivedHistory}
         relayStatus={relayStatus}
         hasRelays={hasRelays}
         onRelaySettings={handleRelaySettings}

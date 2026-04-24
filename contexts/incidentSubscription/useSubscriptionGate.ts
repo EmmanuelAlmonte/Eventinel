@@ -1,10 +1,15 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AppState, InteractionManager, type AppStateStatus } from 'react-native';
 
 import { MAPBOX_CONFIG } from '@lib/map/constants';
 import type { MapSubscriptionViewport } from '@lib/map/subscriptionPlanner';
 
+import { useStartupNavigationInteraction } from '../StartupNavigationInteractionContext';
 import { useSharedLocation } from '../LocationContext';
+
+const STARTUP_INTERACTION_GATE_TIMEOUT_MS = 750;
+const INITIAL_SUBSCRIPTION_LOCATION_DELAY_MS = 8000;
+const POST_STARTUP_TAB_SUBSCRIPTION_DELAY_MS = 3000;
 
 export interface SubscriptionGateState {
   location: [number, number] | null;
@@ -23,9 +28,12 @@ function isAppStateActive(state: AppStateStatus): boolean {
 
 export function useSubscriptionGate(): SubscriptionGateState {
   const { location } = useSharedLocation();
+  const { lastStartupTabInteractionAt } = useStartupNavigationInteraction();
   const [isMapFocused, setIsMapFocused] = useState(false);
   const [isFeedFocused, setIsFeedFocused] = useState(false);
   const [isStartupInteractionSettled, setIsStartupInteractionSettled] = useState(false);
+  const [isInitialSubscriptionLocationSettled, setIsInitialSubscriptionLocationSettled] = useState(false);
+  const hasReleasedInitialSubscriptionLocationRef = useRef(false);
   const [mapSubscriptionAnchor, setMapSubscriptionAnchor] = useState<[number, number] | null>(
     null
   );
@@ -43,18 +51,61 @@ export function useSubscriptionGate(): SubscriptionGateState {
 
   useEffect(() => {
     let isMounted = true;
-    const interactionHandle = InteractionManager.runAfterInteractions(() => {
-      if (!isMounted) {
+    let didSettle = false;
+    const settleStartupInteractionGate = () => {
+      if (!isMounted || didSettle) {
         return;
       }
+
+      didSettle = true;
       setIsStartupInteractionSettled(true);
+    };
+
+    const fallbackTimer = setTimeout(
+      settleStartupInteractionGate,
+      STARTUP_INTERACTION_GATE_TIMEOUT_MS
+    );
+
+    const interactionHandle = InteractionManager.runAfterInteractions(() => {
+      clearTimeout(fallbackTimer);
+      settleStartupInteractionGate();
     });
 
     return () => {
       isMounted = false;
+      clearTimeout(fallbackTimer);
       interactionHandle.cancel?.();
     };
   }, []);
+
+  useEffect(() => {
+    if (!location) {
+      if (!hasReleasedInitialSubscriptionLocationRef.current) {
+        setIsInitialSubscriptionLocationSettled(false);
+      }
+      return;
+    }
+
+    if (hasReleasedInitialSubscriptionLocationRef.current) {
+      setIsInitialSubscriptionLocationSettled(true);
+      return;
+    }
+
+    setIsInitialSubscriptionLocationSettled(false);
+    const releaseDelayMs =
+      lastStartupTabInteractionAt == null
+        ? INITIAL_SUBSCRIPTION_LOCATION_DELAY_MS
+        : POST_STARTUP_TAB_SUBSCRIPTION_DELAY_MS;
+
+    const timer = setTimeout(() => {
+      hasReleasedInitialSubscriptionLocationRef.current = true;
+      setIsInitialSubscriptionLocationSettled(true);
+    }, releaseDelayMs);
+
+    return () => {
+      clearTimeout(timer);
+    };
+  }, [lastStartupTabInteractionAt, location]);
 
   const handleSetMapFocused = useCallback((focused: boolean) => {
     setIsMapFocused(focused);
@@ -78,13 +129,15 @@ export function useSubscriptionGate(): SubscriptionGateState {
     []
   );
 
-  const isScreenFocused = isMapFocused || isFeedFocused;
   const isSubscriptionEnabled =
-    !!location && isScreenFocused && isAppActive && isStartupInteractionSettled;
-  const subscriptionLocation = isMapFocused ? mapSubscriptionAnchor ?? location : location;
+    !!location && isAppActive && isStartupInteractionSettled && isInitialSubscriptionLocationSettled;
+  const subscriptionLocation =
+    isMapFocused || (!isFeedFocused && mapSubscriptionAnchor)
+      ? mapSubscriptionAnchor ?? location
+      : location;
 
   const effectiveSubscriptionViewport = useMemo(() => {
-    if (!isMapFocused) return null;
+    if (!isMapFocused && (isFeedFocused || !mapSubscriptionViewport)) return null;
     if (!subscriptionLocation) return null;
 
     const fallbackViewport: MapSubscriptionViewport = {
@@ -97,7 +150,7 @@ export function useSubscriptionGate(): SubscriptionGateState {
     };
 
     return mapSubscriptionViewport ?? fallbackViewport;
-  }, [isMapFocused, mapSubscriptionViewport, subscriptionLocation]);
+  }, [isFeedFocused, isMapFocused, mapSubscriptionViewport, subscriptionLocation]);
 
   return {
     location,

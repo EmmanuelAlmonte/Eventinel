@@ -27,6 +27,8 @@ interface ScreenContainerProps {
   paddingHorizontal?: number;
   /** Center content vertically */
   centerContent?: boolean;
+  /** Stable selector for native UI automation. */
+  testID?: string;
 }
 
 export function ScreenContainer({
@@ -39,6 +41,7 @@ export function ScreenContainer({
   backgroundColor,
   paddingHorizontal = 16,
   centerContent = false,
+  testID,
 }: ScreenContainerProps) {
   const insets = useSafeAreaInsets();
   const { colors } = useAppTheme();
@@ -59,6 +62,7 @@ export function ScreenContainer({
   if (scroll) {
     return (
       <ScrollView
+        testID={testID}
         style={[styles.scrollView, { backgroundColor: bgColor }]}
         contentContainerStyle={[
           styles.scrollContent,
@@ -88,7 +92,7 @@ export function ScreenContainer({
     );
   }
 
-  return <View style={containerStyle}>{children}</View>;
+  return <View testID={testID} style={containerStyle}>{children}</View>;
 }
 
 const styles = StyleSheet.create({

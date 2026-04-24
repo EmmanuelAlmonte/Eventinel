@@ -2026,7 +2026,7 @@ describe('useIncidentSubscription', () => {
       }
     });
 
-    it('upgrades a cache-first cold-start flush when relay events arrive before the cache timer fires', async () => {
+    it('keeps cache-first cold-start flush responsive when relay events arrive before the cache timer fires', async () => {
       jest.useFakeTimers();
 
       try {
@@ -2059,22 +2059,6 @@ describe('useIncidentSubscription', () => {
 
         await act(async () => {
           jest.advanceTimersByTime(SUBSCRIPTION_BUFFER_MS);
-          await Promise.resolve();
-        });
-
-        expect(result.current.incidents).toEqual([]);
-
-        await act(async () => {
-          jest.advanceTimersByTime(
-            INITIAL_HISTORY_RELAY_BUFFER_MS - SUBSCRIPTION_BUFFER_MS - 1
-          );
-          await Promise.resolve();
-        });
-
-        expect(result.current.incidents).toEqual([]);
-
-        await act(async () => {
-          jest.advanceTimersByTime(1);
           await Promise.resolve();
         });
 

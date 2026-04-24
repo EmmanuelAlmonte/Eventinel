@@ -27,7 +27,7 @@ const SEVERITY_LABELS: Record<number, string> = {
   5: 'Critical',
 };
 
-function formatSourceLabel(source: string) {
+function formatSourceLabel(source: string | undefined) {
   switch (source) {
     case 'opendataphilly':
       return 'Official data';
@@ -36,6 +36,9 @@ function formatSourceLabel(source: string) {
     case 'radio':
       return 'Radio';
     default:
+      if (!source) {
+        return 'Community';
+      }
       return source.replace(/_/g, ' ');
   }
 }

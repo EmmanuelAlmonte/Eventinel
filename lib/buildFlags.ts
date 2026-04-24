@@ -41,10 +41,15 @@ export const buildFlags = {
   appEnv,
   isProd,
   isDevLike,
+  enableAutomationTestIDs:
+    isDevLike &&
+    parseOptionalBoolFlag(
+      process.env.EXPO_PUBLIC_ENABLE_AUTOMATION_TEST_IDS ?? process.env.EXPO_PUBLIC_ENABLE_AUTOMATION_IDS,
+      __DEV__
+    ),
   showDebugUI: isDevLike && parseOptionalBoolFlag(process.env.EXPO_PUBLIC_ENABLE_DEBUG_UI, __DEV__),
   enableProtocolDebug:
     isDevLike && parseOptionalBoolFlag(process.env.EXPO_PUBLIC_ENABLE_PROTOCOL_DEBUG, __DEV__),
   enableVerboseLogs:
     isDevLike && parseOptionalBoolFlag(process.env.EXPO_PUBLIC_ENABLE_VERBOSE_LOGS, __DEV__),
 } as const;
-

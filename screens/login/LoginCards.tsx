@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Pressable, Switch, View } from 'react-native';
 import { Card, Icon, Input, Text } from '@rneui/themed';
 import type { SignerAppInfo } from 'expo-nip55';
+import { automationTestID } from '@lib/utils';
 
 import { LoginActionButton } from './LoginActionButton';
 import { SegmentedControl, type SegmentedOption } from './SegmentedControl';
@@ -311,6 +312,7 @@ function PrivateKeyMethodBody({
       </View>
 
       <Input
+        testID={automationTestID('login-private-key-input')}
         placeholder="nsec1... or hex private key"
         value={manualKey}
         onChangeText={setManualKey}
@@ -327,6 +329,7 @@ function PrivateKeyMethodBody({
 
       <View style={styles.privateKeyActions}>
         <LoginActionButton
+          testID={automationTestID('login-generate-key')}
           colors={colors}
           label="Generate key"
           onPress={onGenerate}
@@ -336,6 +339,7 @@ function PrivateKeyMethodBody({
           containerStyle={styles.privateKeySecondaryAction}
         />
         <LoginActionButton
+          testID={automationTestID('login-private-key-submit')}
           colors={colors}
           label="Continue with private key"
           onPress={onLogin}

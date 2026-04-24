@@ -14,6 +14,7 @@ import { useNDKCurrentPubkey, useNDKCurrentUser, useNDKSessionLogout } from '@no
 import { showToast } from '@components/ui';
 import { type AppNavigation } from '@lib/navigation';
 import { isCashuWalletFeatureEnabled, isLightningWalletFeatureEnabled } from '@lib/featureFlags';
+import { automationTestID } from '@lib/utils';
 import { ScreenContainer } from '@components/ui';
 import { useAppTheme } from '@hooks';
 
@@ -120,7 +121,7 @@ export default function ProfileScreen() {
     : '';
 
   return (
-    <ScreenContainer scroll>
+    <ScreenContainer scroll testID={automationTestID('screen-profile')}>
       <ProfileHeader colors={colors} />
 
       <IdentityHeroCard

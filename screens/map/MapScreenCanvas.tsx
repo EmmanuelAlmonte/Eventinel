@@ -69,6 +69,7 @@ type MapScreenLayoutProps = {
   onSelectDateRange: (days: number) => void;
   onShapeSourcePress: (event: ShapeSourcePressEvent) => void | Promise<void>;
   onFlyToUser: () => void;
+  testID?: string;
 };
 
 function MapPlaceholder() {
@@ -106,12 +107,13 @@ export function MapScreenCanvas({
   onSelectDateRange,
   onShapeSourcePress,
   onFlyToUser,
+  testID,
 }: MapScreenLayoutProps) {
   const effectiveCameraCenter = camera.cameraCenter || userLocation || DEFAULT_CAMERA.centerCoordinate;
   const cameraCenterCoordinate = camera.followUser || camera.isAnimating ? effectiveCameraCenter : undefined;
 
   return (
-    <View style={styles.container}>
+    <View testID={testID} style={styles.container}>
       <View style={styles.mapContainer} onLayout={handleMapLayout}>
         {camera.mapReady ? (
           <mapbox.MapView

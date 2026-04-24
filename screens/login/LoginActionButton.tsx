@@ -24,6 +24,7 @@ type LoginActionButtonProps = {
   variant?: LoginActionVariant;
   iconName?: string;
   containerStyle?: StyleProp<ViewStyle>;
+  testID?: string;
 };
 
 function resolveButtonColors(colors: ThemeColors, variant: LoginActionVariant, disabled: boolean) {
@@ -84,11 +85,13 @@ export function LoginActionButton({
   variant = 'primary',
   iconName,
   containerStyle,
+  testID,
 }: LoginActionButtonProps) {
   const palette = resolveButtonColors(colors, variant, disabled);
 
   return (
     <Pressable
+      testID={testID}
       accessibilityRole="button"
       accessibilityState={{ disabled }}
       disabled={disabled}

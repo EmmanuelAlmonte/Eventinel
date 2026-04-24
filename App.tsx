@@ -26,6 +26,7 @@ import {
   IncidentSubscriptionProvider,
   ReportDraftProvider,
   RelayStatusProvider,
+  StartupNavigationInteractionProvider,
 } from '@contexts';
 import { ToastProvider, ErrorBoundary } from '@components/ui';
 import { ThemeProvider } from '@rneui/themed';
@@ -137,9 +138,11 @@ function AppContent() {
         <RelayStatusProvider>
           <IncidentCacheProvider>
             <IncidentHistoryWindowProvider>
-              <IncidentSubscriptionProvider>
-                <MainNavigation />
-              </IncidentSubscriptionProvider>
+              <StartupNavigationInteractionProvider>
+                <IncidentSubscriptionProvider>
+                  <MainNavigation />
+                </IncidentSubscriptionProvider>
+              </StartupNavigationInteractionProvider>
             </IncidentHistoryWindowProvider>
           </IncidentCacheProvider>
         </RelayStatusProvider>

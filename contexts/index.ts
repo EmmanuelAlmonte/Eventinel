@@ -12,3 +12,7 @@ export { LocationProvider, useSharedLocation, LocationGate } from './LocationCon
 export { IncidentSubscriptionProvider, useSharedIncidents } from './IncidentSubscriptionContext';
 export { RelayStatusProvider, useRelayStatus } from './RelayStatusContext';
 export { ReportDraftProvider, useReportDraft } from './ReportDraftContext';
+export {
+  StartupNavigationInteractionProvider,
+  useStartupNavigationInteraction,
+} from './StartupNavigationInteractionContext';

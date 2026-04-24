@@ -6,6 +6,8 @@ import type { MapSubscriptionViewport } from '@lib/map/subscriptionPlanner';
 export const INCIDENT_KIND = 30911 as const;
 export const SUBSCRIPTION_BUFFER_MS = 100;
 export const INITIAL_HISTORY_RELAY_BUFFER_MS = 1000;
+export const INITIAL_HISTORY_FLUSH_CHUNK_SIZE = 50;
+export const INITIAL_HISTORY_FLUSH_CONTINUATION_MS = 16;
 export const EARTH_RADIUS_METERS = 6371000;
 
 export interface QueuedEvent {

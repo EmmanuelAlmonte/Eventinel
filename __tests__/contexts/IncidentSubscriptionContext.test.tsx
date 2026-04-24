@@ -13,7 +13,7 @@
  */
 
 import React, { useEffect } from 'react';
-import { render, waitFor } from '@testing-library/react-native';
+import { render, waitFor, act } from '@testing-library/react-native';
 import { InteractionManager, Text, View } from 'react-native';
 
 import {
@@ -134,6 +134,14 @@ const defaultSubscriptionMock = {
   lastUpdatedAt: null,
 };
 
+const INITIAL_SUBSCRIPTION_LOCATION_DELAY_MS = 8000;
+
+function releaseInitialSubscriptionLocationGate() {
+  act(() => {
+    jest.advanceTimersByTime(INITIAL_SUBSCRIPTION_LOCATION_DELAY_MS);
+  });
+}
+
 /**
  * Test consumer component that displays subscription state
  */
@@ -163,6 +171,60 @@ function FocusSetter() {
       setMapFocused(false);
     };
   }, [setMapFocused]);
+
+  return null;
+}
+
+function FocusController({
+  mapFocused = false,
+  feedFocused = false,
+  mapAnchor = null,
+  mapViewport = null,
+}: {
+  mapFocused?: boolean;
+  feedFocused?: boolean;
+  mapAnchor?: [number, number] | null;
+  mapViewport?: {
+    center: [number, number];
+    bounds: {
+      ne: [number, number];
+      sw: [number, number];
+    };
+    zoom: number;
+  } | null;
+}) {
+  const {
+    setMapFocused,
+    setFeedFocused,
+    setMapSubscriptionAnchor,
+    setMapSubscriptionViewport,
+  } = useSharedIncidents();
+
+  useEffect(() => {
+    setMapFocused(mapFocused);
+    return () => {
+      setMapFocused(false);
+    };
+  }, [mapFocused, setMapFocused]);
+
+  useEffect(() => {
+    setFeedFocused(feedFocused);
+    return () => {
+      setFeedFocused(false);
+    };
+  }, [feedFocused, setFeedFocused]);
+
+  useEffect(() => {
+    if (mapAnchor) {
+      setMapSubscriptionAnchor(mapAnchor);
+    }
+  }, [mapAnchor, setMapSubscriptionAnchor]);
+
+  useEffect(() => {
+    if (mapViewport) {
+      setMapSubscriptionViewport(mapViewport);
+    }
+  }, [mapViewport, setMapSubscriptionViewport]);
 
   return null;
 }
@@ -219,6 +281,16 @@ function TestWrapper({ children }: { children: React.ReactNode }) {
   );
 }
 
+function TestWrapperWithoutFocus({ children }: { children: React.ReactNode }) {
+  return (
+    <LocationProvider>
+      <IncidentCacheProvider>
+        <IncidentSubscriptionProvider>{children}</IncidentSubscriptionProvider>
+      </IncidentCacheProvider>
+    </LocationProvider>
+  );
+}
+
 // =============================================================================
 // TEST SUITE
 // =============================================================================
@@ -262,6 +334,10 @@ describe('IncidentSubscriptionContext', () => {
       isReady: true,
       setHistoryWindowDays: jest.fn().mockResolvedValue(undefined),
     });
+  });
+
+  afterEach(() => {
+    jest.useRealTimers();
   });
 
   // =============================================================================
@@ -871,6 +947,77 @@ describe('IncidentSubscriptionContext', () => {
       expect(mockUseIncidentSubscription).toHaveBeenLastCalledWith(
         expect.objectContaining({
           location: location2,
+        })
+      );
+    });
+
+    it('keeps subscriptions enabled when no incident surface is focused', async () => {
+      jest.useFakeTimers();
+      render(
+        <TestWrapperWithoutFocus>
+          <SubscriptionConsumer />
+        </TestWrapperWithoutFocus>
+      );
+
+      releaseInitialSubscriptionLocationGate();
+
+      expect(mockUseIncidentSubscription).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          enabled: true,
+          location: defaultLocationMock.location,
+        })
+      );
+    });
+
+    it('keeps the last map viewport target when leaving map for a non-incident tab', async () => {
+      jest.useFakeTimers();
+      const mapAnchor: [number, number] = [-73.9857, 40.7484];
+      const mapViewport = {
+        center: mapAnchor,
+        bounds: {
+          ne: [-73.9, 40.8] as [number, number],
+          sw: [-74.1, 40.7] as [number, number],
+        },
+        zoom: 12,
+      };
+
+      const { rerender } = render(
+        <TestWrapperWithoutFocus>
+          <FocusController
+            mapFocused
+            mapAnchor={mapAnchor}
+            mapViewport={mapViewport}
+          />
+          <SubscriptionConsumer />
+        </TestWrapperWithoutFocus>
+      );
+
+      releaseInitialSubscriptionLocationGate();
+
+      expect(mockUseIncidentSubscription).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          subscriptionLocation: mapAnchor,
+          subscriptionViewport: mapViewport,
+        })
+      );
+
+      rerender(
+        <TestWrapperWithoutFocus>
+          <FocusController
+            mapFocused={false}
+            feedFocused={false}
+            mapAnchor={mapAnchor}
+            mapViewport={mapViewport}
+          />
+          <SubscriptionConsumer />
+        </TestWrapperWithoutFocus>
+      );
+
+      expect(mockUseIncidentSubscription).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          enabled: true,
+          subscriptionLocation: mapAnchor,
+          subscriptionViewport: mapViewport,
         })
       );
     });

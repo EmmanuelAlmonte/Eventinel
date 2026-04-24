@@ -12,7 +12,7 @@
  */
 
 import React from 'react';
-import { render, fireEvent, waitFor } from '@testing-library/react-native';
+import { render, fireEvent, act } from '@testing-library/react-native';
 
 // Import the component
 import IncidentFeedScreen from '../../screens/IncidentFeedScreen';
@@ -109,6 +109,20 @@ const mockUseSharedIncidents = jest.fn(() => ({
   hasReceivedHistory: true,
   setFeedFocused: jest.fn(),
 }));
+
+const FOCUS_LIST_ACTIVATION_DELAY_MS = 250;
+
+const activateFocusedIncidentList = () => {
+  act(() => {
+    jest.advanceTimersByTime(FOCUS_LIST_ACTIVATION_DELAY_MS);
+  });
+};
+
+const renderActiveIncidentFeed = () => {
+  const result = render(<IncidentFeedScreen />);
+  activateFocusedIncidentList();
+  return result;
+};
 
 const mockUseRelayStatus = jest.fn(() => ({
   hasConnectedRelay: true,
@@ -245,6 +259,7 @@ jest.mock('@rneui/themed', () => ({
 
 describe('IncidentFeedScreen', () => {
   beforeEach(() => {
+    jest.useFakeTimers();
     jest.clearAllMocks();
     mockUseSharedLocation.mockReturnValue(createLocationState());
     mockUseSharedIncidents.mockReturnValue({
@@ -254,23 +269,36 @@ describe('IncidentFeedScreen', () => {
     });
   });
 
+  afterEach(() => {
+    jest.runOnlyPendingTimers();
+    jest.useRealTimers();
+  });
+
   // =============================================================================
   // RENDERING TESTS
   // =============================================================================
 
   describe('Rendering', () => {
     it('renders the incidents title', () => {
-      const { getByText } = render(<IncidentFeedScreen />);
+      const { getByText } = renderActiveIncidentFeed();
       expect(getByText('Incidents')).toBeTruthy();
     });
 
+    it('renders a lightweight feed shell before activating the incident list', () => {
+      const { getByText, queryByText } = render(<IncidentFeedScreen />);
+      expect(getByText('0')).toBeTruthy();
+      expect(getByText('Updating now')).toBeTruthy();
+      expect(queryByText('Fire on Main Street')).toBeNull();
+    });
+
     it('renders subtitle with incident count', () => {
-      const { getByText } = render(<IncidentFeedScreen />);
-      expect(getByText(/3 nearby/)).toBeTruthy();
+      const { getByText } = renderActiveIncidentFeed();
+      expect(getByText('3')).toBeTruthy();
+      expect(getByText('nearby')).toBeTruthy();
     });
 
     it('shows Updated status when history received', () => {
-      const { getByText } = render(<IncidentFeedScreen />);
+      const { getByText } = renderActiveIncidentFeed();
       expect(getByText(/Updated/)).toBeTruthy();
     });
 
@@ -281,12 +309,12 @@ describe('IncidentFeedScreen', () => {
         setFeedFocused: jest.fn(),
       });
 
-      const { getByText } = render(<IncidentFeedScreen />);
-      expect(getByText(/Loading/)).toBeTruthy();
+      const { getByText } = renderActiveIncidentFeed();
+      expect(getByText('Updating now')).toBeTruthy();
     });
 
     it('renders screen container', () => {
-      const { getByTestId } = render(<IncidentFeedScreen />);
+      const { getByTestId } = renderActiveIncidentFeed();
       expect(getByTestId('screen-container')).toBeTruthy();
     });
   });
@@ -301,7 +329,7 @@ describe('IncidentFeedScreen', () => {
         createLocationState({ location: null, isLoading: true, source: 'none', permission: 'undetermined' })
       );
 
-      const { getByTestId } = render(<IncidentFeedScreen />);
+      const { getByTestId } = renderActiveIncidentFeed();
       expect(getByTestId('skeleton-list')).toBeTruthy();
     });
 
@@ -310,12 +338,12 @@ describe('IncidentFeedScreen', () => {
         createLocationState({ location: null, isLoading: true, source: 'none', permission: 'undetermined' })
       );
 
-      const { getByText } = render(<IncidentFeedScreen />);
+      const { getByText } = renderActiveIncidentFeed();
       expect(getByText('Finding your location...')).toBeTruthy();
     });
 
     it('does not show skeleton when location is ready', () => {
-      const { queryByTestId } = render(<IncidentFeedScreen />);
+      const { queryByTestId } = renderActiveIncidentFeed();
       expect(queryByTestId('skeleton-list')).toBeNull();
     });
   });
@@ -326,33 +354,33 @@ describe('IncidentFeedScreen', () => {
 
   describe('Incident List', () => {
     it('renders all incident cards', () => {
-      const { getByText } = render(<IncidentFeedScreen />);
+      const { getByText } = renderActiveIncidentFeed();
       expect(getByText('Fire on Main Street')).toBeTruthy();
       expect(getByText('Traffic Accident')).toBeTruthy();
       expect(getByText('Medical Emergency')).toBeTruthy();
     });
 
     it('displays incident descriptions', () => {
-      const { getByText } = render(<IncidentFeedScreen />);
+      const { getByText } = renderActiveIncidentFeed();
       expect(getByText(/Large fire reported/)).toBeTruthy();
       expect(getByText(/Multi-car accident/)).toBeTruthy();
     });
 
     it('displays incident addresses', () => {
-      const { getAllByText } = render(<IncidentFeedScreen />);
+      const { getAllByText } = renderActiveIncidentFeed();
       expect(getAllByText(/123 Main St/).length).toBeGreaterThan(0);
       expect(getAllByText(/456 Broadway/).length).toBeGreaterThan(0);
     });
 
     it('displays severity badges', () => {
-      const { getByText } = render(<IncidentFeedScreen />);
-      expect(getByText('Sev 4')).toBeTruthy();
-      expect(getByText('Sev 3')).toBeTruthy();
-      expect(getByText('Sev 5')).toBeTruthy();
+      const { getByText } = renderActiveIncidentFeed();
+      expect(getByText('High')).toBeTruthy();
+      expect(getByText('Medium')).toBeTruthy();
+      expect(getByText('Critical')).toBeTruthy();
     });
 
     it('displays relative timestamps', () => {
-      const { getAllByText } = render(<IncidentFeedScreen />);
+      const { getAllByText } = renderActiveIncidentFeed();
       expect(getAllByText(/ago/).length).toBeGreaterThan(0);
     });
   });
@@ -363,7 +391,7 @@ describe('IncidentFeedScreen', () => {
 
   describe('Incident Card Interactions', () => {
     it('navigates to incident detail when card is pressed', () => {
-      const { getByText } = render(<IncidentFeedScreen />);
+      const { getByText } = renderActiveIncidentFeed();
       const fireIncident = getByText('Fire on Main Street');
 
       fireEvent.press(fireIncident);
@@ -374,7 +402,7 @@ describe('IncidentFeedScreen', () => {
     });
 
     it('navigates with correct incident id for second item', () => {
-      const { getByText } = render(<IncidentFeedScreen />);
+      const { getByText } = renderActiveIncidentFeed();
       const trafficIncident = getByText('Traffic Accident');
 
       fireEvent.press(trafficIncident);
@@ -385,7 +413,7 @@ describe('IncidentFeedScreen', () => {
     });
 
     it('navigates with correct incident id for third item', () => {
-      const { getByText } = render(<IncidentFeedScreen />);
+      const { getByText } = renderActiveIncidentFeed();
       const medicalIncident = getByText('Medical Emergency');
 
       fireEvent.press(medicalIncident);
@@ -408,8 +436,8 @@ describe('IncidentFeedScreen', () => {
         setFeedFocused: jest.fn(),
       });
 
-      const { getByText } = render(<IncidentFeedScreen />);
-      expect(getByText('All Clear')).toBeTruthy();
+      const { getByText } = renderActiveIncidentFeed();
+      expect(getByText('Quiet right now')).toBeTruthy();
     });
 
     it('shows no incidents message in empty state', () => {
@@ -419,8 +447,8 @@ describe('IncidentFeedScreen', () => {
         setFeedFocused: jest.fn(),
       });
 
-      const { getByText } = render(<IncidentFeedScreen />);
-      expect(getByText('No incidents reported in your area')).toBeTruthy();
+      const { getByText } = renderActiveIncidentFeed();
+      expect(getByText('No nearby incidents have been reported in your current area.')).toBeTruthy();
     });
 
     it('shows check-circle icon in empty state', () => {
@@ -430,7 +458,7 @@ describe('IncidentFeedScreen', () => {
         setFeedFocused: jest.fn(),
       });
 
-      const { getByTestId } = render(<IncidentFeedScreen />);
+      const { getByTestId } = renderActiveIncidentFeed();
       expect(getByTestId('icon-check-circle')).toBeTruthy();
     });
 
@@ -441,9 +469,9 @@ describe('IncidentFeedScreen', () => {
         setFeedFocused: jest.fn(),
       });
 
-      const { getByText } = render(<IncidentFeedScreen />);
-      expect(getByText('Loading...')).toBeTruthy();
-      expect(getByText('Fetching incidents from relays')).toBeTruthy();
+      const { getByText } = renderActiveIncidentFeed();
+      expect(getByText('Checking nearby activity')).toBeTruthy();
+      expect(getByText('Pulling the latest incident reports from your relays.')).toBeTruthy();
     });
 
     it('shows hourglass icon during loading empty state', () => {
@@ -453,7 +481,7 @@ describe('IncidentFeedScreen', () => {
         setFeedFocused: jest.fn(),
       });
 
-      const { getByTestId } = render(<IncidentFeedScreen />);
+      const { getByTestId } = renderActiveIncidentFeed();
       expect(getByTestId('icon-hourglass-empty')).toBeTruthy();
     });
   });
@@ -464,17 +492,17 @@ describe('IncidentFeedScreen', () => {
 
   describe('Incident Type Icons', () => {
     it('shows fire icon for fire incidents', () => {
-      const { getByTestId } = render(<IncidentFeedScreen />);
+      const { getByTestId } = renderActiveIncidentFeed();
       expect(getByTestId('icon-local-fire-department')).toBeTruthy();
     });
 
     it('shows traffic icon for traffic incidents', () => {
-      const { getByTestId } = render(<IncidentFeedScreen />);
+      const { getByTestId } = renderActiveIncidentFeed();
       expect(getByTestId('icon-traffic')).toBeTruthy();
     });
 
     it('shows medical icon for medical incidents', () => {
-      const { getByTestId } = render(<IncidentFeedScreen />);
+      const { getByTestId } = renderActiveIncidentFeed();
       expect(getByTestId('icon-medical-services')).toBeTruthy();
     });
   });
@@ -485,8 +513,9 @@ describe('IncidentFeedScreen', () => {
 
   describe('Subtitle Counts', () => {
     it('shows correct count with multiple incidents', () => {
-      const { getByText } = render(<IncidentFeedScreen />);
-      expect(getByText(/3 nearby/)).toBeTruthy();
+      const { getByText } = renderActiveIncidentFeed();
+      expect(getByText('3')).toBeTruthy();
+      expect(getByText('nearby')).toBeTruthy();
     });
 
     it('shows 0 nearby when no incidents', () => {
@@ -496,8 +525,9 @@ describe('IncidentFeedScreen', () => {
         setFeedFocused: jest.fn(),
       });
 
-      const { getByText } = render(<IncidentFeedScreen />);
-      expect(getByText(/0 nearby/)).toBeTruthy();
+      const { getByText } = renderActiveIncidentFeed();
+      expect(getByText('0')).toBeTruthy();
+      expect(getByText('nearby')).toBeTruthy();
     });
 
     it('shows 1 nearby with single incident', () => {
@@ -507,8 +537,9 @@ describe('IncidentFeedScreen', () => {
         setFeedFocused: jest.fn(),
       });
 
-      const { getByText } = render(<IncidentFeedScreen />);
-      expect(getByText(/1 nearby/)).toBeTruthy();
+      const { getByText } = renderActiveIncidentFeed();
+      expect(getByText('1')).toBeTruthy();
+      expect(getByText('nearby')).toBeTruthy();
     });
   });
 
@@ -518,19 +549,19 @@ describe('IncidentFeedScreen', () => {
 
   describe('Meta Information Icons', () => {
     it('shows schedule icon for time', () => {
-      const { getAllByTestId } = render(<IncidentFeedScreen />);
+      const { getAllByTestId } = renderActiveIncidentFeed();
       const scheduleIcons = getAllByTestId('icon-schedule');
       expect(scheduleIcons.length).toBeGreaterThan(0);
     });
 
     it('shows location icon for address', () => {
-      const { getAllByTestId } = render(<IncidentFeedScreen />);
+      const { getAllByTestId } = renderActiveIncidentFeed();
       const locationIcons = getAllByTestId('icon-location-on');
       expect(locationIcons.length).toBeGreaterThan(0);
     });
 
     it('shows chevron for navigation', () => {
-      const { getAllByTestId } = render(<IncidentFeedScreen />);
+      const { getAllByTestId } = renderActiveIncidentFeed();
       const chevrons = getAllByTestId('icon-chevron-right');
       expect(chevrons.length).toBe(3);
     });
@@ -551,13 +582,13 @@ describe('IncidentFeedScreen', () => {
         setFeedFocused: jest.fn(),
       });
 
-      const { getByText } = render(<IncidentFeedScreen />);
-      expect(getByText('Sev 1')).toBeTruthy();
+      const { getByText } = renderActiveIncidentFeed();
+      expect(getByText('Info')).toBeTruthy();
     });
 
     it('handles maximum severity 5 incidents', () => {
-      const { getByText } = render(<IncidentFeedScreen />);
-      expect(getByText('Sev 5')).toBeTruthy();
+      const { getByText } = renderActiveIncidentFeed();
+      expect(getByText('Critical')).toBeTruthy();
     });
   });
 });

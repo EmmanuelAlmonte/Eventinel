@@ -8,6 +8,8 @@ import { buildIncidentDisplayState } from './sorting';
 import { applyIncidentEventBatch } from './eventReducer';
 import { markRelayConfirmedIncident, type RelayConfirmationMapRef } from './cacheConfirmation';
 import {
+  INITIAL_HISTORY_FLUSH_CHUNK_SIZE,
+  INITIAL_HISTORY_FLUSH_CONTINUATION_MS,
   INITIAL_HISTORY_RELAY_BUFFER_MS,
   INCIDENT_KIND,
   SUBSCRIPTION_BUFFER_MS,
@@ -194,7 +196,7 @@ function scheduleSubscriptionFlushTimer(
   requestedDelayMs: number
 ): void {
   const currentDelayMs = flushTimerDelayMsRef.current;
-  if (flushTimerRef.current && currentDelayMs != null && currentDelayMs >= requestedDelayMs) {
+  if (flushTimerRef.current && currentDelayMs != null && currentDelayMs <= requestedDelayMs) {
     return;
   }
 
@@ -225,12 +227,17 @@ function flushQueuedIncidentEvents(
 ): void {
   clearSubscriptionFlushTimer(args.flushTimerRef, args.flushTimerDelayMsRef);
 
-  const queued = args.pendingEventsRef.current;
+  const shouldChunkInitialHistory = !args.hasReceivedHistory();
+  const queued = shouldChunkInitialHistory
+    ? args.pendingEventsRef.current.slice(0, INITIAL_HISTORY_FLUSH_CHUNK_SIZE)
+    : args.pendingEventsRef.current;
   if (queued.length === 0) {
     return;
   }
 
-  args.pendingEventsRef.current = [];
+  args.pendingEventsRef.current = shouldChunkInitialHistory
+    ? args.pendingEventsRef.current.slice(INITIAL_HISTORY_FLUSH_CHUNK_SIZE)
+    : [];
 
   const reducerResult = applyIncidentEventBatch({
     queuedEvents: queued,
@@ -244,6 +251,14 @@ function flushQueuedIncidentEvents(
 
   const { didUpdate, totalRelevantEvents, cacheCount, relayCount } = reducerResult;
   if (totalRelevantEvents === 0) {
+    if (args.pendingEventsRef.current.length > 0) {
+      scheduleSubscriptionFlushTimer(
+        args.flushTimerRef,
+        args.flushTimerDelayMsRef,
+        () => flushQueuedIncidentEvents(args, updatedStateCallback),
+        INITIAL_HISTORY_FLUSH_CONTINUATION_MS
+      );
+    }
     return;
   }
 
@@ -257,6 +272,14 @@ function flushQueuedIncidentEvents(
 
   if (didUpdate) {
     updatedStateCallback(reducerResult.updatedIncidents);
+    if (args.pendingEventsRef.current.length > 0) {
+      scheduleSubscriptionFlushTimer(
+        args.flushTimerRef,
+        args.flushTimerDelayMsRef,
+        () => flushQueuedIncidentEvents(args, updatedStateCallback),
+        INITIAL_HISTORY_FLUSH_CONTINUATION_MS
+      );
+    }
     return;
   }
 
@@ -267,6 +290,15 @@ function flushQueuedIncidentEvents(
     removedIncidentIds: [],
     hasReceivedHistory: args.hasReceivedHistory(),
   }));
+
+  if (args.pendingEventsRef.current.length > 0) {
+    scheduleSubscriptionFlushTimer(
+      args.flushTimerRef,
+      args.flushTimerDelayMsRef,
+      () => flushQueuedIncidentEvents(args, updatedStateCallback),
+      INITIAL_HISTORY_FLUSH_CONTINUATION_MS
+    );
+  }
 }
 
 function enqueueIncidentEvents(
