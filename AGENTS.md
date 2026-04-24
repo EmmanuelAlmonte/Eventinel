@@ -12,7 +12,7 @@ This is the nested React Native/Expo app repo inside the outer Eventinel workspa
 
 ## Architecture Standard
 
-The app standard is feature-sliced UI, pure domain core, isolated native/Nostr adapters. See `../docs/agent-friendly-codebase-plan.md` for the current detailed architecture, LOC, testing, documentation, and refactor rules.
+The app standard is feature-sliced UI, pure domain core, isolated native/Nostr adapters. See `../docs/PROGRAMMING_STANDARDS.md` for mandatory coding rules and `../docs/REFACTORING_PLAN.md` for oversized-file split targets.
 
 Dependency direction:
 
@@ -30,7 +30,7 @@ UI screens/components -> hooks/application services -> domain + adapters
 
 - `App.tsx` boots the app and wires providers/navigation; `index.ts` is the Expo entrypoint.
 - UI lives in `screens/`, screen feature subfolders, and shared component folders under `components/`.
-- Current domain and adapter logic still lives mostly under `lib/`, `hooks/`, and `contexts/`; move it incrementally toward `domain/`, `adapters/`, `features/`, `state/`, `ui/`, and `testing/` as described in the plan doc.
+- Current domain and adapter logic still lives mostly under `lib/`, `hooks/`, and `contexts/`; move it incrementally toward `domain/`, `adapters/`, `features/`, `state/`, `ui/`, and `testing/` as described in the standards docs.
 - Tests live in `__tests__` with supporting mocks in `__mocks__`.
 - Build outputs and generated artifacts such as `dist/`, `android/`, `ios/`, coverage, screenshots, and runtime evidence should not be committed unless a task explicitly requires a reviewed artifact.
 
@@ -45,7 +45,7 @@ UI screens/components -> hooks/application services -> domain + adapters
 
 ## File Size Guardrails
 
-Use `../docs/agent-friendly-codebase-plan.md` as the source of truth. Current practical guardrails:
+Use `../docs/PROGRAMMING_STANDARDS.md` as the source of truth. Current practical guardrails:
 
 - Screens: target 200 LOC, hard cap 325 LOC.
 - Components/sections: target 120 LOC, hard cap 220 LOC.
