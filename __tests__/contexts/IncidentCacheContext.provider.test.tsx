@@ -25,10 +25,10 @@ describe('IncidentCacheContext provider', () => {
             <Text>Child Content</Text>
           </IncidentCacheProvider>
         );
-  
+
         expect(getByText('Child Content')).toBeTruthy();
       });
-  
+
       it('renders multiple children', () => {
         const { getByText } = render(
           <IncidentCacheProvider>
@@ -36,11 +36,11 @@ describe('IncidentCacheContext provider', () => {
             <Text>Second Child</Text>
           </IncidentCacheProvider>
         );
-  
+
         expect(getByText('First Child')).toBeTruthy();
         expect(getByText('Second Child')).toBeTruthy();
       });
-  
+
       it('renders nested components', () => {
         const { getByText } = render(
           <IncidentCacheProvider>
@@ -51,15 +51,15 @@ describe('IncidentCacheContext provider', () => {
             </View>
           </IncidentCacheProvider>
         );
-  
+
         expect(getByText('Nested Content')).toBeTruthy();
       });
     });
-  
+
     describe('Context Value Access', () => {
       it('provides getIncident function', () => {
         let cacheApi: ReturnType<typeof useIncidentCache> | null = null;
-  
+
         render(
           <IncidentCacheProvider>
             <CacheConsumer
@@ -69,14 +69,14 @@ describe('IncidentCacheContext provider', () => {
             />
           </IncidentCacheProvider>
         );
-  
+
         expect(cacheApi).not.toBeNull();
         expect(typeof cacheApi!.getIncident).toBe('function');
       });
-  
+
       it('provides upsertMany function', () => {
         let cacheApi: ReturnType<typeof useIncidentCache> | null = null;
-  
+
         render(
           <IncidentCacheProvider>
             <CacheConsumer
@@ -86,31 +86,31 @@ describe('IncidentCacheContext provider', () => {
             />
           </IncidentCacheProvider>
         );
-  
+
         expect(cacheApi).not.toBeNull();
         expect(typeof cacheApi!.upsertMany).toBe('function');
       });
-  
+
       it('provides version number', () => {
         const { getByTestId } = render(
           <IncidentCacheProvider>
             <CacheConsumer />
           </IncidentCacheProvider>
         );
-  
+
         const versionText = getByTestId('version');
         expect(versionText.props.children).toBe(0);
       });
-  
+
       it('throws error when used outside provider', () => {
         // Suppress console.error for this test since we expect an error
         const originalError = console.error;
         console.error = jest.fn();
-  
+
         expect(() => {
           render(<CacheConsumer />);
         }).toThrow('useIncidentCache must be used within IncidentCacheProvider');
-  
+
         console.error = originalError;
       });
     });

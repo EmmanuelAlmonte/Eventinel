@@ -31,21 +31,21 @@ describe('useIncidentSubscription filters and options', () => {
             location: null,
           })
         );
-  
+
         expect(getSubscribeCalls().length).toBe(0);
         expect(result.current.incidents).toEqual([]);
         expect(result.current.totalEventsReceived).toBe(0);
         expect(result.current.hasReceivedHistory).toBe(true);
         expect(result.current.isInitialLoading).toBe(false);
       });
-  
+
       it('subscribes when location is provided', () => {
         renderHook(() =>
           useIncidentSubscription({
             location: [-75.1652, 39.9526],
           })
         );
-  
+
         // Subscription should be created with a geohash filter.
         const calls = getSubscribeCalls();
         expect(calls.length).toBeGreaterThan(0);
@@ -55,28 +55,28 @@ describe('useIncidentSubscription filters and options', () => {
         });
         expect(hasGeoHashFilter).toBe(true);
       });
-  
+
       it('does not build filters when location is null', () => {
         renderHook(() =>
           useIncidentSubscription({
             location: null,
           })
         );
-  
+
         expect(getSubscribeCalls().length).toBe(0);
       });
-  
+
       it('adds the default freshness window to live subscription filters', () => {
         const fixedNowMs = 1_735_689_600_000;
         const nowSpy = jest.spyOn(Date, 'now').mockReturnValue(fixedNowMs);
-  
+
         try {
           renderHook(() =>
             useIncidentSubscription({
               location: [-75.1652, 39.9526],
             })
           );
-  
+
           const filters = getSubscribeCalls()[0][0];
           expect(filters[0].since).toBe(
             Math.floor(fixedNowMs / 1000) - INCIDENT_LIMITS.SINCE_DAYS * 86400
@@ -85,11 +85,11 @@ describe('useIncidentSubscription filters and options', () => {
           nowSpy.mockRestore();
         }
       });
-  
+
       it('uses a custom sinceDays override when provided', () => {
         const fixedNowMs = 1_735_689_600_000;
         const nowSpy = jest.spyOn(Date, 'now').mockReturnValue(fixedNowMs);
-  
+
         try {
           renderHook(() =>
             useIncidentSubscription({
@@ -97,7 +97,7 @@ describe('useIncidentSubscription filters and options', () => {
               sinceDays: 3,
             })
           );
-  
+
           const filters = getSubscribeCalls()[0][0];
           expect(filters[0].since).toBe(Math.floor(fixedNowMs / 1000) - 3 * 86400);
         } finally {
@@ -105,7 +105,7 @@ describe('useIncidentSubscription filters and options', () => {
         }
       });
     });
-  
+
     describe('Subscription Options', () => {
       it('uses CACHE_FIRST cache usage', () => {
         renderHook(() =>
@@ -113,40 +113,40 @@ describe('useIncidentSubscription filters and options', () => {
             location: [-75.1652, 39.9526],
           })
         );
-  
+
         const filterCall = getSubscribeCalls()[0];
         const options = filterCall[1];
-  
+
         expect(options.cacheUsage).toBe('CACHE_FIRST');
       });
-  
+
       it('sets closeOnEose to false for live updates', () => {
         renderHook(() =>
           useIncidentSubscription({
             location: [-75.1652, 39.9526],
           })
         );
-  
+
         const filterCall = getSubscribeCalls()[0];
         const options = filterCall[1];
-  
+
         expect(options.closeOnEose).toBe(false);
       });
-  
+
       it('sets groupable to false to avoid race conditions', () => {
         renderHook(() =>
           useIncidentSubscription({
             location: [-75.1652, 39.9526],
           })
         );
-  
+
         const filterCall = getSubscribeCalls()[0];
         const options = filterCall[1];
-  
+
         expect(options.groupable).toBe(false);
       });
     });
-  
+
   describe('Filter Edge Cases', () => {
       it('handles location at equator/prime meridian', () => {
         renderHook(() =>
@@ -154,14 +154,14 @@ describe('useIncidentSubscription filters and options', () => {
             location: [0, 0],
           })
         );
-  
+
         expect(mockNDKHooks.getNDK().subscribe).toHaveBeenCalled();
       });
-  
+
       it('handles location change without altering simple filter', () => {
         const fixedNowMs = 1_735_689_600_000;
         const nowSpy = jest.spyOn(Date, 'now').mockReturnValue(fixedNowMs);
-  
+
         try {
           const { rerender } = renderHook(
             ({ location }) =>
@@ -172,9 +172,9 @@ describe('useIncidentSubscription filters and options', () => {
               initialProps: { location: [-75.1652, 39.9526] as [number, number] },
             }
           );
-  
+
           rerender({ location: [-74.006, 40.7128] as [number, number] });
-  
+
           const calls = getSubscribeCalls();
           const globalFilterCall = calls.find(([filters]) => {
             if (!Array.isArray(filters) || filters.length === 0) {
@@ -183,7 +183,7 @@ describe('useIncidentSubscription filters and options', () => {
             return Array.isArray(filters[0]?.kinds) && filters[0].kinds.includes(30911);
           });
           const filters = globalFilterCall?.[0];
-  
+
           expect(filters).toBeDefined();
           expect(filters[0].kinds).toEqual([30911]);
           expect(filters[0].limit).toBe(INCIDENT_LIMITS.FETCH_LIMIT);
@@ -196,4 +196,3 @@ describe('useIncidentSubscription filters and options', () => {
       });
     });
 });
-

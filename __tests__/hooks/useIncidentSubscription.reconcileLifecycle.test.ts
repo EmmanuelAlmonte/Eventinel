@@ -35,23 +35,23 @@ describe('useIncidentSubscription reconcile lifecycle', () => {
             initialProps: { location: [-75.1652, 39.9526] as [number, number] },
           }
         );
-  
+
         const startCalls = getSubscribeCalls();
         const initialCount = startCalls.length;
         const initialStops = mockNDKHooks.getNDK().subscribe.mock.results
           .map((result) => (result.value ?? null) as { stop: jest.Mock })
           .filter(Boolean)
           .map((entry) => entry.stop);
-  
+
         rerender({ location: [40.7128, -74.006] as [number, number] });
-  
+
         await waitFor(() => {
           expect(getSubscribeCalls().length).toBeGreaterThan(initialCount);
           const hadStop = initialStops.some((stop) => stop.mock.calls.length > 0);
           expect(hadStop).toBe(true);
         });
       });
-  
+
       it('batches cache and relay updates into a single flush window', async () => {
         const createdAt = Math.floor(Date.now() / 1000);
         const cacheEvent = createMockIncidentEvent({
@@ -64,7 +64,7 @@ describe('useIncidentSubscription reconcile lifecycle', () => {
           created_at: createdAt + 5,
           title: 'Relay',
         });
-  
+
         const { result } = renderHook(() =>
           useIncidentSubscription({
             location: [-75.1652, 39.9526],
@@ -74,7 +74,7 @@ describe('useIncidentSubscription reconcile lifecycle', () => {
         mockSubscription.setEvents([cacheEvent]);
         mockSubscription.addEvent(relayEvent);
         mockSubscription.setEose(true);
-  
+
         await waitFor(() => {
           expect(result.current.totalEventsReceived).toBe(subscriptionCount * 2);
           expect(result.current.incidents).toHaveLength(1);
@@ -82,25 +82,25 @@ describe('useIncidentSubscription reconcile lifecycle', () => {
           expect(result.current.updatedIncidents.some((incident) => incident.title === 'Relay')).toBe(true);
         });
       });
-  
+
       it('removes cache-only incidents after live relay history completes without confirmation', async () => {
         const cacheOnlyEvent = createMockIncidentEvent({
           incidentId: 'manual-stale-cache',
           title: 'Manual Stale Cache',
         });
-  
+
         mockSubscription.setEose(false);
-  
+
         const { result } = renderHook(() =>
           useIncidentSubscription({
             location: [-75.1652, 39.9526],
           })
         );
-  
+
         act(() => {
           mockSubscription.setEvents([cacheOnlyEvent]);
         });
-  
+
         await waitFor(() => {
           expect(
             result.current.incidents.some(
@@ -109,11 +109,11 @@ describe('useIncidentSubscription reconcile lifecycle', () => {
           ).toBe(true);
           expect(result.current.hasReceivedHistory).toBe(false);
         });
-  
+
         act(() => {
           mockSubscription.setEose(true);
         });
-  
+
         await waitFor(() => {
           expect(
             result.current.incidents.some(
@@ -123,7 +123,7 @@ describe('useIncidentSubscription reconcile lifecycle', () => {
           expect(result.current.hasReceivedHistory).toBe(true);
           expect(result.current.removedIncidentIds).toContain('manual-stale-cache');
         });
-  
+
         expect(mockDeleteIncidentEventsFromNdkCache).toHaveBeenCalledWith(
           expect.arrayContaining([
             expect.objectContaining({
@@ -134,7 +134,7 @@ describe('useIncidentSubscription reconcile lifecycle', () => {
           ])
         );
       });
-  
+
       it('keeps relay-confirmed incidents after live relay history completes', async () => {
         const createdAt = Math.floor(Date.now() / 1000);
         const cacheEvent = createMockIncidentEvent({
@@ -147,21 +147,21 @@ describe('useIncidentSubscription reconcile lifecycle', () => {
           created_at: createdAt + 1,
           title: 'Relay Confirmed Copy',
         });
-  
+
         mockSubscription.setEose(false);
-  
+
         const { result } = renderHook(() =>
           useIncidentSubscription({
             location: [-75.1652, 39.9526],
           })
         );
-  
+
         act(() => {
           mockSubscription.setEvents([cacheEvent]);
           mockSubscription.addEvent(relayEvent);
           mockSubscription.setEose(true);
         });
-  
+
         await waitFor(() => {
           expect(result.current.incidents).toHaveLength(1);
           expect(result.current.incidents[0].incidentId).toBe('relay-confirmed-cache');
@@ -171,4 +171,3 @@ describe('useIncidentSubscription reconcile lifecycle', () => {
       });
     });
 });
-

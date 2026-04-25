@@ -38,7 +38,7 @@ describe('IncidentSubscriptionContext edge cases', () => {
             <SubscriptionConsumer />
           </TestWrapper>
         );
-  
+
         // Simulate rapid updates
         for (let i = 0; i < 10; i++) {
           mockUseIncidentSubscription.mockReturnValue({
@@ -47,45 +47,45 @@ describe('IncidentSubscriptionContext edge cases', () => {
               .fill(null)
               .map((_, j) => createMockIncident(`rapid-${j}`)),
           });
-  
+
           rerender(
             <TestWrapper>
               <SubscriptionConsumer />
             </TestWrapper>
           );
         }
-  
+
         expect(getByTestId('incident-count').props.children).toBe(10);
       });
-  
+
       it('handles empty incidents after having incidents', () => {
         mockUseIncidentSubscription.mockReturnValue({
           ...defaultSubscriptionMock,
           incidents: [createMockIncident('temp-1'), createMockIncident('temp-2')],
         });
-  
+
         const { getByTestId, rerender } = render(
           <TestWrapper>
             <SubscriptionConsumer />
           </TestWrapper>
         );
-  
+
         expect(getByTestId('incident-count').props.children).toBe(2);
-  
+
         mockUseIncidentSubscription.mockReturnValue({
           ...defaultSubscriptionMock,
           incidents: [],
         });
-  
+
         rerender(
           <TestWrapper>
             <SubscriptionConsumer />
           </TestWrapper>
         );
-  
+
         expect(getByTestId('incident-count').props.children).toBe(0);
       });
-  
+
       it('handles location permission denied', () => {
         mockUseUserLocation.mockReturnValue({
           ...defaultLocationMock,
@@ -93,14 +93,14 @@ describe('IncidentSubscriptionContext edge cases', () => {
           permission: 'denied',
           isLoading: false,
         });
-  
+
         const { getByTestId } = render(
           <TestWrapper>
             <LocationConsumer />
             <SubscriptionConsumer />
           </TestWrapper>
         );
-  
+
         expect(getByTestId('permission').props.children).toBe('denied');
         expect(mockUseIncidentSubscription).toHaveBeenCalledWith(
           expect.objectContaining({
@@ -110,4 +110,3 @@ describe('IncidentSubscriptionContext edge cases', () => {
       });
     });
 });
-

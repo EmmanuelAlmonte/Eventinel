@@ -38,13 +38,13 @@ describe('IncidentSubscriptionContext location and lifecycle', () => {
           ...defaultLocationMock,
           location: mockLocation,
         });
-  
+
         render(
           <TestWrapper>
             <SubscriptionConsumer />
           </TestWrapper>
         );
-  
+
         expect(mockUseIncidentSubscription).toHaveBeenCalledWith(
           expect.objectContaining({
             location: mockLocation,
@@ -52,19 +52,19 @@ describe('IncidentSubscriptionContext location and lifecycle', () => {
           })
         );
       });
-  
+
       it('disables subscription when location is null', () => {
         mockUseUserLocation.mockReturnValue({
           ...defaultLocationMock,
           location: null,
         });
-  
+
         render(
           <TestWrapper>
             <SubscriptionConsumer />
           </TestWrapper>
         );
-  
+
         expect(mockUseIncidentSubscription).toHaveBeenCalledWith(
           expect.objectContaining({
             location: null,
@@ -73,7 +73,7 @@ describe('IncidentSubscriptionContext location and lifecycle', () => {
           })
         );
       });
-  
+
       it('passes the updated location through when location becomes available', () => {
         // Start with null location
         mockUseUserLocation.mockReturnValue({
@@ -81,32 +81,32 @@ describe('IncidentSubscriptionContext location and lifecycle', () => {
           location: null,
           isLoading: true,
         });
-  
+
         const { rerender } = render(
           <TestWrapper>
             <SubscriptionConsumer />
           </TestWrapper>
         );
-  
+
         expect(mockUseIncidentSubscription).toHaveBeenCalledWith(
           expect.objectContaining({
             enabled: false,
           })
         );
-  
+
         // Update location
         mockUseUserLocation.mockReturnValue({
           ...defaultLocationMock,
           location: [-74.006, 40.7128],
           isLoading: false,
         });
-  
+
         rerender(
           <TestWrapper>
             <SubscriptionConsumer />
           </TestWrapper>
         );
-  
+
         expect(mockUseIncidentSubscription).toHaveBeenLastCalledWith(
           expect.objectContaining({
             location: [-74.006, 40.7128],
@@ -114,20 +114,20 @@ describe('IncidentSubscriptionContext location and lifecycle', () => {
           })
         );
       });
-  
+
       it('disables subscription while the history window preference is still loading', () => {
         mockUseIncidentHistoryWindow.mockReturnValue({
           historyWindowDays: 7,
           isReady: false,
           setHistoryWindowDays: jest.fn().mockResolvedValue(undefined),
         });
-  
+
         render(
           <TestWrapper>
             <SubscriptionConsumer />
           </TestWrapper>
         );
-  
+
         expect(mockUseIncidentSubscription).toHaveBeenCalledWith(
           expect.objectContaining({
             enabled: false,
@@ -136,7 +136,7 @@ describe('IncidentSubscriptionContext location and lifecycle', () => {
         );
       });
     });
-  
+
     describe('Subscription Lifecycle', () => {
       it('creates subscription only once with stable location', () => {
         const mockLocation: [number, number] = [-74.006, 40.7128];
@@ -144,64 +144,64 @@ describe('IncidentSubscriptionContext location and lifecycle', () => {
           ...defaultLocationMock,
           location: mockLocation,
         });
-  
+
         const { rerender } = render(
           <TestWrapper>
             <SubscriptionConsumer />
           </TestWrapper>
         );
-  
+
         const callCount = mockUseIncidentSubscription.mock.calls.length;
-  
+
         // Re-render without changing location
         rerender(
           <TestWrapper>
             <SubscriptionConsumer />
           </TestWrapper>
         );
-  
+
         // Hook should be called again but with same params
         expect(mockUseIncidentSubscription).toHaveBeenCalledTimes(callCount + 1);
       });
-  
+
       it('updates subscription when location changes', () => {
         const location1: [number, number] = [-74.006, 40.7128];
         mockUseUserLocation.mockReturnValue({
           ...defaultLocationMock,
           location: location1,
         });
-  
+
         const { rerender } = render(
           <TestWrapper>
             <SubscriptionConsumer />
           </TestWrapper>
         );
-  
+
         expect(mockUseIncidentSubscription).toHaveBeenLastCalledWith(
           expect.objectContaining({
             location: location1,
           })
         );
-  
+
         const location2: [number, number] = [-75.1652, 39.9526];
         mockUseUserLocation.mockReturnValue({
           ...defaultLocationMock,
           location: location2,
         });
-  
+
         rerender(
           <TestWrapper>
             <SubscriptionConsumer />
           </TestWrapper>
         );
-  
+
         expect(mockUseIncidentSubscription).toHaveBeenLastCalledWith(
           expect.objectContaining({
             location: location2,
           })
         );
       });
-  
+
       it('keeps subscriptions enabled when no incident surface is focused', async () => {
         jest.useFakeTimers();
         render(
@@ -209,9 +209,9 @@ describe('IncidentSubscriptionContext location and lifecycle', () => {
             <SubscriptionConsumer />
           </TestWrapperWithoutFocus>
         );
-  
+
         releaseInitialSubscriptionLocationGate();
-  
+
         expect(mockUseIncidentSubscription).toHaveBeenLastCalledWith(
           expect.objectContaining({
             enabled: true,
@@ -219,7 +219,7 @@ describe('IncidentSubscriptionContext location and lifecycle', () => {
           })
         );
       });
-  
+
       it('keeps the last map viewport target when leaving map for a non-incident tab', async () => {
         jest.useFakeTimers();
         const mapAnchor: [number, number] = [-73.9857, 40.7484];
@@ -231,7 +231,7 @@ describe('IncidentSubscriptionContext location and lifecycle', () => {
           },
           zoom: 12,
         };
-  
+
         const { rerender } = render(
           <TestWrapperWithoutFocus>
             <FocusController
@@ -242,16 +242,16 @@ describe('IncidentSubscriptionContext location and lifecycle', () => {
             <SubscriptionConsumer />
           </TestWrapperWithoutFocus>
         );
-  
+
         releaseInitialSubscriptionLocationGate();
-  
+
         expect(mockUseIncidentSubscription).toHaveBeenLastCalledWith(
           expect.objectContaining({
             subscriptionLocation: mapAnchor,
             subscriptionViewport: mapViewport,
           })
         );
-  
+
         rerender(
           <TestWrapperWithoutFocus>
             <FocusController
@@ -263,7 +263,7 @@ describe('IncidentSubscriptionContext location and lifecycle', () => {
             <SubscriptionConsumer />
           </TestWrapperWithoutFocus>
         );
-  
+
         expect(mockUseIncidentSubscription).toHaveBeenLastCalledWith(
           expect.objectContaining({
             enabled: true,
@@ -274,4 +274,3 @@ describe('IncidentSubscriptionContext location and lifecycle', () => {
       });
     });
 });
-
