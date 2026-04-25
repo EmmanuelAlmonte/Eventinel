@@ -36,19 +36,13 @@ jest.mock('react-native-safe-area-context', () => ({
 
 jest.mock('@rneui/themed', () => ({
   Text: ({ children, style, ...props }: any) => {
-    const { Text } = require('react-native');
-    return (
-      <Text style={style} {...props}>
-        {children}
-      </Text>
-    );
+    return require('react').createElement(require('react-native').Text, { style, ...props }, children);
   },
 }));
 
 jest.mock('@expo/vector-icons', () => ({
   MaterialCommunityIcons: ({ name }: { name: string }) => {
-    const { Text } = require('react-native');
-    return <Text>{name}</Text>;
+    return require('react').createElement(require('react-native').Text, null, name);
   },
 }));
 

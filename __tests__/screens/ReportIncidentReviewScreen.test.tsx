@@ -88,11 +88,11 @@ jest.mock('./../../screens/reportIncident/locationPresentation', () => ({
 
 jest.mock('./../../screens/reportIncident/ReportLocationPreview', () => ({
   ReportLocationPreview: () => {
-    const { View, Text } = require('react-native');
-    return (
-      <View>
-        <Text>Preview</Text>
-      </View>
+    const ReactNative = require('react-native');
+    return require('react').createElement(
+      ReactNative.View,
+      null,
+      require('react').createElement(ReactNative.Text, null, 'Preview')
     );
   },
 }));
@@ -108,19 +108,13 @@ jest.mock('react-native-safe-area-context', () => ({
 
 jest.mock('@rneui/themed', () => ({
   Text: ({ children, style, ...props }: any) => {
-    const { Text } = require('react-native');
-    return (
-      <Text style={style} {...props}>
-        {children}
-      </Text>
-    );
+    return require('react').createElement(require('react-native').Text, { style, ...props }, children);
   },
 }));
 
 jest.mock('@expo/vector-icons', () => ({
   MaterialCommunityIcons: ({ name }: { name: string }) => {
-    const { Text } = require('react-native');
-    return <Text>{name}</Text>;
+    return require('react').createElement(require('react-native').Text, null, name);
   },
 }));
 

@@ -12,8 +12,7 @@
  */
 
 import React from 'react';
-import { render, fireEvent, waitFor } from '@testing-library/react-native';
-import { View } from 'react-native';
+import { render, fireEvent } from '@testing-library/react-native';
 
 // Import the component
 import MapScreen from '../../screens/MapScreen';
@@ -121,23 +120,30 @@ const mockUseRelayStatus = jest.fn(() => ({
   ],
 }));
 
+const mockUseIncidentHistoryWindow = jest.fn(() => ({
+  historyWindowDays: 7,
+  isReady: true,
+  setHistoryWindowDays: jest.fn().mockResolvedValue(undefined),
+}));
+
 jest.mock('@contexts', () => ({
   useSharedLocation: () => mockUseSharedLocation(),
   useSharedIncidents: () => mockUseSharedIncidents(),
   useRelayStatus: () => mockUseRelayStatus(),
+  useIncidentHistoryWindow: () => mockUseIncidentHistoryWindow(),
 }));
 
 // Mock IncidentMarker component
 jest.mock('@components/map', () => ({
   IncidentMarker: ({ incident, onPress }: any) => {
-    const { Pressable, Text } = require('react-native');
-    return (
-      <Pressable
-        testID={`marker-${incident.incidentId}`}
-        onPress={() => onPress(incident)}
-      >
-        <Text>{incident.title}</Text>
-      </Pressable>
+    const ReactNative = require('react-native');
+    return require('react').createElement(
+      ReactNative.Pressable,
+      {
+        testID: `marker-${incident.incidentId}`,
+        onPress: () => onPress(incident),
+      },
+      require('react').createElement(ReactNative.Text, null, incident.title)
     );
   },
 }));
@@ -145,46 +151,62 @@ jest.mock('@components/map', () => ({
 // Mock MapSkeleton
 jest.mock('@components/ui', () => ({
   MapSkeleton: () => {
-    const { View, Text } = require('react-native');
-    return (
-      <View testID="map-skeleton">
-        <Text>Loading map...</Text>
-      </View>
+    const ReactNative = require('react-native');
+    return require('react').createElement(
+      ReactNative.View,
+      { testID: 'map-skeleton' },
+      require('react').createElement(ReactNative.Text, null, 'Loading map...')
     );
   },
   ScreenContainer: ({ children }: any) => {
-    const { View } = require('react-native');
-    return <View testID="screen-container">{children}</View>;
+    return require('react').createElement(
+      require('react-native').View,
+      { testID: 'screen-container' },
+      children
+    );
   },
   LocationRequiredEmpty: ({ onRetry }: { onRetry?: () => void }) => {
-    const { View, Text, Pressable } = require('react-native');
-    return (
-      <View testID="location-required">
-        <Text>Location Required</Text>
-        <Pressable onPress={onRetry}>
-          <Text>Retry</Text>
-        </Pressable>
-      </View>
+    const ReactNative = require('react-native');
+    return require('react').createElement(
+      ReactNative.View,
+      { testID: 'location-required' },
+      require('react').createElement(ReactNative.Text, null, 'Location Required'),
+      require('react').createElement(
+        ReactNative.Pressable,
+        { onPress: onRetry },
+        require('react').createElement(ReactNative.Text, null, 'Retry')
+      )
     );
   },
   EmptyState: ({ title }: { title: string }) => {
-    const { View, Text } = require('react-native');
-    return (
-      <View testID="empty-state">
-        <Text>{title}</Text>
-      </View>
+    const ReactNative = require('react-native');
+    return require('react').createElement(
+      ReactNative.View,
+      { testID: 'empty-state' },
+      require('react').createElement(ReactNative.Text, null, title)
     );
   },
   NoRelaysEmpty: ({ onAddRelay }: { onAddRelay?: () => void }) => {
-    const { View, Text, Pressable } = require('react-native');
-    return (
-      <View testID="no-relays-empty">
-        <Text>No Relays Connected</Text>
-        <Pressable onPress={onAddRelay}>
-          <Text>Add Relay</Text>
-        </Pressable>
-      </View>
+    const ReactNative = require('react-native');
+    return require('react').createElement(
+      ReactNative.View,
+      { testID: 'no-relays-empty' },
+      require('react').createElement(ReactNative.Text, null, 'No Relays Connected'),
+      require('react').createElement(
+        ReactNative.Pressable,
+        { onPress: onAddRelay },
+        require('react').createElement(ReactNative.Text, null, 'Add Relay')
+      )
     );
+  },
+  SearchBar: ({ placeholder, value, onChangeText, ...props }: any) => {
+    return require('react').createElement(require('react-native').TextInput, {
+      accessibilityLabel: placeholder,
+      placeholder,
+      value,
+      onChangeText,
+      ...props,
+    });
   },
 }));
 
@@ -244,19 +266,19 @@ jest.mock('@lib/map/constants', () => ({
 // Mock @rneui/themed Icon
 jest.mock('@rneui/themed', () => ({
   Icon: ({ name, onPress, testID }: any) => {
-    const { Pressable, Text } = require('react-native');
-    return (
-      <Pressable testID={testID || `icon-${name}`} onPress={onPress}>
-        <Text>{name}</Text>
-      </Pressable>
+    const ReactNative = require('react-native');
+    return require('react').createElement(
+      ReactNative.Pressable,
+      { testID: testID || `icon-${name}`, onPress },
+      require('react').createElement(ReactNative.Text, null, name)
     );
   },
   Button: ({ title, onPress }: any) => {
-    const { Pressable, Text } = require('react-native');
-    return (
-      <Pressable onPress={onPress}>
-        <Text>{title}</Text>
-      </Pressable>
+    const ReactNative = require('react-native');
+    return require('react').createElement(
+      ReactNative.Pressable,
+      { onPress },
+      require('react').createElement(ReactNative.Text, null, title)
     );
   },
 }));
@@ -295,9 +317,11 @@ describe('MapScreen', () => {
       expect(getByText('Loading map...')).toBeTruthy();
     });
 
-    it('renders map container after location loads', () => {
-      const { queryByTestId } = render(<MapScreen />);
+    it('renders the default visible map immediately after location loads', () => {
+      const { getByTestId, getByText, queryByTestId } = render(<MapScreen />);
       expect(queryByTestId('map-skeleton')).toBeNull();
+      expect(getByTestId('screen-map')).toBeTruthy();
+      expect(getByText('2 nearby')).toBeTruthy();
     });
   });
 
@@ -314,13 +338,14 @@ describe('MapScreen', () => {
 
     it('shows incident count in stats overlay', () => {
       const { getByText } = render(<MapScreen />);
-      // Incident count is shown in the stats overlay when DEV mode is on
-      expect(getByText(/Incidents: 2/)).toBeTruthy();
+      expect(getByText('2 nearby')).toBeTruthy();
     });
 
-    it('shows EOSE indicator when history received', () => {
-      const { getByText } = render(<MapScreen />);
-      expect(getByText(/EOSE:/)).toBeTruthy();
+    it('shows complete history seed diagnostics when history received', () => {
+      const { getByLabelText, getByText } = render(<MapScreen />);
+      fireEvent.press(getByLabelText('Open developer diagnostics'));
+      expect(getByText('History seed')).toBeTruthy();
+      expect(getByText('complete')).toBeTruthy();
     });
   });
 
@@ -331,8 +356,7 @@ describe('MapScreen', () => {
   describe('Incident Data', () => {
     it('displays incident count from shared context', () => {
       const { getByText } = render(<MapScreen />);
-      // The component shows incidents.length in the stats overlay
-      expect(getByText(/Incidents: 2/)).toBeTruthy();
+      expect(getByText('2 nearby')).toBeTruthy();
     });
 
     it('handles empty incidents array', () => {
@@ -343,7 +367,7 @@ describe('MapScreen', () => {
       });
 
       const { getByText } = render(<MapScreen />);
-      expect(getByText(/Incidents: 0/)).toBeTruthy();
+      expect(getByText('No nearby incidents')).toBeTruthy();
     });
   });
 
@@ -453,8 +477,8 @@ describe('MapScreen', () => {
         createLocationState({ source: 'fresh', permission: 'granted' })
       );
 
-      const { getByText } = render(<MapScreen />);
-      // In DEV mode, the location source text should be visible
+      const { getByLabelText, getByText } = render(<MapScreen />);
+      fireEvent.press(getByLabelText('Open developer diagnostics'));
       expect(getByText(/FRESH/)).toBeTruthy();
     });
 
@@ -463,7 +487,8 @@ describe('MapScreen', () => {
         createLocationState({ source: 'cached', permission: 'granted' })
       );
 
-      const { getByText } = render(<MapScreen />);
+      const { getByLabelText, getByText } = render(<MapScreen />);
+      fireEvent.press(getByLabelText('Open developer diagnostics'));
       expect(getByText(/CACHED/)).toBeTruthy();
     });
 
@@ -472,7 +497,8 @@ describe('MapScreen', () => {
         createLocationState({ source: 'default', permission: 'denied' })
       );
 
-      const { getByText } = render(<MapScreen />);
+      const { getByLabelText, getByText } = render(<MapScreen />);
+      fireEvent.press(getByLabelText('Open developer diagnostics'));
       expect(getByText(/DEFAULT/)).toBeTruthy();
     });
   });
@@ -491,14 +517,17 @@ describe('MapScreen', () => {
     });
 
     it('shows incident count in DEV mode', () => {
-      const { getByText } = render(<MapScreen />);
-      expect(getByText(/Incidents: 2/)).toBeTruthy();
+      const { getByLabelText, getByText } = render(<MapScreen />);
+      fireEvent.press(getByLabelText('Open developer diagnostics'));
+      expect(getByText('Incidents loaded')).toBeTruthy();
+      expect(getByText('2')).toBeTruthy();
     });
 
-    it('shows EOSE status when history received', () => {
-      const { getByText } = render(<MapScreen />);
-      // EOSE checkmark should be visible
-      expect(getByText(/EOSE:/)).toBeTruthy();
+    it('shows complete history seed status in DEV mode', () => {
+      const { getByLabelText, getByText } = render(<MapScreen />);
+      fireEvent.press(getByLabelText('Open developer diagnostics'));
+      expect(getByText('History seed')).toBeTruthy();
+      expect(getByText('complete')).toBeTruthy();
     });
   });
 
