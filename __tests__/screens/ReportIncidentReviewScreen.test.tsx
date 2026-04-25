@@ -158,42 +158,55 @@ describe('ReportIncidentReviewScreen', () => {
     expect(screen.getByLabelText('Submit report').props.accessibilityState?.disabled).not.toBe(true);
   });
 
-  it('resets the report stack to main plus submitted after successful submit', async () => {
-    const publish = jest.fn().mockResolvedValue(undefined);
-    jest.mocked(createIncidentEvent).mockReturnValue({ publish } as any);
-    mockUseRelayStatus.mockReturnValue(
-      buildRelayStatus({
-        relays: [buildRelayInfo()],
-      })
-    );
-    const props = buildReportReviewScreenProps();
+  it.each(['Map', 'Incidents'] as const)(
+    'resets the report stack to %s under submitted after successful submit',
+    async (sourceTab) => {
+      const publish = jest.fn().mockResolvedValue(undefined);
+      jest.mocked(createIncidentEvent).mockReturnValue({ publish } as any);
+      mockDraft = buildReportDraft({ sourceTab });
+      mockUseRelayStatus.mockReturnValue(
+        buildRelayStatus({
+          relays: [buildRelayInfo()],
+        })
+      );
+      const props = buildReportReviewScreenProps();
 
-    const screen = render(<ReportIncidentReviewScreen {...props} />);
-    fireEvent.press(screen.getByLabelText('Submit report'));
+      const screen = render(<ReportIncidentReviewScreen {...props} />);
+      fireEvent.press(screen.getByLabelText('Submit report'));
 
-    await waitFor(() => {
-      expect(publish).toHaveBeenCalledTimes(1);
-    });
+      await waitFor(() => {
+        expect(publish).toHaveBeenCalledTimes(1);
+      });
 
-    expect(mockResetDraft).toHaveBeenCalledTimes(1);
-    expect(props.navigation.replace).not.toHaveBeenCalled();
-    expect(props.navigation.reset).toHaveBeenCalledWith({
-      index: 1,
-      routes: [
-        { name: 'Main' },
-        {
-          name: 'ReportIncidentSubmitted',
-          params: {
-            incidentType: 'fire',
-            locationLabel: '3100 block Princeton Avenue',
-            relayCount: 1,
-            sourceTab: 'Map',
-            stillActive: true,
+      expect(mockResetDraft).toHaveBeenCalledTimes(1);
+      expect(props.navigation.replace).not.toHaveBeenCalled();
+      expect(props.navigation.reset).toHaveBeenCalledWith({
+        index: 1,
+        routes: [
+          {
+            name: 'Main',
+            params: {
+              screen: sourceTab,
+            },
+            state: {
+              index: 0,
+              routes: [{ name: sourceTab }],
+            },
           },
-        },
-      ],
-    });
-  });
+          {
+            name: 'ReportIncidentSubmitted',
+            params: {
+              incidentType: 'fire',
+              locationLabel: '3100 block Princeton Avenue',
+              relayCount: 1,
+              sourceTab,
+              stillActive: true,
+            },
+          },
+        ],
+      });
+    }
+  );
 
   it('does not submit a stale resolved place label when the current location has no valid resolution yet', async () => {
     const publish = jest.fn().mockResolvedValue(undefined);

@@ -9,7 +9,7 @@ import { showToast } from '@components/ui';
 import { useRelayStatus, useReportDraft, useSharedLocation } from '@contexts';
 import { useAppTheme } from '@hooks';
 import { getReportRadiusState } from '@lib/utils/reportLocationRadius';
-import type { RootStackParamList } from '@lib/navigation';
+import type { ReportSourceTab, RootStackParamList } from '@lib/navigation';
 import { submitIncidentReport } from '../application/report';
 import {
   buildReportAddress,
@@ -27,6 +27,31 @@ import {
 import { buildLocationPresentation, useResolvedReportLocation } from './reportIncident/locationPresentation';
 
 type ReportIncidentReviewScreenProps = NativeStackScreenProps<RootStackParamList, 'ReportIncidentReview'>;
+type MainResetRoute = {
+  name: 'Main';
+  params?: RootStackParamList['Main'];
+  state?: {
+    index: number;
+    routes: { name: ReportSourceTab }[];
+  };
+};
+
+function buildSubmittedReturnRoute(sourceTab?: ReportSourceTab): MainResetRoute {
+  if (!sourceTab) {
+    return { name: 'Main' };
+  }
+
+  return {
+    name: 'Main',
+    params: {
+      screen: sourceTab,
+    },
+    state: {
+      index: 0,
+      routes: [{ name: sourceTab }],
+    },
+  };
+}
 
 export default function ReportIncidentReviewScreen({ navigation, route }: ReportIncidentReviewScreenProps) {
   const { colors } = useAppTheme();
@@ -136,7 +161,7 @@ export default function ReportIncidentReviewScreen({ navigation, route }: Report
       navigation.reset({
         index: 1,
         routes: [
-          { name: 'Main' },
+          buildSubmittedReturnRoute(draft.sourceTab),
           { name: 'ReportIncidentSubmitted', params: nextRoute },
         ],
       });
