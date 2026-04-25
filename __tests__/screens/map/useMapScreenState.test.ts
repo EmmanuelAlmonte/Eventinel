@@ -126,6 +126,63 @@ describe('useMapScreenState route focus', () => {
     });
   });
 
+  it('does not focus the camera again when the same focus request re-renders', async () => {
+    mockRouteParams = {
+      focusIncident: {
+        incidentId: 'test-incident-id',
+        eventId: 'test-event-id',
+        title: 'Major Fire on Broadway',
+        coordinate: [-73.985565, 40.756795],
+        requestedAt: 1,
+      },
+    };
+
+    const { rerender } = renderHook(() => useMapScreenState());
+
+    await waitFor(() => {
+      expect(mockFocusCoordinate).toHaveBeenCalledTimes(1);
+    });
+
+    rerender({});
+
+    expect(mockFocusCoordinate).toHaveBeenCalledTimes(1);
+  });
+
+  it('focuses the camera again for a new focus request', async () => {
+    mockRouteParams = {
+      focusIncident: {
+        incidentId: 'test-incident-id',
+        eventId: 'test-event-id',
+        title: 'Major Fire on Broadway',
+        coordinate: [-73.985565, 40.756795],
+        requestedAt: 1,
+      },
+    };
+
+    const { rerender } = renderHook(() => useMapScreenState());
+
+    await waitFor(() => {
+      expect(mockFocusCoordinate).toHaveBeenCalledTimes(1);
+    });
+
+    mockRouteParams = {
+      focusIncident: {
+        incidentId: 'test-incident-id',
+        eventId: 'test-event-id',
+        title: 'Major Fire on Broadway',
+        coordinate: [-73.984, 40.758],
+        requestedAt: 2,
+      },
+    };
+
+    rerender({});
+
+    await waitFor(() => {
+      expect(mockFocusCoordinate).toHaveBeenCalledTimes(2);
+    });
+    expect(mockFocusCoordinate).toHaveBeenLastCalledWith([-73.984, 40.758]);
+  });
+
   it('caps map feature rendering while initial incident history is loading', () => {
     mockSharedIncidentsState = {
       hasReceivedHistory: false,

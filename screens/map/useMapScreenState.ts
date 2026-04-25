@@ -131,6 +131,14 @@ function getValidFocusCoordinate(focusIncident?: MapIncidentFocus): [number, num
   return getPointCoordinates(focusIncident.coordinate);
 }
 
+function getFocusRequestKey(focusIncident?: MapIncidentFocus): string | null {
+  if (!focusIncident || !Number.isFinite(focusIncident.requestedAt)) {
+    return null;
+  }
+
+  return `${focusIncident.incidentId}:${focusIncident.eventId ?? ''}:${focusIncident.requestedAt}`;
+}
+
 export function useMapScreenState(): MapScreenState {
   const navigation = useNavigation<AppNavigation>();
   const route = useRoute<RouteProp<MainTabParamList, 'Map'>>();
@@ -163,6 +171,7 @@ export function useMapScreenState(): MapScreenState {
     refreshStarted: boolean;
   } | null>(null);
   const fallbackClearTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const consumedFocusRequestKeysRef = useRef<Set<string>>(new Set());
 
   const clearFallbackTimer = useCallback(() => {
     if (fallbackClearTimerRef.current) {
@@ -215,18 +224,24 @@ export function useMapScreenState(): MapScreenState {
     setMapSubscriptionViewport,
   });
   const focusIncident = route.params?.focusIncident;
-  const focusCoordinate = getValidFocusCoordinate(focusIncident);
+  const focusRequestKey = getFocusRequestKey(focusIncident);
 
   useEffect(() => {
-    if (!focusIncident || !focusCoordinate) {
+    const focusCoordinate = getValidFocusCoordinate(focusIncident);
+    if (!focusCoordinate || !focusRequestKey) {
       return;
     }
 
+    if (consumedFocusRequestKeysRef.current.has(focusRequestKey)) {
+      return;
+    }
+
+    consumedFocusRequestKeysRef.current.add(focusRequestKey);
     camera.focusCoordinate(focusCoordinate);
   }, [
     camera.focusCoordinate,
-    focusCoordinate,
     focusIncident,
+    focusRequestKey,
   ]);
 
   const visibleIncidents = incidents;
