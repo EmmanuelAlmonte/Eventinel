@@ -69,6 +69,25 @@ jest.mock('../../contexts/IncidentHistoryWindowContext', () => ({
   useIncidentHistoryWindow: () => mockUseIncidentHistoryWindow(),
 }));
 
+interface MockStartupNavigationInteraction {
+  hasStartupMapRequest: boolean;
+  lastStartupTabInteractionAt: number | null;
+  markStartupTabInteraction: jest.Mock;
+}
+
+export const mockUseStartupNavigationInteraction = jest.fn<
+  MockStartupNavigationInteraction,
+  []
+>(() => ({
+  hasStartupMapRequest: false,
+  lastStartupTabInteractionAt: null,
+  markStartupTabInteraction: jest.fn(),
+}));
+
+jest.mock('../../contexts/StartupNavigationInteractionContext', () => ({
+  useStartupNavigationInteraction: () => mockUseStartupNavigationInteraction(),
+}));
+
 // =============================================================================
 // TEST UTILITIES
 // =============================================================================
@@ -171,6 +190,11 @@ export function setupIncidentSubscriptionContextTestLifecycle() {
       historyWindowDays: 30,
       isReady: true,
       setHistoryWindowDays: jest.fn().mockResolvedValue(undefined),
+    });
+    mockUseStartupNavigationInteraction.mockReturnValue({
+      hasStartupMapRequest: false,
+      lastStartupTabInteractionAt: null,
+      markStartupTabInteraction: jest.fn(),
     });
   });
 

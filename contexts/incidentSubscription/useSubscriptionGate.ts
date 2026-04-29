@@ -37,6 +37,10 @@ export function useSubscriptionGate(): SubscriptionGateState {
   const initialSubscriptionLocationTimerRef = useRef<ReturnType<typeof setTimeout> | null>(
     null
   );
+  const initialSubscriptionLocationTimerDeadlineRef = useRef<number | null>(null);
+  const initialSubscriptionLocationTimerModeRef = useRef<'initial' | 'post-interaction' | null>(
+    null
+  );
   const [mapSubscriptionAnchor, setMapSubscriptionAnchor] = useState<[number, number] | null>(
     null
   );
@@ -82,6 +86,33 @@ export function useSubscriptionGate(): SubscriptionGateState {
   }, []);
 
   useEffect(() => {
+    const clearInitialSubscriptionLocationTimer = () => {
+      if (initialSubscriptionLocationTimerRef.current != null) {
+        clearTimeout(initialSubscriptionLocationTimerRef.current);
+        initialSubscriptionLocationTimerRef.current = null;
+      }
+
+      initialSubscriptionLocationTimerDeadlineRef.current = null;
+      initialSubscriptionLocationTimerModeRef.current = null;
+    };
+
+    const scheduleInitialSubscriptionLocationRelease = (
+      delayMs: number,
+      mode: 'initial' | 'post-interaction'
+    ) => {
+      clearInitialSubscriptionLocationTimer();
+
+      initialSubscriptionLocationTimerDeadlineRef.current = Date.now() + delayMs;
+      initialSubscriptionLocationTimerModeRef.current = mode;
+      initialSubscriptionLocationTimerRef.current = setTimeout(() => {
+        initialSubscriptionLocationTimerRef.current = null;
+        initialSubscriptionLocationTimerDeadlineRef.current = null;
+        initialSubscriptionLocationTimerModeRef.current = null;
+        hasReleasedInitialSubscriptionLocationRef.current = true;
+        setIsInitialSubscriptionLocationSettled(true);
+      }, delayMs);
+    };
+
     if (!location) {
       if (
         !hasReleasedInitialSubscriptionLocationRef.current &&
@@ -98,6 +129,21 @@ export function useSubscriptionGate(): SubscriptionGateState {
     }
 
     if (initialSubscriptionLocationTimerRef.current != null) {
+      if (
+        lastStartupTabInteractionAt != null &&
+        initialSubscriptionLocationTimerModeRef.current === 'initial'
+      ) {
+        const initialTimerRemainingMs =
+          initialSubscriptionLocationTimerDeadlineRef.current == null
+            ? INITIAL_SUBSCRIPTION_LOCATION_DELAY_MS
+            : Math.max(initialSubscriptionLocationTimerDeadlineRef.current - Date.now(), 0);
+        const nextDelayMs = Math.min(
+          initialTimerRemainingMs,
+          POST_STARTUP_TAB_SUBSCRIPTION_DELAY_MS
+        );
+
+        scheduleInitialSubscriptionLocationRelease(nextDelayMs, 'post-interaction');
+      }
       return;
     }
 
@@ -107,11 +153,10 @@ export function useSubscriptionGate(): SubscriptionGateState {
         ? INITIAL_SUBSCRIPTION_LOCATION_DELAY_MS
         : POST_STARTUP_TAB_SUBSCRIPTION_DELAY_MS;
 
-    initialSubscriptionLocationTimerRef.current = setTimeout(() => {
-      initialSubscriptionLocationTimerRef.current = null;
-      hasReleasedInitialSubscriptionLocationRef.current = true;
-      setIsInitialSubscriptionLocationSettled(true);
-    }, releaseDelayMs);
+    scheduleInitialSubscriptionLocationRelease(
+      releaseDelayMs,
+      lastStartupTabInteractionAt == null ? 'initial' : 'post-interaction'
+    );
   }, [lastStartupTabInteractionAt, location]);
 
   useEffect(() => {
@@ -120,6 +165,8 @@ export function useSubscriptionGate(): SubscriptionGateState {
         clearTimeout(initialSubscriptionLocationTimerRef.current);
         initialSubscriptionLocationTimerRef.current = null;
       }
+      initialSubscriptionLocationTimerDeadlineRef.current = null;
+      initialSubscriptionLocationTimerModeRef.current = null;
     };
   }, []);
 

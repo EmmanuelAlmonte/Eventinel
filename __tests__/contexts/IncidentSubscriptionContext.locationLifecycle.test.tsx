@@ -17,6 +17,7 @@ import {
   LocationProvider,
   mockUseIncidentHistoryWindow,
   mockUseIncidentSubscription,
+  mockUseStartupNavigationInteraction,
   mockUseUserLocation,
   releaseInitialSubscriptionLocationGate,
   setupIncidentSubscriptionContextTestLifecycle,
@@ -265,6 +266,63 @@ describe('IncidentSubscriptionContext location and lifecycle', () => {
           expect.objectContaining({
             enabled: true,
             location: freshLocation,
+          })
+        );
+      });
+
+      it('shortens the initial subscription delay after startup tab interaction', async () => {
+        jest.useFakeTimers();
+        mockUseStartupNavigationInteraction.mockReturnValue({
+          hasStartupMapRequest: false,
+          lastStartupTabInteractionAt: null,
+          markStartupTabInteraction: jest.fn(),
+        });
+
+        const { rerender } = render(
+          <TestWrapperWithoutFocus>
+            <SubscriptionConsumer />
+          </TestWrapperWithoutFocus>
+        );
+
+        act(() => {
+          jest.advanceTimersByTime(4000);
+        });
+
+        mockUseStartupNavigationInteraction.mockReturnValue({
+          hasStartupMapRequest: false,
+          lastStartupTabInteractionAt: Date.now(),
+          markStartupTabInteraction: jest.fn(),
+        });
+
+        rerender(
+          <TestWrapperWithoutFocus>
+            <SubscriptionConsumer />
+          </TestWrapperWithoutFocus>
+        );
+
+        expect(mockUseIncidentSubscription).toHaveBeenLastCalledWith(
+          expect.objectContaining({
+            enabled: false,
+          })
+        );
+
+        act(() => {
+          jest.advanceTimersByTime(2999);
+        });
+
+        expect(mockUseIncidentSubscription).toHaveBeenLastCalledWith(
+          expect.objectContaining({
+            enabled: false,
+          })
+        );
+
+        act(() => {
+          jest.advanceTimersByTime(1);
+        });
+
+        expect(mockUseIncidentSubscription).toHaveBeenLastCalledWith(
+          expect.objectContaining({
+            enabled: true,
           })
         );
       });
