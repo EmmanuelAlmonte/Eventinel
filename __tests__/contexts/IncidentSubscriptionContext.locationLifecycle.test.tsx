@@ -220,6 +220,55 @@ describe('IncidentSubscriptionContext location and lifecycle', () => {
         );
       });
 
+      it('does not restart the initial subscription delay on repeated location fixes', async () => {
+        jest.useFakeTimers();
+        const initialLocation: [number, number] = [-74.006, 40.7128];
+        mockUseUserLocation.mockReturnValue({
+          ...defaultLocationMock,
+          location: initialLocation,
+        });
+
+        const { rerender } = render(
+          <TestWrapperWithoutFocus>
+            <SubscriptionConsumer />
+          </TestWrapperWithoutFocus>
+        );
+
+        act(() => {
+          jest.advanceTimersByTime(4000);
+        });
+
+        const freshLocation: [number, number] = [-75.1652, 39.9526];
+        mockUseUserLocation.mockReturnValue({
+          ...defaultLocationMock,
+          location: freshLocation,
+        });
+
+        rerender(
+          <TestWrapperWithoutFocus>
+            <SubscriptionConsumer />
+          </TestWrapperWithoutFocus>
+        );
+
+        expect(mockUseIncidentSubscription).toHaveBeenLastCalledWith(
+          expect.objectContaining({
+            enabled: false,
+            location: freshLocation,
+          })
+        );
+
+        act(() => {
+          jest.advanceTimersByTime(4000);
+        });
+
+        expect(mockUseIncidentSubscription).toHaveBeenLastCalledWith(
+          expect.objectContaining({
+            enabled: true,
+            location: freshLocation,
+          })
+        );
+      });
+
       it('keeps the last map viewport target when leaving map for a non-incident tab', async () => {
         jest.useFakeTimers();
         const mapAnchor: [number, number] = [-73.9857, 40.7484];

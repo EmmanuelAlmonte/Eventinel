@@ -34,6 +34,9 @@ export function useSubscriptionGate(): SubscriptionGateState {
   const [isStartupInteractionSettled, setIsStartupInteractionSettled] = useState(false);
   const [isInitialSubscriptionLocationSettled, setIsInitialSubscriptionLocationSettled] = useState(false);
   const hasReleasedInitialSubscriptionLocationRef = useRef(false);
+  const initialSubscriptionLocationTimerRef = useRef<ReturnType<typeof setTimeout> | null>(
+    null
+  );
   const [mapSubscriptionAnchor, setMapSubscriptionAnchor] = useState<[number, number] | null>(
     null
   );
@@ -80,7 +83,10 @@ export function useSubscriptionGate(): SubscriptionGateState {
 
   useEffect(() => {
     if (!location) {
-      if (!hasReleasedInitialSubscriptionLocationRef.current) {
+      if (
+        !hasReleasedInitialSubscriptionLocationRef.current &&
+        initialSubscriptionLocationTimerRef.current == null
+      ) {
         setIsInitialSubscriptionLocationSettled(false);
       }
       return;
@@ -91,21 +97,31 @@ export function useSubscriptionGate(): SubscriptionGateState {
       return;
     }
 
+    if (initialSubscriptionLocationTimerRef.current != null) {
+      return;
+    }
+
     setIsInitialSubscriptionLocationSettled(false);
     const releaseDelayMs =
       lastStartupTabInteractionAt == null
         ? INITIAL_SUBSCRIPTION_LOCATION_DELAY_MS
         : POST_STARTUP_TAB_SUBSCRIPTION_DELAY_MS;
 
-    const timer = setTimeout(() => {
+    initialSubscriptionLocationTimerRef.current = setTimeout(() => {
+      initialSubscriptionLocationTimerRef.current = null;
       hasReleasedInitialSubscriptionLocationRef.current = true;
       setIsInitialSubscriptionLocationSettled(true);
     }, releaseDelayMs);
-
-    return () => {
-      clearTimeout(timer);
-    };
   }, [lastStartupTabInteractionAt, location]);
+
+  useEffect(() => {
+    return () => {
+      if (initialSubscriptionLocationTimerRef.current != null) {
+        clearTimeout(initialSubscriptionLocationTimerRef.current);
+        initialSubscriptionLocationTimerRef.current = null;
+      }
+    };
+  }, []);
 
   const handleSetMapFocused = useCallback((focused: boolean) => {
     setIsMapFocused(focused);
