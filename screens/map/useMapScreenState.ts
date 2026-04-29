@@ -4,12 +4,12 @@
  * Composes shared-map state, handlers, and memoized incident data for the map screen.
  */
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react';
 import type { LayoutChangeEvent } from 'react-native';
-import { useIsFocused, useNavigation } from '@react-navigation/native';
+import { useIsFocused, useNavigation, useRoute, type RouteProp } from '@react-navigation/native';
 import { useSafeAreaInsets, type EdgeInsets } from 'react-native-safe-area-context';
 
-import { type AppNavigation } from '@lib/navigation';
+import { type AppNavigation, type MainTabParamList, type MapIncidentFocus } from '@lib/navigation';
 import {
   useIncidentHistoryWindow,
   useRelayStatus,
@@ -17,6 +17,7 @@ import {
   useSharedLocation,
 } from '@contexts';
 import { useAppTheme, type ProcessedIncident } from '@hooks';
+import { INCIDENT_LIMITS } from '@lib/map/constants';
 import { incidentsToFeatureCollection } from '@lib/map/types';
 import {
   formatIncidentHistoryWindowLabel,
@@ -122,8 +123,25 @@ function getClusterCenterFromFeature(
   return getPointCoordinates(geometry.coordinates);
 }
 
+function getValidFocusCoordinate(focusIncident?: MapIncidentFocus): [number, number] | null {
+  if (!focusIncident) {
+    return null;
+  }
+
+  return getPointCoordinates(focusIncident.coordinate);
+}
+
+function getFocusRequestKey(focusIncident?: MapIncidentFocus): string | null {
+  if (!focusIncident || !Number.isFinite(focusIncident.requestedAt)) {
+    return null;
+  }
+
+  return `${focusIncident.incidentId}:${focusIncident.eventId ?? ''}:${focusIncident.requestedAt}`;
+}
+
 export function useMapScreenState(): MapScreenState {
   const navigation = useNavigation<AppNavigation>();
+  const route = useRoute<RouteProp<MainTabParamList, 'Map'>>();
   const isFocused = useIsFocused();
   const insets = useSafeAreaInsets();
   const { colors } = useAppTheme();
@@ -153,6 +171,7 @@ export function useMapScreenState(): MapScreenState {
     refreshStarted: boolean;
   } | null>(null);
   const fallbackClearTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const consumedFocusRequestKeysRef = useRef<Set<string>>(new Set());
 
   const clearFallbackTimer = useCallback(() => {
     if (fallbackClearTimerRef.current) {
@@ -204,11 +223,35 @@ export function useMapScreenState(): MapScreenState {
     setMapSubscriptionAnchor,
     setMapSubscriptionViewport,
   });
+  const focusIncident = route.params?.focusIncident;
+  const focusRequestKey = getFocusRequestKey(focusIncident);
+
+  useEffect(() => {
+    const focusCoordinate = getValidFocusCoordinate(focusIncident);
+    if (!focusCoordinate || !focusRequestKey) {
+      return;
+    }
+
+    if (consumedFocusRequestKeysRef.current.has(focusRequestKey)) {
+      return;
+    }
+
+    consumedFocusRequestKeysRef.current.add(focusRequestKey);
+    camera.focusCoordinate(focusCoordinate);
+  }, [
+    camera.focusCoordinate,
+    focusIncident,
+    focusRequestKey,
+  ]);
 
   const visibleIncidents = incidents;
+  const mapFeatureIncidents = hasReceivedHistory
+    ? visibleIncidents
+    : visibleIncidents.slice(0, INCIDENT_LIMITS.COLD_START_MAP_FEATURE_LIMIT);
+  const deferredMapFeatureIncidents = useDeferredValue(mapFeatureIncidents);
   const incidentFeatureCollection = useMemo(
-    () => incidentsToFeatureCollection(visibleIncidents),
-    [visibleIncidents]
+    () => incidentsToFeatureCollection(deferredMapFeatureIncidents),
+    [deferredMapFeatureIncidents]
   );
 
   const handleIncidentPress = useCallback(

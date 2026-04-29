@@ -1,20 +1,19 @@
-import { Image, type ImageSourcePropType, StyleSheet, View } from 'react-native';
-import { Card, Icon, Text } from '@rneui/themed';
+import { Image, Pressable, type ImageSourcePropType, StyleSheet, View } from 'react-native';
+import { Icon, Text } from '@rneui/themed';
 
 import { formatRelativeTime } from '@lib/utils/time';
 import type { ProcessedIncident } from '@hooks/useIncidentSubscription';
 
 type TypeConfig = {
   color: string;
+  label: string;
 };
 
 type ThemeColors = {
-  border: string;
   success: string;
   surface: string;
   text: string;
   textMuted: string;
-  warning: string;
 };
 
 type IncidentDetailInfoCardsProps = {
@@ -23,6 +22,8 @@ type IncidentDetailInfoCardsProps = {
   typeConfig: TypeConfig;
   typeIconSource: ImageSourcePropType;
   severityColor: string;
+  onViewOnMap: () => void;
+  onShare: () => void;
 };
 
 export function IncidentDetailInfoCards({
@@ -31,221 +32,192 @@ export function IncidentDetailInfoCards({
   typeConfig,
   typeIconSource,
   severityColor,
+  onViewOnMap,
+  onShare,
 }: IncidentDetailInfoCardsProps) {
+  const trustLabel = incident.isVerified ? 'Verified' : 'Community report';
+  const sourceLabel = incident.source
+    .replace(/_/g, ' ')
+    .replace(/\b\w/g, (char) => char.toUpperCase());
+  const locationLabel = incident.location.city
+    ? `${incident.location.city}${incident.location.state ? `, ${incident.location.state}` : ''}`
+    : incident.location.address;
+  const metaLine = [formatRelativeTime(incident.occurredAt), locationLabel, sourceLabel].join(' · ');
+
   return (
-    <>
-      <View style={styles.section}>
-        <Card containerStyle={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-          <View style={styles.incidentHeader}>
-            <View style={[styles.iconFrame, { backgroundColor: `${typeConfig.color}20` }]}>
-              <Image
-                source={typeIconSource}
-                style={[styles.typeIconImage, { tintColor: severityColor }]}
-                resizeMode="contain"
-              />
-            </View>
+    <View style={styles.section}>
+      <View style={styles.badgeRow}>
+        <View style={[styles.primaryBadge, { backgroundColor: `${typeConfig.color}1F` }]}>
+          <Image
+            source={typeIconSource}
+            style={[styles.typeIconImage, { tintColor: severityColor }]}
+            resizeMode="contain"
+          />
+          <Text style={[styles.primaryBadgeText, { color: typeConfig.color }]}>{typeConfig.label}</Text>
+        </View>
 
-            <View style={styles.incidentInfo}>
-              <View style={styles.badgeRow}>
-                <Text style={[styles.typeBadge, { color: typeConfig.color }]}>
-                  {incident.type.replace('_', ' ').toUpperCase()}
-                </Text>
-                {incident.isVerified ? (
-                  <View style={[styles.verifiedBadge, { backgroundColor: `${colors.success}20` }]}>
-                    <Icon name="verified" type="material" size={12} color={colors.success} />
-                    <Text style={[styles.verifiedText, { color: colors.success }]}>VERIFIED</Text>
-                  </View>
-                ) : null}
-              </View>
-
-              <Text style={[styles.incidentTitle, { color: colors.text }]}>{incident.title}</Text>
-              <View style={styles.metaRow}>
-                <View style={styles.metaItem}>
-                  <Icon name="schedule" type="material" size={14} color={colors.textMuted} />
-                  <Text style={[styles.metaText, { color: colors.textMuted }]}>
-                    {formatRelativeTime(incident.occurredAt)}
-                  </Text>
-                </View>
-                <View style={[styles.severityPill, { backgroundColor: severityColor }]}>
-                  <Text style={styles.severityText}>Severity {incident.severity}</Text>
-                </View>
-              </View>
-            </View>
-          </View>
-        </Card>
+        <View
+          style={[
+            styles.secondaryBadge,
+            {
+              backgroundColor: incident.isVerified
+                ? `${colors.success}10`
+                : 'rgba(148, 163, 184, 0.08)',
+            },
+          ]}
+        >
+          <Icon
+            name={incident.isVerified ? 'verified' : 'groups'}
+            type="material"
+            size={13}
+            color={incident.isVerified ? colors.success : colors.textMuted}
+          />
+          <Text
+            style={[
+              styles.secondaryBadgeText,
+              {
+                color: incident.isVerified ? colors.success : colors.textMuted,
+              },
+            ]}
+          >
+            {trustLabel}
+          </Text>
+        </View>
       </View>
 
-      <View style={styles.section}>
-        <Card containerStyle={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-          <View style={styles.locationRow}>
-            <View style={[styles.locationIcon, { backgroundColor: `${typeConfig.color}20` }]}>
-              <Icon name="location-on" type="material" size={20} color={typeConfig.color} />
-            </View>
-            <View style={styles.locationContent}>
-              <Text style={[styles.locationLabel, { color: colors.textMuted }]}>Location</Text>
-              <Text style={[styles.locationAddress, { color: colors.text }]}>{incident.location.address}</Text>
-              {incident.location.city ? (
-                <Text style={[styles.locationCity, { color: colors.textMuted }]}>
-                  {incident.location.city}{incident.location.state ? `, ${incident.location.state}` : ''}
-                </Text>
-              ) : null}
-            </View>
-          </View>
-        </Card>
+      <Text style={[styles.incidentTitle, { color: colors.text }]}>{incident.title}</Text>
+
+      <Text style={[styles.description, { color: colors.textMuted }]}>{incident.description}</Text>
+
+      <Text style={[styles.metaLine, { color: colors.textMuted }]}>{metaLine}</Text>
+
+      <View style={styles.locationRow}>
+        <Icon name="location-on" type="material" size={16} color={typeConfig.color} />
+        <Text style={[styles.locationText, { color: colors.text }]}>{incident.location.address}</Text>
       </View>
 
-      <View style={styles.section}>
-        <Card containerStyle={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-          <View style={styles.cardHeader}>
-            <Icon name="info-outline" type="material" size={18} color={colors.warning} />
-            <Text style={[styles.cardTitle, { color: colors.text }]}>Incident Details</Text>
-          </View>
-          <Text style={[styles.description, { color: colors.text }]}>{incident.description}</Text>
-        </Card>
+      <View style={styles.actionRow}>
+        <Pressable
+          onPress={onViewOnMap}
+          accessibilityRole="button"
+          accessibilityLabel="View on map"
+          style={[styles.actionButton, styles.primaryActionButton, { backgroundColor: colors.text }]}
+        >
+          <Icon name="navigation" type="material" size={18} color={colors.surface} />
+          <Text style={[styles.primaryActionText, { color: colors.surface }]}>View on map</Text>
+        </Pressable>
+        <Pressable
+          onPress={onShare}
+          style={[
+            styles.actionButton,
+            styles.secondaryActionButton,
+            { backgroundColor: colors.surface },
+          ]}
+        >
+          <Icon name="share" type="material" size={18} color={colors.text} />
+          <Text style={[styles.secondaryActionText, { color: colors.text }]}>Share</Text>
+        </Pressable>
       </View>
-
-      <View style={styles.sourceRow}>
-        <View style={[styles.sourceDot, { backgroundColor: colors.textMuted }]} />
-        <Text style={[styles.sourceText, { color: colors.textMuted }]}>Source: {incident.source}</Text>
-      </View>
-    </>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   section: {
-    paddingHorizontal: 16,
-    marginBottom: 12,
-  },
-  card: {
-    borderRadius: 16,
-    borderWidth: 1,
-    padding: 16,
-    margin: 0,
-  },
-  cardHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    marginBottom: 12,
-  },
-  cardTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  incidentHeader: {
-    flexDirection: 'row',
-    gap: 16,
-  },
-  iconFrame: {
-    width: 64,
-    height: 64,
-    borderRadius: 18,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  typeIconImage: {
-    width: 36,
-    height: 36,
-  },
-  incidentInfo: {
-    flex: 1,
+    paddingHorizontal: 20,
+    paddingTop: 8,
+    marginBottom: 28,
   },
   badgeRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    marginBottom: 8,
+    flexWrap: 'wrap',
+    marginBottom: 14,
   },
-  typeBadge: {
-    fontSize: 11,
-    fontWeight: '700',
-    letterSpacing: 1,
-  },
-  verifiedBadge: {
+  primaryBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: 12,
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 999,
   },
-  verifiedText: {
-    fontSize: 10,
+  secondaryBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 999,
+  },
+  primaryBadgeText: {
+    fontSize: 12,
     fontWeight: '700',
+    letterSpacing: 0.2,
+  },
+  secondaryBadgeText: {
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  typeIconImage: {
+    width: 16,
+    height: 16,
   },
   incidentTitle: {
-    fontSize: 20,
+    fontSize: 28,
     fontWeight: '700',
-    marginBottom: 8,
-    lineHeight: 26,
+    lineHeight: 34,
   },
-  metaRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
+  description: {
+    fontSize: 16,
+    lineHeight: 24,
+    marginTop: 10,
   },
-  metaItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
-  metaText: {
-    fontSize: 13,
-  },
-  severityPill: {
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: 10,
-  },
-  severityText: {
-    color: '#FFFFFF',
-    fontSize: 11,
-    fontWeight: '600',
+  metaLine: {
+    fontSize: 14,
+    lineHeight: 21,
+    marginTop: 12,
   },
   locationRow: {
     flexDirection: 'row',
-    gap: 12,
+    alignItems: 'flex-start',
+    gap: 8,
+    marginTop: 10,
   },
-  locationIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  locationContent: {
+  locationText: {
     flex: 1,
-  },
-  locationLabel: {
-    fontSize: 12,
-    marginBottom: 4,
-  },
-  locationAddress: {
-    fontSize: 16,
-    fontWeight: '600',
-    marginBottom: 2,
-  },
-  locationCity: {
-    fontSize: 14,
-  },
-  description: {
     fontSize: 15,
+    fontWeight: '600',
     lineHeight: 22,
   },
-  sourceRow: {
+  actionRow: {
+    flexDirection: 'row',
+    gap: 10,
+    marginTop: 18,
+  },
+  actionButton: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
     gap: 8,
-    marginHorizontal: 20,
-    marginBottom: 16,
+    minHeight: 48,
+    borderRadius: 999,
+    paddingHorizontal: 16,
   },
-  sourceDot: {
-    width: 4,
-    height: 4,
-    borderRadius: 2,
+  primaryActionButton: {
+    borderWidth: 0,
   },
-  sourceText: {
-    fontSize: 11,
+  secondaryActionButton: {
+    borderWidth: 0,
+  },
+  primaryActionText: {
+    fontSize: 15,
+    fontWeight: '700',
+  },
+  secondaryActionText: {
+    fontSize: 15,
+    fontWeight: '600',
   },
 });

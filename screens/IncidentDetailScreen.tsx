@@ -5,7 +5,7 @@
  */
 
 import { useCallback, useEffect } from 'react';
-import { InteractionManager, Linking, Platform, Share } from 'react-native';
+import { InteractionManager, Share } from 'react-native';
 import { useNavigation, useRoute, type RouteProp } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNDKCurrentUser } from '@nostr-dev-kit/mobile';
@@ -21,6 +21,17 @@ import { IncidentDetailLoadingState } from './incidentDetail/IncidentDetailLoadi
 import { IncidentDetailScreenView } from './incidentDetail/IncidentDetailScreenView';
 import { useIncidentCommentsController } from './incidentDetail/useIncidentCommentsController';
 import { useIncidentRecord } from './incidentDetail/useIncidentRecord';
+
+const DEBUG_INCIDENT_VERIFICATION =
+  __DEV__ && process.env.EXPO_PUBLIC_DEBUG_INCIDENT_VERIFICATION === '1';
+
+function getOfficialPubkey(): string {
+  return (
+    process.env.EXPO_PUBLIC_EVENTINEL_OFFICIAL_PUBKEY_HEX ??
+    process.env.EVENTINEL_OFFICIAL_PUBKEY_HEX ??
+    'missing'
+  );
+}
 
 export default function IncidentDetailScreen() {
   const navigation = useNavigation<AppNavigation>();
@@ -104,6 +115,18 @@ export default function IncidentDetailScreen() {
         source: incident.source,
       },
     });
+
+    if (DEBUG_INCIDENT_VERIFICATION) {
+      console.log('[IncidentDetail] verification snapshot', {
+        incidentId: incident.incidentId,
+        eventId: incident.eventId,
+        source: incident.source,
+        sourceId: incident.sourceId,
+        pubkey: incident.pubkey,
+        officialPubkey: getOfficialPubkey(),
+        isVerified: incident.isVerified,
+      });
+    }
   }, [incident, routeEventId]);
 
   const handleShare = useCallback(async () => {
@@ -118,19 +141,24 @@ export default function IncidentDetailScreen() {
     }
   }, [incident]);
 
-  const handleDirections = useCallback(() => {
-    if (!incident) return;
-
-    const { lat, lng } = incident.location;
-    const url = Platform.select({
-      ios: `maps://?daddr=${lat},${lng}`,
-      android: `geo:${lat},${lng}?q=${lat},${lng}(${encodeURIComponent(incident.title)})`,
-    });
-
-    if (url) {
-      Linking.openURL(url).catch((error) => console.error('Could not open maps:', error));
+  const handleViewOnMap = useCallback(() => {
+    if (!incident) {
+      return;
     }
-  }, [incident]);
+
+    navigation.navigate('Main', {
+      screen: 'Map',
+      params: {
+        focusIncident: {
+          incidentId: incident.incidentId,
+          eventId: incident.eventId,
+          title: incident.title,
+          coordinate: [incident.location.lng, incident.location.lat],
+          requestedAt: Date.now(),
+        },
+      },
+    });
+  }, [incident, navigation]);
 
   if (!incident) {
     return (
@@ -151,8 +179,8 @@ export default function IncidentDetailScreen() {
       currentUser={currentUserIdentity}
       comments={comments}
       onBack={() => navigation.goBack()}
+      onViewOnMap={handleViewOnMap}
       onShare={handleShare}
-      onDirections={handleDirections}
     />
   );
 }

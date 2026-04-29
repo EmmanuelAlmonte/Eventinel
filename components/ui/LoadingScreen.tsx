@@ -152,9 +152,15 @@ export function SkeletonList({ count = 3, animation = 'pulse' }: SkeletonListPro
 /**
  * Map loading skeleton - shows a large placeholder for the map area.
  */
-export function MapSkeleton({ animation = 'pulse' }: { animation?: 'pulse' | 'wave' | 'none' }) {
+export function MapSkeleton({
+  animation = 'pulse',
+  testID,
+}: {
+  animation?: 'pulse' | 'wave' | 'none';
+  testID?: string;
+}) {
   return (
-    <View style={styles.mapSkeletonContainer}>
+    <View testID={testID} style={styles.mapSkeletonContainer}>
       <Skeleton
         animation={animation}
         width="100%"

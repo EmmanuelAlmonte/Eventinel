@@ -3,7 +3,7 @@ import { Alert } from 'react-native';
 
 import { ndk } from '@lib/ndk';
 import { normalizeRelayUrl } from '@lib/relay/config';
-import { isConnected, isConnecting, getStatusString } from '@lib/relay/status';
+import { isConnected, isConnecting, getStatusString, sortRelays } from '@lib/relay/status';
 import {
   addRelayToStorage,
   removeRelayFromStorage,
@@ -45,10 +45,10 @@ export function useRelayManagement(): RelayManagementResult {
         status: getStatusString(relay.status),
         rawStatus: relay.status,
         isConnected: isConnected(relay.status),
-      }))
-      .sort((a, b) => a.url.localeCompare(b.url));
+      }));
+    const sortedRelayInfos = sortRelays(relayInfos);
 
-    setRelays((previous) => (areRelayInfosEqual(previous, relayInfos) ? previous : relayInfos));
+    setRelays((previous) => (areRelayInfosEqual(previous, sortedRelayInfos) ? previous : sortedRelayInfos));
   }, []);
 
   const getPoolRelayByUrl = useCallback((url: string) => {
@@ -209,6 +209,11 @@ export function useRelayManagement(): RelayManagementResult {
   const handleDisconnect = useCallback(
     (rawUrl: string) => {
       const url = normalizeUrl(rawUrl);
+      if (relays.length <= 1) {
+        setMessage('At least one relay is required. Add another relay before removing this one.');
+        return;
+      }
+
       Alert.alert('Disconnect Relay', `Remove ${url}?`, [
         { text: 'Cancel', style: 'cancel' },
         {
@@ -235,7 +240,7 @@ export function useRelayManagement(): RelayManagementResult {
         },
       ]);
     },
-    [getPoolRelayByUrl]
+    [getPoolRelayByUrl, relays.length]
   );
 
   const handleReconnect = useCallback(
@@ -258,7 +263,8 @@ export function useRelayManagement(): RelayManagementResult {
     message.includes('Failed') ||
     message.includes('must start') ||
     message.includes('Please enter') ||
-    message.includes('Relay list is empty');
+    message.includes('Relay list is empty') ||
+    message.includes('At least one relay is required');
 
   useEffect(() => {
     if (!__DEV__) return;

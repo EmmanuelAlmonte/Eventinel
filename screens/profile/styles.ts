@@ -2,36 +2,48 @@ import { Platform, StyleSheet } from 'react-native';
 
 export const profileScreenStyles = StyleSheet.create({
   header: {
-    marginBottom: 20,
     marginTop: 8,
+    marginBottom: 22,
   },
   title: {
     marginBottom: 4,
   },
   subtitle: {
-    fontSize: 16,
+    fontSize: 15,
+    lineHeight: 22,
   },
-  card: {
-    borderRadius: 12,
+  heroCard: {
+    borderRadius: 22,
     borderWidth: 1,
     padding: 20,
     margin: 0,
-    marginBottom: 16,
+    marginBottom: 22,
   },
-  profileSection: {
+  heroTopRow: {
+    flexDirection: 'row',
     alignItems: 'center',
+    gap: 16,
   },
   avatar: {
-    marginBottom: 16,
+    marginBottom: 0,
   },
   avatarTitle: {
-    fontSize: 36,
+    fontSize: 34,
     fontWeight: '700',
+  },
+  heroIdentity: {
+    flex: 1,
+    paddingTop: 2,
   },
   displayName: {
     fontSize: 22,
     fontWeight: '700',
-    marginBottom: 4,
+    marginBottom: 2,
+  },
+  heroSubtitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    marginBottom: 6,
   },
   nip05Container: {
     flexDirection: 'row',
@@ -45,84 +57,171 @@ export const profileScreenStyles = StyleSheet.create({
   },
   about: {
     fontSize: 14,
-    textAlign: 'center',
     lineHeight: 20,
-    marginTop: 8,
+    marginTop: 14,
   },
-  cardHeader: {
+  heroActions: {
+    flexDirection: 'row',
+    gap: 10,
+    marginTop: 18,
+  },
+  heroActionButton: {
+    flex: 1,
+  },
+  heroAction: {
+    borderRadius: 14,
+    minHeight: 48,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  heroActionContent: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
-    marginBottom: 12,
+    justifyContent: 'center',
+    gap: 8,
   },
-  cardTitle: {
-    fontSize: 16,
+  heroActionPrimary: {
+    borderWidth: 1,
+    borderColor: 'transparent',
+  },
+  heroActionSecondary: {
+    borderWidth: 1,
+  },
+  heroActionPrimaryPressed: {
+    opacity: 0.9,
+    transform: [{ scale: 0.99 }],
+  },
+  heroActionSecondaryPressed: {
+    opacity: 0.82,
+    transform: [{ scale: 0.99 }],
+  },
+  heroActionPrimaryDisabled: {
+    opacity: 0.45,
+  },
+  heroActionSecondaryDisabled: {
+    opacity: 0.55,
+  },
+  heroActionLabel: {
+    fontSize: 13,
     fontWeight: '600',
   },
-  pubkeyText: {
-    fontSize: 14,
-    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
-    padding: 12,
-    borderRadius: 8,
+  heroActionSecondaryText: {
+    fontWeight: '700',
+  },
+  heroActionPrimaryText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#FFFFFF',
+  },
+  section: {
+    marginBottom: 22,
+  },
+  sectionHeading: {
+    marginBottom: 12,
+  },
+  sectionTitle: {
+    fontSize: 15,
+    fontWeight: '700',
+    marginBottom: 3,
+  },
+  sectionDescription: {
+    fontSize: 13,
+    lineHeight: 19,
+  },
+  sectionGroup: {
+    borderRadius: 18,
+    borderWidth: 1,
     overflow: 'hidden',
   },
-  pubkeyHint: {
-    fontSize: 12,
-    marginTop: 8,
-    textAlign: 'center',
-  },
-  divider: {
-    marginVertical: 16,
-  },
-  fullPubkey: {
-    fontSize: 11,
-    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
-    lineHeight: 16,
-  },
-  settingRow: {
+  row: {
+    paddingHorizontal: 18,
+    paddingVertical: 18,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
   },
-  settingInfo: {
+  rowDivider: {
+    borderTopWidth: 1,
+  },
+  rowPressed: {
+    opacity: 0.72,
+  },
+  rowInfo: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
     flex: 1,
   },
-  settingText: {
+  rowText: {
     flex: 1,
   },
-  settingLabel: {
-    fontSize: 16,
-    fontWeight: '500',
-  },
-  settingDescription: {
-    fontSize: 13,
-    marginTop: 2,
-  },
-  logoutButton: {
-    borderRadius: 8,
-    paddingVertical: 12,
-  },
-  logoutButtonText: {
+  rowTitle: {
+    fontSize: 15,
     fontWeight: '600',
-    fontSize: 16,
   },
-  infoContainer: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    backgroundColor: 'rgba(59, 130, 246, 0.1)',
-    padding: 14,
-    borderRadius: 8,
-    borderWidth: 1,
-    gap: 10,
-    marginBottom: 24,
-  },
-  infoText: {
-    flex: 1,
+  rowDescription: {
     fontSize: 13,
-    lineHeight: 18,
+    marginTop: 3,
+    lineHeight: 19,
+  },
+  rowPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+  },
+  rowPillText: {
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  statusBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    borderWidth: 1,
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+  },
+  statusDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+  },
+  statusText: {
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  advancedBody: {
+    borderTopWidth: 1,
+    padding: 16,
+  },
+  advancedActions: {
+    flexDirection: 'row',
+    gap: 8,
+    marginBottom: 12,
+  },
+  advancedActionButton: {
+    flex: 1,
+  },
+  advancedToken: {
+    fontSize: 12,
+    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
+    padding: 12,
+    borderRadius: 10,
+    lineHeight: 16,
+  },
+  advancedHint: {
+    fontSize: 12,
+    marginTop: 8,
+  },
+  advancedEmpty: {
+    fontSize: 12,
+    lineHeight: 16,
   },
   pushTokenText: {
     fontSize: 12,

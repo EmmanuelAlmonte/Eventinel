@@ -56,8 +56,8 @@ export function useMapCamera({ userLocation }: UseMapCameraOptions) {
     }
   }, []);
 
-  const startFlyTo = useCallback((target: [number, number]) => {
-    if (isAnimatingRef.current) return false;
+  const startFlyTo = useCallback((target: [number, number], options?: { force?: boolean }) => {
+    if (isAnimatingRef.current && !options?.force) return false;
 
     isAnimatingRef.current = true;
     setIsAnimating(true);
@@ -80,6 +80,23 @@ export function useMapCamera({ userLocation }: UseMapCameraOptions) {
 
     return true;
   }, []);
+
+  const focusCoordinate = useCallback(
+    (target: [number, number]) => {
+      clearAutoResumeTimer();
+      setFollowUser(false);
+      const didStartAnimation = startFlyTo(target, { force: true });
+      cameraRef.current?.setCamera({
+        centerCoordinate: target,
+        zoomLevel: MAPBOX_CONFIG.DEFAULT_ZOOM,
+        animationMode: 'flyTo',
+        animationDuration: FLY_TO_DURATION,
+      });
+
+      return didStartAnimation;
+    },
+    [clearAutoResumeTimer, startFlyTo]
+  );
 
   const scheduleAutoResume = useCallback(() => {
     clearAutoResumeTimer();
@@ -144,6 +161,7 @@ export function useMapCamera({ userLocation }: UseMapCameraOptions) {
     lastCameraZoomRef,
     clearAutoResumeTimer,
     scheduleAutoResume,
+    focusCoordinate,
     handleFlyToUser,
     handleCameraChanged,
   };

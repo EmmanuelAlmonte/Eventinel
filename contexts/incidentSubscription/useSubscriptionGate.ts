@@ -1,10 +1,15 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AppState, InteractionManager, type AppStateStatus } from 'react-native';
 
 import { MAPBOX_CONFIG } from '@lib/map/constants';
 import type { MapSubscriptionViewport } from '@lib/map/subscriptionPlanner';
 
+import { useStartupNavigationInteraction } from '../StartupNavigationInteractionContext';
 import { useSharedLocation } from '../LocationContext';
+
+const STARTUP_INTERACTION_GATE_TIMEOUT_MS = 750;
+const INITIAL_SUBSCRIPTION_LOCATION_DELAY_MS = 8000;
+const POST_STARTUP_TAB_SUBSCRIPTION_DELAY_MS = 3000;
 
 export interface SubscriptionGateState {
   location: [number, number] | null;
@@ -23,9 +28,19 @@ function isAppStateActive(state: AppStateStatus): boolean {
 
 export function useSubscriptionGate(): SubscriptionGateState {
   const { location } = useSharedLocation();
+  const { lastStartupTabInteractionAt } = useStartupNavigationInteraction();
   const [isMapFocused, setIsMapFocused] = useState(false);
   const [isFeedFocused, setIsFeedFocused] = useState(false);
   const [isStartupInteractionSettled, setIsStartupInteractionSettled] = useState(false);
+  const [isInitialSubscriptionLocationSettled, setIsInitialSubscriptionLocationSettled] = useState(false);
+  const hasReleasedInitialSubscriptionLocationRef = useRef(false);
+  const initialSubscriptionLocationTimerRef = useRef<ReturnType<typeof setTimeout> | null>(
+    null
+  );
+  const initialSubscriptionLocationTimerDeadlineRef = useRef<number | null>(null);
+  const initialSubscriptionLocationTimerModeRef = useRef<'initial' | 'post-interaction' | null>(
+    null
+  );
   const [mapSubscriptionAnchor, setMapSubscriptionAnchor] = useState<[number, number] | null>(
     null
   );
@@ -43,16 +58,115 @@ export function useSubscriptionGate(): SubscriptionGateState {
 
   useEffect(() => {
     let isMounted = true;
-    const interactionHandle = InteractionManager.runAfterInteractions(() => {
-      if (!isMounted) {
+    let didSettle = false;
+    const settleStartupInteractionGate = () => {
+      if (!isMounted || didSettle) {
         return;
       }
+
+      didSettle = true;
       setIsStartupInteractionSettled(true);
+    };
+
+    const fallbackTimer = setTimeout(
+      settleStartupInteractionGate,
+      STARTUP_INTERACTION_GATE_TIMEOUT_MS
+    );
+
+    const interactionHandle = InteractionManager.runAfterInteractions(() => {
+      clearTimeout(fallbackTimer);
+      settleStartupInteractionGate();
     });
 
     return () => {
       isMounted = false;
+      clearTimeout(fallbackTimer);
       interactionHandle.cancel?.();
+    };
+  }, []);
+
+  useEffect(() => {
+    const clearInitialSubscriptionLocationTimer = () => {
+      if (initialSubscriptionLocationTimerRef.current != null) {
+        clearTimeout(initialSubscriptionLocationTimerRef.current);
+        initialSubscriptionLocationTimerRef.current = null;
+      }
+
+      initialSubscriptionLocationTimerDeadlineRef.current = null;
+      initialSubscriptionLocationTimerModeRef.current = null;
+    };
+
+    const scheduleInitialSubscriptionLocationRelease = (
+      delayMs: number,
+      mode: 'initial' | 'post-interaction'
+    ) => {
+      clearInitialSubscriptionLocationTimer();
+
+      initialSubscriptionLocationTimerDeadlineRef.current = Date.now() + delayMs;
+      initialSubscriptionLocationTimerModeRef.current = mode;
+      initialSubscriptionLocationTimerRef.current = setTimeout(() => {
+        initialSubscriptionLocationTimerRef.current = null;
+        initialSubscriptionLocationTimerDeadlineRef.current = null;
+        initialSubscriptionLocationTimerModeRef.current = null;
+        hasReleasedInitialSubscriptionLocationRef.current = true;
+        setIsInitialSubscriptionLocationSettled(true);
+      }, delayMs);
+    };
+
+    if (!location) {
+      if (
+        !hasReleasedInitialSubscriptionLocationRef.current &&
+        initialSubscriptionLocationTimerRef.current == null
+      ) {
+        setIsInitialSubscriptionLocationSettled(false);
+      }
+      return;
+    }
+
+    if (hasReleasedInitialSubscriptionLocationRef.current) {
+      setIsInitialSubscriptionLocationSettled(true);
+      return;
+    }
+
+    if (initialSubscriptionLocationTimerRef.current != null) {
+      if (
+        lastStartupTabInteractionAt != null &&
+        initialSubscriptionLocationTimerModeRef.current === 'initial'
+      ) {
+        const initialTimerRemainingMs =
+          initialSubscriptionLocationTimerDeadlineRef.current == null
+            ? INITIAL_SUBSCRIPTION_LOCATION_DELAY_MS
+            : Math.max(initialSubscriptionLocationTimerDeadlineRef.current - Date.now(), 0);
+        const nextDelayMs = Math.min(
+          initialTimerRemainingMs,
+          POST_STARTUP_TAB_SUBSCRIPTION_DELAY_MS
+        );
+
+        scheduleInitialSubscriptionLocationRelease(nextDelayMs, 'post-interaction');
+      }
+      return;
+    }
+
+    setIsInitialSubscriptionLocationSettled(false);
+    const releaseDelayMs =
+      lastStartupTabInteractionAt == null
+        ? INITIAL_SUBSCRIPTION_LOCATION_DELAY_MS
+        : POST_STARTUP_TAB_SUBSCRIPTION_DELAY_MS;
+
+    scheduleInitialSubscriptionLocationRelease(
+      releaseDelayMs,
+      lastStartupTabInteractionAt == null ? 'initial' : 'post-interaction'
+    );
+  }, [lastStartupTabInteractionAt, location]);
+
+  useEffect(() => {
+    return () => {
+      if (initialSubscriptionLocationTimerRef.current != null) {
+        clearTimeout(initialSubscriptionLocationTimerRef.current);
+        initialSubscriptionLocationTimerRef.current = null;
+      }
+      initialSubscriptionLocationTimerDeadlineRef.current = null;
+      initialSubscriptionLocationTimerModeRef.current = null;
     };
   }, []);
 
@@ -78,13 +192,15 @@ export function useSubscriptionGate(): SubscriptionGateState {
     []
   );
 
-  const isScreenFocused = isMapFocused || isFeedFocused;
   const isSubscriptionEnabled =
-    !!location && isScreenFocused && isAppActive && isStartupInteractionSettled;
-  const subscriptionLocation = isMapFocused ? mapSubscriptionAnchor ?? location : location;
+    !!location && isAppActive && isStartupInteractionSettled && isInitialSubscriptionLocationSettled;
+  const subscriptionLocation =
+    isMapFocused || (!isFeedFocused && mapSubscriptionAnchor)
+      ? mapSubscriptionAnchor ?? location
+      : location;
 
   const effectiveSubscriptionViewport = useMemo(() => {
-    if (!isMapFocused) return null;
+    if (!isMapFocused && (isFeedFocused || !mapSubscriptionViewport)) return null;
     if (!subscriptionLocation) return null;
 
     const fallbackViewport: MapSubscriptionViewport = {
@@ -97,7 +213,7 @@ export function useSubscriptionGate(): SubscriptionGateState {
     };
 
     return mapSubscriptionViewport ?? fallbackViewport;
-  }, [isMapFocused, mapSubscriptionViewport, subscriptionLocation]);
+  }, [isFeedFocused, isMapFocused, mapSubscriptionViewport, subscriptionLocation]);
 
   return {
     location,

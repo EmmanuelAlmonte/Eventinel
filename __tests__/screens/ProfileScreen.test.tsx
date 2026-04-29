@@ -11,7 +11,7 @@
  */
 
 import React from 'react';
-import { render, fireEvent, waitFor } from '@testing-library/react-native';
+import { render, fireEvent } from '@testing-library/react-native';
 import { Alert } from 'react-native';
 
 // Mock navigation
@@ -53,6 +53,18 @@ jest.mock('@lib/featureFlags', () => ({
   },
 }));
 
+jest.mock('expo-clipboard', () => ({
+  setStringAsync: jest.fn().mockResolvedValue(undefined),
+}));
+
+jest.mock('expo-notifications', () => ({
+  PermissionStatus: {
+    GRANTED: 'granted',
+    DENIED: 'denied',
+    UNDETERMINED: 'undetermined',
+  },
+}));
+
 jest.mock('@hooks', () => ({
   useAppTheme: () => ({
     colors: mockColors,
@@ -61,14 +73,18 @@ jest.mock('@hooks', () => ({
   }),
 }));
 
-const mockUseIncidentHistoryWindow = jest.fn(() => ({
-  historyWindowDays: 30,
-  isReady: true,
-  setHistoryWindowDays: jest.fn().mockResolvedValue(undefined),
+const mockUsePushSettings = jest.fn(() => ({
+  pushToken: null,
+  isLoadingPushToken: false,
+  pushPermissionStatus: null,
+  isRequestingPermission: false,
+  isRegisteringPush: false,
+  requestPermission: jest.fn(),
+  registerPushToken: jest.fn(),
 }));
 
-jest.mock('@contexts', () => ({
-  useIncidentHistoryWindow: () => mockUseIncidentHistoryWindow(),
+jest.mock('../../screens/profile/usePushSettings', () => ({
+  usePushSettings: () => mockUsePushSettings(),
 }));
 
 // Import the component
@@ -77,8 +93,6 @@ import ProfileScreen from '../../screens/ProfileScreen';
 // Import mock helpers
 import {
   mockNDKHooks,
-  useNDKCurrentUser,
-  useNDKCurrentPubkey,
   useNDKSessionLogout,
 } from '../../__mocks__/@nostr-dev-kit/mobile';
 
@@ -103,10 +117,14 @@ describe('ProfileScreen', () => {
     mockNDKHooks.setCurrentPubkey(defaultMockUser.pubkey);
     mockFeatureFlags.isCashuWalletFeatureEnabled = true;
     mockFeatureFlags.isLightningWalletFeatureEnabled = true;
-    mockUseIncidentHistoryWindow.mockReturnValue({
-      historyWindowDays: 30,
-      isReady: true,
-      setHistoryWindowDays: jest.fn().mockResolvedValue(undefined),
+    mockUsePushSettings.mockReturnValue({
+      pushToken: null,
+      isLoadingPushToken: false,
+      pushPermissionStatus: null,
+      isRequestingPermission: false,
+      isRegisteringPush: false,
+      requestPermission: jest.fn(),
+      registerPushToken: jest.fn(),
     });
     jest.clearAllMocks();
   });
@@ -123,7 +141,7 @@ describe('ProfileScreen', () => {
 
     it('renders the subtitle', () => {
       const { getByText } = render(<ProfileScreen />);
-      expect(getByText('Your Nostr identity')).toBeTruthy();
+      expect(getByText('Manage your identity, connections, and app settings')).toBeTruthy();
     });
 
     it('renders the logout button', () => {
@@ -131,9 +149,9 @@ describe('ProfileScreen', () => {
       expect(getByText('Logout')).toBeTruthy();
     });
 
-    it('renders security info notice', () => {
+    it('renders session control copy', () => {
       const { getByText } = render(<ProfileScreen />);
-      expect(getByText(/session is securely stored/)).toBeTruthy();
+      expect(getByText('Clear the local session from this device')).toBeTruthy();
     });
 
     it('shows wallet settings row when at least one wallet feature is enabled', () => {
@@ -144,11 +162,11 @@ describe('ProfileScreen', () => {
       expect(getByText('Wallet')).toBeTruthy();
     });
 
-    it('renders the incident history settings card', () => {
+    it('renders app settings rows', () => {
       const { getByText } = render(<ProfileScreen />);
-      expect(getByText('Incident History')).toBeTruthy();
-      expect(getByText('1 day')).toBeTruthy();
-      expect(getByText('30 days')).toBeTruthy();
+      expect(getByText('App')).toBeTruthy();
+      expect(getByText('Appearance')).toBeTruthy();
+      expect(getByText('Notifications')).toBeTruthy();
     });
 
     it('hides wallet settings row when wallet features are disabled', () => {
@@ -157,18 +175,23 @@ describe('ProfileScreen', () => {
 
       const { getByText, queryByText } = render(<ProfileScreen />);
       expect(queryByText('Wallet')).toBeNull();
-      expect(getByText('Relay Settings')).toBeTruthy();
+      expect(getByText('Relay settings')).toBeTruthy();
     });
 
-    it('shows the current history window summary', () => {
-      mockUseIncidentHistoryWindow.mockReturnValue({
-        historyWindowDays: 7,
-        isReady: true,
-        setHistoryWindowDays: jest.fn().mockResolvedValue(undefined),
+    it('shows granted notification status when permission is granted', () => {
+      mockUsePushSettings.mockReturnValue({
+        pushToken: null,
+        isLoadingPushToken: false,
+        pushPermissionStatus: 'granted' as any,
+        isRequestingPermission: false,
+        isRegisteringPush: false,
+        requestPermission: jest.fn(),
+        registerPushToken: jest.fn(),
       });
 
-      const { getByText } = render(<ProfileScreen />);
-      expect(getByText('Current window: 7 days')).toBeTruthy();
+      const { getByText, getAllByText } = render(<ProfileScreen />);
+      expect(getAllByText('Granted')).toHaveLength(2);
+      expect(getByText('Alerts are enabled on this device')).toBeTruthy();
     });
   });
 
@@ -189,12 +212,12 @@ describe('ProfileScreen', () => {
 
     it('displays public key', () => {
       const { getByText } = render(<ProfileScreen />);
-      expect(getByText('abc123def456')).toBeTruthy();
+      expect(getByText('abc123def456...abc123def456')).toBeTruthy();
     });
 
     it('displays pubkey label', () => {
       const { getByText } = render(<ProfileScreen />);
-      expect(getByText('Public Key')).toBeTruthy();
+      expect(getByText('Public key')).toBeTruthy();
     });
 
     it('displays avatar with first letter of displayName', () => {
@@ -243,7 +266,7 @@ describe('ProfileScreen', () => {
       mockNDKHooks.setCurrentPubkey(null);
 
       const { queryByText } = render(<ProfileScreen />);
-      expect(queryByText('Your Public Key:')).toBeNull();
+      expect(queryByText('Public key')).toBeNull();
     });
   });
 
@@ -392,8 +415,7 @@ describe('ProfileScreen', () => {
       mockNDKHooks.setCurrentPubkey(longPubkey);
 
       const { getByText } = render(<ProfileScreen />);
-      // The component should display the full key but limit lines
-      expect(getByText(longPubkey)).toBeTruthy();
+      expect(getByText('aaaaaaaaaaaa...aaaaaaaaaaaa')).toBeTruthy();
     });
 
     it('handles special characters in display name', () => {
@@ -428,24 +450,31 @@ describe('ProfileScreen', () => {
   // =============================================================================
 
   describe('Accessibility', () => {
-    it('public key text is selectable', () => {
+    it('renders public key copy affordance', () => {
       const { getByText } = render(<ProfileScreen />);
-      const pubkeyText = getByText('abc123def456');
-      expect(pubkeyText.props.selectable).toBe(true);
+      expect(getByText('Copy')).toBeTruthy();
+      expect(getByText('Copy key')).toBeTruthy();
     });
 
-    it('updates the incident history window when a preset is pressed', () => {
-      const setHistoryWindowDays = jest.fn().mockResolvedValue(undefined);
-      mockUseIncidentHistoryWindow.mockReturnValue({
-        historyWindowDays: 30,
-        isReady: true,
-        setHistoryWindowDays,
+    it('renders advanced notification actions in development', () => {
+      const requestPermission = jest.fn();
+      const registerPushToken = jest.fn();
+      mockUsePushSettings.mockReturnValue({
+        pushToken: null,
+        isLoadingPushToken: false,
+        pushPermissionStatus: null,
+        isRequestingPermission: false,
+        isRegisteringPush: false,
+        requestPermission,
+        registerPushToken,
       });
 
       const { getByText } = render(<ProfileScreen />);
-      fireEvent.press(getByText('3 days'));
+      fireEvent.press(getByText('Request permission'));
+      fireEvent.press(getByText('Register token'));
 
-      expect(setHistoryWindowDays).toHaveBeenCalledWith(3);
+      expect(requestPermission).toHaveBeenCalledTimes(1);
+      expect(registerPushToken).toHaveBeenCalledTimes(1);
     });
   });
 });

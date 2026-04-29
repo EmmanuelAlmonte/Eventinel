@@ -16,7 +16,7 @@ import type { IncidentSubscriptionContextValue } from './incidentSubscription/ty
 const IncidentSubscriptionContext = createContext<IncidentSubscriptionContextValue | null>(null);
 
 export function IncidentSubscriptionProvider({ children }: { children: React.ReactNode }) {
-  const { upsertMany } = useIncidentCacheApi();
+  const { removeMany, upsertMany } = useIncidentCacheApi();
   const { historyWindowDays, isReady } = useIncidentHistoryWindow();
   const {
     location,
@@ -32,6 +32,7 @@ export function IncidentSubscriptionProvider({ children }: { children: React.Rea
   const {
     incidents,
     updatedIncidents,
+    removedIncidentIds,
     isInitialLoading,
     hasReceivedHistory,
     severityCounts,
@@ -48,6 +49,12 @@ export function IncidentSubscriptionProvider({ children }: { children: React.Rea
       upsertMany(updatedIncidents);
     }
   }, [updatedIncidents, upsertMany]);
+
+  useEffect(() => {
+    if (removedIncidentIds && removedIncidentIds.length > 0) {
+      removeMany(removedIncidentIds);
+    }
+  }, [removedIncidentIds, removeMany]);
 
   const contextValue = useMemo(
     () => ({

@@ -5,3 +5,4 @@
  */
 
 export { formatRelativeTime, formatRelativeTimeMs, formatAge } from './time';
+export { automationTestID } from './automationTestID';

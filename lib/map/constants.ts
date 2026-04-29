@@ -113,22 +113,63 @@ export const INCIDENT_LIMITS = {
    * Maximum number of incidents to keep in memory at once
    * Oldest incidents are evicted when this limit is exceeded (LRU strategy)
    */
-  MAX_CACHE: 1000,
+  MAX_CACHE: 500,
 
   /**
    * Maximum number of events requested per active relay subscription filter.
    */
-  FETCH_LIMIT: 400,
+  FETCH_LIMIT: 200,
 
   /**
    * Maximum incidents rendered from the live subscription set.
    */
-  MAX_VISIBLE: 400,
+  MAX_VISIBLE: 200,
+
+  /**
+   * Marker feature cap while initial history is still loading.
+   * Keeps cold-start map rendering light enough for navigation taps to stay responsive.
+   */
+  COLD_START_MAP_FEATURE_LIMIT: 50,
+
+  /**
+   * Maximum kind:30911 rows retained in the NDK SQLite cache.
+   */
+  MAX_NDK_INCIDENT_CACHE: 1000,
 
   /**
    * Internal upper bound for candidate incidents kept before pruning/sorting.
    */
-  CANDIDATE_RETENTION: 1000,
+  CANDIDATE_RETENTION: 600,
+
+  /**
+   * Hard cap for queued raw relay/cache events waiting to be flushed.
+   */
+  MAX_PENDING_QUEUE: 500,
+
+  /**
+   * Hard cap for candidate incidents parsed in a single reducer flush.
+   */
+  MAX_PARSE_CANDIDATES: 300,
+
+  /**
+   * Maximum raw incident event content length accepted before JSON parsing.
+   */
+  MAX_EVENT_CONTENT_LENGTH: 8192,
+
+  /**
+   * Maximum number of tags accepted on an incident event before queueing.
+   */
+  MAX_EVENT_TAGS: 24,
+
+  /**
+   * Maximum string length accepted for any individual tag value.
+   */
+  MAX_EVENT_TAG_VALUE_LENGTH: 256,
+
+  /**
+   * Maximum string length accepted for event ids before queueing.
+   */
+  MAX_EVENT_ID_LENGTH: 128,
 
   /**
    * How many days back to fetch incident events

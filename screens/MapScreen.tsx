@@ -5,6 +5,7 @@
  */
 
 import { MapSkeleton } from '@components/ui';
+import { automationTestID } from '@lib/utils';
 import { Mapbox } from './map/config';
 import { MapScreenCanvas } from './map/MapScreenCanvas';
 import { MapScreenLocationRequired, MapScreenUnavailable } from './map/MapScreenStates';
@@ -40,7 +41,7 @@ export default function MapScreen() {
   } = useMapScreenState();
 
   if (isLoadingLocation) {
-    return <MapSkeleton />;
+    return <MapSkeleton testID={automationTestID('screen-map')} />;
   }
 
   if (!userLocation) {
@@ -53,6 +54,7 @@ export default function MapScreen() {
 
   return (
     <MapScreenCanvas
+      testID={automationTestID('screen-map')}
       mapbox={Mapbox}
       camera={camera}
       viewport={viewport}

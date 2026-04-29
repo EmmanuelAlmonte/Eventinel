@@ -21,9 +21,10 @@ type LoginHeaderProps = {
 export function LoginHeader({ colors }: LoginHeaderProps) {
   return (
     <View style={styles.header}>
-      <Text h1 style={[styles.title, { color: colors.text }]}>Welcome to Eventinel</Text>
-      <Text style={[styles.subtitle, { color: colors.textMuted }]}>Sign in to continue</Text>
+      <Text h2 style={[styles.title, { color: colors.text }]}>Sign in to Eventinel</Text>
+      <Text style={[styles.subtitle, { color: colors.textMuted }]}>
+        Choose how you want to sign in. You can switch methods anytime.
+      </Text>
     </View>
   );
 }
-

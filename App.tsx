@@ -24,7 +24,9 @@ import {
   IncidentHistoryWindowProvider,
   LocationProvider,
   IncidentSubscriptionProvider,
+  ReportDraftProvider,
   RelayStatusProvider,
+  StartupNavigationInteractionProvider,
 } from '@contexts';
 import { ToastProvider, ErrorBoundary } from '@components/ui';
 import { ThemeProvider } from '@rneui/themed';
@@ -132,15 +134,19 @@ function AppContent() {
     <LoginWrapper />
   ) : (
     <LocationProvider>
-      <RelayStatusProvider>
-        <IncidentCacheProvider>
-          <IncidentHistoryWindowProvider>
-            <IncidentSubscriptionProvider>
-              <MainNavigation />
-            </IncidentSubscriptionProvider>
-          </IncidentHistoryWindowProvider>
-        </IncidentCacheProvider>
-      </RelayStatusProvider>
+      <ReportDraftProvider>
+        <RelayStatusProvider>
+          <IncidentCacheProvider>
+            <IncidentHistoryWindowProvider>
+              <StartupNavigationInteractionProvider>
+                <IncidentSubscriptionProvider>
+                  <MainNavigation />
+                </IncidentSubscriptionProvider>
+              </StartupNavigationInteractionProvider>
+            </IncidentHistoryWindowProvider>
+          </IncidentCacheProvider>
+        </RelayStatusProvider>
+      </ReportDraftProvider>
     </LocationProvider>
   );
 }

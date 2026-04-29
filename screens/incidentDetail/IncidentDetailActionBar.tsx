@@ -1,6 +1,5 @@
 import { ActivityIndicator, Pressable, StyleSheet, TextInput, View } from 'react-native';
-import { Button, Icon, Text } from '@rneui/themed';
-import { LinearGradient } from 'expo-linear-gradient';
+import { Icon, Text } from '@rneui/themed';
 import type { EdgeInsets } from 'react-native-safe-area-context';
 
 type ThemeColors = {
@@ -12,38 +11,28 @@ type ThemeColors = {
   textMuted: string;
 };
 
-type TypeConfig = {
-  gradient: [string, string, ...string[]];
-};
-
 type IncidentDetailActionBarProps = {
   colors: ThemeColors;
   insets: EdgeInsets;
   isAuthenticated: boolean;
-  typeConfig: TypeConfig;
   commentText: string;
   setCommentText: (value: string) => void;
   isSubmitting: boolean;
   isUploadingMedia: boolean;
   onAddMedia: () => void;
   onSubmitComment: () => void;
-  onShare: () => void;
-  onDirections: () => void;
 };
 
 export function IncidentDetailActionBar({
   colors,
   insets,
   isAuthenticated,
-  typeConfig,
   commentText,
   setCommentText,
   isSubmitting,
   isUploadingMedia,
   onAddMedia,
   onSubmitComment,
-  onShare,
-  onDirections,
 }: IncidentDetailActionBarProps) {
   return (
     <View
@@ -103,25 +92,10 @@ export function IncidentDetailActionBar({
           </Pressable>
         </View>
       ) : (
-        <View style={styles.actionButtons}>
-          <Button
-            title="Share"
-            onPress={onShare}
-            buttonStyle={[styles.actionButton, { backgroundColor: colors.surface }]}
-            titleStyle={[styles.actionButtonText, { color: colors.text }]}
-            icon={<Icon name="share" type="material" size={20} color={colors.text} style={{ marginRight: 8 }} />}
-          />
-          <Pressable onPress={onDirections} style={{ flex: 1 }}>
-            <LinearGradient
-              colors={typeConfig.gradient}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 0 }}
-              style={styles.directionsButton}
-            >
-              <Icon name="navigation" type="material" size={20} color="#FFFFFF" />
-              <Text style={styles.directionsButtonText}>Get Directions</Text>
-            </LinearGradient>
-          </Pressable>
+        <View style={styles.signInPrompt}>
+          <Text style={[styles.signInPromptText, { color: colors.textMuted }]}>
+            Sign in to add context or follow-up updates.
+          </Text>
         </View>
       )}
     </View>
@@ -138,36 +112,18 @@ const styles = StyleSheet.create({
     paddingTop: 12,
     borderTopWidth: 1,
   },
-  actionButtons: {
-    flexDirection: 'row',
-    gap: 12,
-  },
-  actionButton: {
-    flex: 1,
-    borderRadius: 12,
-    paddingVertical: 14,
-  },
-  actionButtonText: {
-    fontWeight: '600',
-    fontSize: 15,
-  },
-  directionsButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    borderRadius: 12,
-    paddingVertical: 14,
-  },
-  directionsButtonText: {
-    color: '#FFFFFF',
-    fontWeight: '600',
-    fontSize: 15,
-  },
   composerRow: {
     flexDirection: 'row',
     alignItems: 'flex-end',
     gap: 10,
+  },
+  signInPrompt: {
+    paddingHorizontal: 4,
+    paddingVertical: 4,
+  },
+  signInPromptText: {
+    fontSize: 13,
+    textAlign: 'center',
   },
   attachButton: {
     width: 44,

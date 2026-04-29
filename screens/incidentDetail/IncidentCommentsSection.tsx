@@ -1,5 +1,5 @@
 import { ActivityIndicator, Pressable, StyleSheet, View } from 'react-native';
-import { Avatar, Card, Icon, Text } from '@rneui/themed';
+import { Avatar, Icon, Text } from '@rneui/themed';
 
 import { formatRelativeTimeMs } from '@lib/utils/time';
 import type { IncidentComment } from '@hooks';
@@ -57,16 +57,21 @@ export function IncidentCommentsSection({
   onDeleteComment,
 }: IncidentCommentsSectionProps) {
   const displayedComments = showAllComments ? comments : comments.slice(0, 2);
+  const hasComments = comments.length > 0;
 
   return (
     <View style={styles.section}>
       <View style={styles.commentsHeader}>
-        <Icon name="chat-bubble-outline" type="material" size={20} color={colors.textMuted} />
-        <Text style={[styles.commentsTitle, { color: colors.text }]}>Comments ({comments.length})</Text>
+        <Text style={[styles.commentsTitle, { color: colors.text }]}>Discussion</Text>
+        <Text style={[styles.commentsSubtitle, { color: colors.textMuted }]}>
+          {comments.length > 0
+            ? `${comments.length} ${comments.length === 1 ? 'comment' : 'comments'} so far.`
+            : 'Comments and follow-up discussion live here.'}
+        </Text>
       </View>
 
       {commentsAreStale && comments.length === 0 ? (
-        <View style={styles.commentsBanner}>
+        <View style={[styles.commentsBanner, { backgroundColor: 'rgba(148, 163, 184, 0.12)' }]}>
           <Icon name="info-outline" type="material" size={16} color={colors.textMuted} />
           <Text style={[styles.commentsBannerText, { color: colors.textMuted }]}>
             Relays slow, showing cached comments
@@ -78,7 +83,7 @@ export function IncidentCommentsSection({
       ) : null}
 
       {recentDeletions.length > 0 ? (
-        <View style={styles.commentsBanner}>
+        <View style={[styles.commentsBanner, { backgroundColor: 'rgba(148, 163, 184, 0.12)' }]}>
           <Icon name="delete-outline" type="material" size={16} color={colors.textMuted} />
           <Text style={[styles.commentsBannerText, { color: colors.textMuted }]}>
             {recentDeletions.length === 1 ? '1 comment deleted' : `${recentDeletions.length} comments deleted`}
@@ -89,120 +94,144 @@ export function IncidentCommentsSection({
         </View>
       ) : null}
 
-      {isLoadingComments && comments.length === 0 ? (
-        <View style={styles.emptyComments}>
-          <ActivityIndicator size="small" color={colors.primary} />
-          <Text style={[styles.emptySubtext, { color: colors.textMuted, marginTop: 8 }]}>
-            Loading comments...
-          </Text>
-        </View>
-      ) : comments.length === 0 ? (
-        <View style={styles.emptyComments}>
-          <Text style={[styles.emptyText, { color: colors.textMuted }]}>No comments yet</Text>
-          <Text style={[styles.emptySubtext, { color: colors.textMuted }]}>
-            Be the first to share what you know
-          </Text>
-        </View>
-      ) : (
-        <>
-          {displayedComments.map((comment) => {
-            const canDelete = currentUserPubkey === comment.authorPubkey;
-            const isDeleting = deletingCommentId === comment.id;
+      <View
+        style={[
+          styles.commentsSurface,
+          { backgroundColor: colors.surface, borderColor: colors.border },
+        ]}
+      >
+        {isLoadingComments && comments.length === 0 ? (
+          <View style={styles.emptyComments}>
+            <ActivityIndicator size="small" color={colors.primary} />
+            <Text style={[styles.emptySubtext, { color: colors.textMuted, marginTop: 8 }]}>
+              Loading discussion...
+            </Text>
+          </View>
+        ) : !hasComments ? (
+          <View style={styles.emptyComments}>
+            <Text style={[styles.emptyText, { color: colors.text }]}>No comments yet</Text>
+            <Text style={[styles.emptySubtext, { color: colors.textMuted }]}>
+              There is no discussion on this report yet.
+            </Text>
+          </View>
+        ) : (
+          <>
+            {displayedComments.map((comment, index) => {
+              const canDelete = currentUserPubkey === comment.authorPubkey;
+              const isDeleting = deletingCommentId === comment.id;
 
-            return (
-              <Card
-                key={comment.id}
-                containerStyle={[
-                  styles.commentCard,
-                  { backgroundColor: colors.surface, borderColor: colors.border },
-                ]}
-              >
-                <Pressable onLongPress={() => onDeleteComment(comment)} disabled={!canDelete || isDeleting}>
-                  <View style={styles.comment}>
-                    <Avatar
-                      rounded
-                      size={36}
-                      title={comment.displayName.charAt(0)}
-                      source={comment.avatarUrl ? { uri: comment.avatarUrl } : undefined}
-                      containerStyle={[styles.commentAvatar, { backgroundColor: colors.primary }]}
-                    />
-                    <View style={styles.commentContent}>
-                      <View style={styles.commentHeader}>
-                        <Text style={[styles.commentAuthor, { color: colors.text }]}>{comment.displayName}</Text>
-                        <View style={styles.commentMetaRow}>
-                          <Text style={[styles.commentTime, { color: colors.textMuted }]}>
-                            {formatRelativeTimeMs(comment.createdAtMs)}
+              return (
+                <View
+                  key={comment.id}
+                  style={[
+                    styles.commentRow,
+                    index > 0 && { borderTopColor: colors.border, borderTopWidth: 1 },
+                  ]}
+                >
+                  <Pressable
+                    onLongPress={() => onDeleteComment(comment)}
+                    disabled={!canDelete || isDeleting}
+                  >
+                    <View style={styles.comment}>
+                      <Avatar
+                        rounded
+                        size={36}
+                        title={comment.displayName.charAt(0)}
+                        source={comment.avatarUrl ? { uri: comment.avatarUrl } : undefined}
+                        containerStyle={[styles.commentAvatar, { backgroundColor: colors.primary }]}
+                      />
+                      <View style={styles.commentContent}>
+                        <View style={styles.commentHeader}>
+                          <Text style={[styles.commentAuthor, { color: colors.text }]}>
+                            {comment.displayName}
                           </Text>
-                          {canDelete ? (
-                            <Pressable
-                              onPress={() => onDeleteComment(comment)}
-                              style={styles.commentMenuButton}
-                              hitSlop={8}
-                              disabled={isDeleting}
-                            >
-                              {isDeleting ? (
-                                <ActivityIndicator size="small" color={colors.textMuted} />
-                              ) : (
-                                <Icon name="more-vert" type="material" size={18} color={colors.textMuted} />
-                              )}
-                            </Pressable>
-                          ) : null}
+                          <View style={styles.commentMetaRow}>
+                            <Text style={[styles.commentTime, { color: colors.textMuted }]}>
+                              {formatRelativeTimeMs(comment.createdAtMs)}
+                            </Text>
+                            {canDelete ? (
+                              <Pressable
+                                onPress={() => onDeleteComment(comment)}
+                                style={styles.commentMenuButton}
+                                hitSlop={8}
+                                disabled={isDeleting}
+                              >
+                                {isDeleting ? (
+                                  <ActivityIndicator size="small" color={colors.textMuted} />
+                                ) : (
+                                  <Icon
+                                    name="more-vert"
+                                    type="material"
+                                    size={18}
+                                    color={colors.textMuted}
+                                  />
+                                )}
+                              </Pressable>
+                            ) : null}
+                          </View>
                         </View>
+                        <Text style={[styles.commentText, { color: colors.text }]}>{comment.content}</Text>
                       </View>
-                      <Text style={[styles.commentText, { color: colors.text }]}>{comment.content}</Text>
                     </View>
-                  </View>
-                </Pressable>
-              </Card>
-            );
-          })}
+                  </Pressable>
+                </View>
+              );
+            })}
 
-          {comments.length > 2 && !showAllComments ? (
-            <Pressable onPress={onShowAllComments} style={styles.showMoreButton}>
-              <Text style={[styles.showMoreText, { color: colors.primary }]}>
-                Show {comments.length - 2} more comments
-              </Text>
-            </Pressable>
-          ) : null}
-        </>
-      )}
+            {comments.length > 2 && !showAllComments ? (
+              <Pressable onPress={onShowAllComments} style={styles.showMoreButton}>
+                <Text style={[styles.showMoreText, { color: colors.primary }]}>
+                  Show {comments.length - 2} more comments
+                </Text>
+              </Pressable>
+            ) : null}
+          </>
+        )}
+      </View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   section: {
-    paddingHorizontal: 16,
-    marginBottom: 12,
+    paddingHorizontal: 20,
+    marginBottom: 20,
   },
   commentsHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    marginBottom: 12,
+    marginBottom: 14,
   },
   commentsTitle: {
-    fontSize: 16,
-    fontWeight: '600',
+    fontSize: 20,
+    fontWeight: '700',
+    marginBottom: 6,
+  },
+  commentsSubtitle: {
+    fontSize: 14,
+    lineHeight: 20,
+  },
+  commentsSurface: {
+    borderWidth: 1,
+    borderRadius: 20,
+    overflow: 'hidden',
   },
   emptyComments: {
     alignItems: 'center',
-    paddingVertical: 24,
+    paddingVertical: 32,
+    paddingHorizontal: 24,
   },
   emptyText: {
     fontSize: 16,
-    fontWeight: '500',
-    marginBottom: 4,
+    fontWeight: '600',
+    marginBottom: 6,
   },
   emptySubtext: {
     fontSize: 14,
+    lineHeight: 20,
+    textAlign: 'center',
   },
-  commentCard: {
-    borderRadius: 12,
-    borderWidth: 1,
-    padding: 12,
-    margin: 0,
-    marginBottom: 8,
+  commentRow: {
+    paddingHorizontal: 16,
+    paddingVertical: 16,
   },
   comment: {
     flexDirection: 'row',
@@ -230,7 +259,6 @@ const styles = StyleSheet.create({
   commentsBanner: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(148, 163, 184, 0.12)',
     borderRadius: 10,
     paddingHorizontal: 12,
     paddingVertical: 8,
@@ -262,7 +290,8 @@ const styles = StyleSheet.create({
   },
   showMoreButton: {
     alignItems: 'center',
-    paddingVertical: 12,
+    paddingVertical: 14,
+    borderTopWidth: 1,
   },
   showMoreText: {
     fontSize: 14,

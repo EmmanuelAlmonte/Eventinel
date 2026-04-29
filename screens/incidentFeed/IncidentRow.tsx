@@ -1,6 +1,6 @@
 import { memo } from 'react';
 import { Pressable, View } from 'react-native';
-import { Badge, Card, Icon, Text } from '@rneui/themed';
+import { Icon, Text } from '@rneui/themed';
 
 import type { ProcessedIncident } from '@hooks';
 import { SEVERITY_COLORS, TYPE_CONFIG } from '@lib/nostr/config';
@@ -19,6 +19,30 @@ type IncidentRowProps = {
   onPress: (incidentId: string) => void;
 };
 
+const SEVERITY_LABELS: Record<number, string> = {
+  1: 'Info',
+  2: 'Low',
+  3: 'Medium',
+  4: 'High',
+  5: 'Critical',
+};
+
+function formatSourceLabel(source: string | undefined) {
+  switch (source) {
+    case 'opendataphilly':
+      return 'Official data';
+    case 'community':
+      return 'Community';
+    case 'radio':
+      return 'Radio';
+    default:
+      if (!source) {
+        return 'Community';
+      }
+      return source.replace(/_/g, ' ');
+  }
+}
+
 export const IncidentRow = memo(function IncidentRow({
   incident,
   colors,
@@ -26,60 +50,76 @@ export const IncidentRow = memo(function IncidentRow({
 }: IncidentRowProps) {
   const severityColor = SEVERITY_COLORS[incident.severity] || SEVERITY_COLORS[1];
   const typeConfig = TYPE_CONFIG[incident.type] || TYPE_CONFIG.other;
+  const sourceLabel = formatSourceLabel(incident.source);
+  const secondaryLine =
+    incident.description && incident.description !== incident.title
+      ? incident.description
+      : sourceLabel;
 
   return (
-    <Pressable onPress={() => onPress(incident.incidentId)}>
-      <Card
-        containerStyle={[
-          styles.incidentCard,
-          {
-            backgroundColor: colors.surface,
-            borderColor: colors.border,
-            borderLeftColor: severityColor,
-            borderLeftWidth: 4,
-          },
-        ]}
-      >
-        <View style={styles.cardRow}>
-          <View style={[styles.iconContainer, { backgroundColor: `${typeConfig.color}20` }]}>
-            <Icon name={typeConfig.icon} type="material" size={24} color={typeConfig.color} />
+    <Pressable
+      onPress={() => onPress(incident.incidentId)}
+      style={({ pressed }) => [styles.incidentRow, pressed && styles.incidentRowPressed]}
+    >
+      <View style={[styles.iconContainer, { backgroundColor: `${typeConfig.color}18` }]}>
+        <Icon name={typeConfig.icon} type="material" size={18} color={typeConfig.color} />
+      </View>
+
+      <View style={[styles.cardContent, { borderBottomColor: colors.border }]}>
+        <View style={styles.cardHeader}>
+          <View style={styles.kickerRow}>
+            <Text style={[styles.typeLabel, { color: typeConfig.color }]}>{typeConfig.label}</Text>
+
+            {incident.isVerified ? (
+              <View style={[styles.supportPill, { backgroundColor: `${typeConfig.color}14` }]}>
+                <Text style={[styles.supportPillText, { color: typeConfig.color }]}>Verified</Text>
+              </View>
+            ) : null}
+
+            <View style={[styles.supportPill, { backgroundColor: colors.surface }]}>
+              <Text style={[styles.supportPillText, { color: colors.textMuted }]}>{sourceLabel}</Text>
+            </View>
           </View>
 
-          <View style={styles.cardContent}>
-            <View style={styles.cardHeader}>
-              <Text style={[styles.incidentTitle, { color: colors.text }]} numberOfLines={1}>
-                {incident.title}
-              </Text>
-              <Badge
-                value={`Sev ${incident.severity}`}
-                badgeStyle={{ backgroundColor: severityColor }}
-                textStyle={styles.badgeText}
-              />
-            </View>
-
-            <Text style={[styles.incidentDescription, { color: colors.textMuted }]} numberOfLines={2}>
-              {incident.description}
+          <View
+            style={[
+              styles.severityBadge,
+              {
+                borderColor: `${severityColor}55`,
+                backgroundColor: `${severityColor}14`,
+              },
+            ]}
+          >
+            <Text style={[styles.severityBadgeText, { color: severityColor }]}>
+              {SEVERITY_LABELS[incident.severity]}
             </Text>
-
-            <View style={styles.metaRow}>
-              <View style={styles.metaItem}>
-                <Icon name="schedule" type="material" size={14} color={colors.textMuted} />
-                <Text style={[styles.metaText, { color: colors.textMuted }]}>
-                  {formatRelativeTimeMs(incident.occurredAtMs)}
-                </Text>
-              </View>
-              <View style={styles.metaItem}>
-                <Icon name="location-on" type="material" size={14} color={colors.textMuted} />
-                <Text style={[styles.metaText, { color: colors.textMuted }]} numberOfLines={1}>
-                  {incident.location.address}
-                </Text>
-              </View>
-            </View>
           </View>
+        </View>
 
+        <Text style={[styles.incidentTitle, { color: colors.text }]} numberOfLines={1}>
+          {incident.title}
+        </Text>
+
+        <Text style={[styles.incidentDescription, { color: colors.textMuted }]} numberOfLines={2}>
+          {secondaryLine}
+        </Text>
+
+        <View style={styles.metaRow}>
+          <View style={styles.metaItem}>
+            <Icon name="schedule" type="material" size={14} color={colors.textMuted} />
+            <Text style={[styles.metaText, { color: colors.textMuted }]} numberOfLines={1}>
+              {formatRelativeTimeMs(incident.occurredAtMs)}
+            </Text>
+          </View>
+          <View style={styles.metaItem}>
+            <Icon name="location-on" type="material" size={14} color={colors.textMuted} />
+            <Text style={[styles.metaText, { color: colors.textMuted }]} numberOfLines={1}>
+              {incident.location.address}
+            </Text>
+          </View>
           <Icon name="chevron-right" type="material" size={24} color={colors.textMuted} />
         </View>
-      </Card>
+      </View>
     </Pressable>
   );
 });

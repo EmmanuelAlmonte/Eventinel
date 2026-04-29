@@ -5,11 +5,22 @@ import type { MapSubscriptionViewport } from '@lib/map/subscriptionPlanner';
 
 export const INCIDENT_KIND = 30911 as const;
 export const SUBSCRIPTION_BUFFER_MS = 100;
+export const INITIAL_HISTORY_RELAY_BUFFER_MS = 1000;
+export const INITIAL_HISTORY_FLUSH_CHUNK_SIZE = 50;
+export const INITIAL_HISTORY_FLUSH_CONTINUATION_MS = 16;
 export const EARTH_RADIUS_METERS = 6371000;
 
 export interface QueuedEvent {
   event: NDKEvent;
   source: IncomingEventSource;
+  subscriptionKey?: string;
+  queueKey?: string;
+  incidentId?: string | null;
+  createdAt?: number;
+  eventId?: string;
+  rawEventCount?: number;
+  cacheEventCount?: number;
+  relayEventCount?: number;
 }
 
 export type IncomingEventSource = 'cache' | 'relay';
@@ -73,6 +84,8 @@ export interface UseIncidentSubscriptionResult {
   severityCounts: SeverityCounts;
   /** Incidents that were updated since last render */
   updatedIncidents: ProcessedIncident[];
+  /** Incident IDs removed from visible/shared cache state since last render */
+  removedIncidentIds: string[];
   /** Total events received (for debugging) */
   totalEventsReceived: number;
   /** Timestamp of last update */
@@ -83,6 +96,7 @@ export interface IncidentSubscriptionDisplayState {
   incidents: ProcessedIncident[];
   severityCounts: SeverityCounts;
   updatedIncidents: ProcessedIncident[];
+  removedIncidentIds: string[];
   totalEventsReceived: number;
   hasReceivedHistory: boolean;
 }
@@ -91,6 +105,7 @@ export interface EventBatchInput {
   queuedEvents: readonly QueuedEvent[];
   incidentMap: Map<string, ProcessedIncident>;
   maxCandidateRetention: number;
+  maxParseCandidates?: number;
   location: [number, number] | null;
   minCreatedAtUnixSeconds?: number | null;
 }

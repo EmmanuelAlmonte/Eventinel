@@ -1,7 +1,11 @@
-import { Switch, View } from 'react-native';
-import { Button, Card, Icon, Input, Text } from '@rneui/themed';
+import { useState } from 'react';
+import { Pressable, Switch, View } from 'react-native';
+import { Card, Icon, Input, Text } from '@rneui/themed';
 import type { SignerAppInfo } from 'expo-nip55';
+import { automationTestID } from '@lib/utils';
 
+import { LoginActionButton } from './LoginActionButton';
+import { SegmentedControl, type SegmentedOption } from './SegmentedControl';
 import { loginScreenStyles as styles } from './styles';
 
 type ThemeColors = {
@@ -15,81 +19,183 @@ type ThemeColors = {
   warning: string;
 };
 
-type Nip55CardProps = {
+export type LoginMethod = 'signer' | 'nostrConnect' | 'privateKey';
+
+type UnifiedAuthCardProps = {
   colors: ThemeColors;
+  selectedMethod: LoginMethod;
+  onSelectMethod: (method: LoginMethod) => void;
+  isAndroid: boolean;
   apps: SignerAppInfo[];
+  remoteSignerInput: string;
+  setRemoteSignerInput: (value: string) => void;
+  forceLegacyNip04: boolean;
+  setForceLegacyNip04: (value: boolean) => void;
+  nostrConnectRelay: string;
+  setNostrConnectRelay: (value: string) => void;
+  manualKey: string;
+  setManualKey: (value: string) => void;
   isLoading: boolean;
-  onLogin: (app: SignerAppInfo) => void;
+  onNip55Login: (app: SignerAppInfo) => void;
+  onRemoteSignerLogin: () => void;
+  onGenerateNostrConnect: () => void;
+  onGenerateKey: () => void;
+  onManualLogin: () => void;
 };
 
-export function Nip55Card({ colors, apps, isLoading, onLogin }: Nip55CardProps) {
-  return (
-    <Card containerStyle={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-      <View style={styles.cardHeader}>
-        <Icon name="security" type="material" size={24} color={colors.primary} />
-        <Text style={[styles.cardTitle, { color: colors.text }]}>Device Signer</Text>
-        <View style={[styles.recommendedBadge, { backgroundColor: colors.primary }]}>
-          <Text style={styles.recommendedText}>Recommended</Text>
-        </View>
-      </View>
-      <Text style={[styles.cardDescription, { color: colors.textMuted }]}>
-        Sign in with an installed signer app. Your keys never leave the device.
-      </Text>
+const LOGIN_METHODS: SegmentedOption<LoginMethod>[] = [
+  {
+    key: 'signer',
+    label: 'Signer app',
+    subtitle: 'Remote signer',
+  },
+  {
+    key: 'nostrConnect',
+    label: 'Nostr Connect',
+    subtitle: 'URI flow',
+  },
+  {
+    key: 'privateKey',
+    label: 'Private key',
+    subtitle: 'Direct sign in',
+  },
+];
 
-      {apps.map((app) => (
-        <Button
-          key={app.packageName}
-          title={`Login with ${app.name || app.packageName}`}
-          onPress={() => onLogin(app)}
-          disabled={isLoading}
-          containerStyle={styles.buttonContainer}
-          icon={<Icon name="key" type="material" size={20} color="#FFFFFF" style={{ marginRight: 8 }} />}
-        />
-      ))}
-    </Card>
+function AuthBodyHeader({
+  colors,
+  title,
+  subtitle,
+  description,
+  accentColor,
+}: {
+  colors: ThemeColors;
+  title: string;
+  subtitle: string;
+  description: string;
+  accentColor: string;
+}) {
+  return (
+    <View style={styles.authBodyHeader}>
+      <Text style={[styles.authTitle, { color: colors.text }]}>{title}</Text>
+      <Text style={[styles.authSublabel, { color: accentColor }]}>{subtitle}</Text>
+      <Text style={[styles.authDescription, { color: colors.textMuted }]}>{description}</Text>
+    </View>
   );
 }
 
-type RemoteSignerCardProps = {
-  colors: ThemeColors;
-  isIOS: boolean;
-  input: string;
-  setInput: (value: string) => void;
-  forceLegacyNip04: boolean;
-  setForceLegacyNip04: (value: boolean) => void;
-  isLoading: boolean;
-  onConnect: () => void;
-};
-
-export function RemoteSignerCard({
+function AdvancedOptions({
   colors,
-  isIOS,
-  input,
-  setInput,
+  isVisible,
+  onToggle,
   forceLegacyNip04,
   setForceLegacyNip04,
   isLoading,
-  onConnect,
-}: RemoteSignerCardProps) {
+}: {
+  colors: ThemeColors;
+  isVisible: boolean;
+  onToggle: () => void;
+  forceLegacyNip04: boolean;
+  setForceLegacyNip04: (value: boolean) => void;
+  isLoading: boolean;
+}) {
   return (
-    <Card containerStyle={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-      <View style={styles.cardHeader}>
-        <Icon name="cloud" type="material" size={24} color={isIOS ? colors.primary : colors.textMuted} />
-        <Text style={[styles.cardTitle, { color: colors.text }]}>Remote Signer (NIP-46)</Text>
-        {isIOS && (
-          <View style={[styles.recommendedBadge, { backgroundColor: colors.primary }]}>
-            <Text style={styles.recommendedText}>Recommended</Text>
+    <View style={styles.advancedSection}>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityState={{ expanded: isVisible }}
+        onPress={onToggle}
+        style={styles.advancedToggle}
+      >
+        <Text style={[styles.advancedToggleText, { color: colors.textMuted }]}>Advanced options</Text>
+        <Icon
+          name={isVisible ? 'expand-less' : 'expand-more'}
+          type="material"
+          size={18}
+          color={colors.textMuted}
+        />
+      </Pressable>
+
+      {isVisible ? (
+        <View style={[styles.advancedPanel, { backgroundColor: colors.background, borderColor: colors.border }]}>
+          <View style={styles.toggleRow}>
+            <Text style={[styles.toggleLabel, { color: colors.textMuted }]}>
+              Legacy NIP-04 (if bunker does not support NIP-44)
+            </Text>
+            <Switch
+              value={forceLegacyNip04}
+              onValueChange={setForceLegacyNip04}
+              disabled={isLoading}
+              trackColor={{ false: `${colors.textMuted}33`, true: `${colors.primary}66` }}
+              thumbColor={forceLegacyNip04 ? colors.primary : '#F4F4F5'}
+            />
           </View>
-        )}
-      </View>
-      <Text style={[styles.cardDescription, { color: colors.textMuted }]}>
-        Connect via bunker:// or NIP-05 (name@domain) for secure remote signing.
-      </Text>
+        </View>
+      ) : null}
+    </View>
+  );
+}
+
+function SignerMethodBody({
+  colors,
+  isAndroid,
+  apps,
+  remoteSignerInput,
+  setRemoteSignerInput,
+  forceLegacyNip04,
+  setForceLegacyNip04,
+  isLoading,
+  onNip55Login,
+  onRemoteSignerLogin,
+}: {
+  colors: ThemeColors;
+  isAndroid: boolean;
+  apps: SignerAppInfo[];
+  remoteSignerInput: string;
+  setRemoteSignerInput: (value: string) => void;
+  forceLegacyNip04: boolean;
+  setForceLegacyNip04: (value: boolean) => void;
+  isLoading: boolean;
+  onNip55Login: (app: SignerAppInfo) => void;
+  onRemoteSignerLogin: () => void;
+}) {
+  const [showAdvanced, setShowAdvanced] = useState(false);
+
+  return (
+    <>
+      <AuthBodyHeader
+        colors={colors}
+        title="Signer app"
+        subtitle="Recommended"
+        description="Use a bunker URI or NIP-05 to connect a signer securely."
+        accentColor={colors.primary}
+      />
+
+      {isAndroid && apps.length > 0 ? (
+        <View style={[styles.inlineNotice, { backgroundColor: colors.background, borderColor: colors.border }]}>
+          <Text style={[styles.inlineNoticeTitle, { color: colors.text }]}>Installed signer apps</Text>
+          <Text style={[styles.inlineNoticeText, { color: colors.textMuted }]}>
+            You can use an installed signer directly, or connect a bunker URI below.
+          </Text>
+          <View style={styles.installedSignerActions}>
+            {apps.map((app) => (
+              <LoginActionButton
+                key={app.packageName}
+                colors={colors}
+                label={app.name || app.packageName}
+                onPress={() => onNip55Login(app)}
+                disabled={isLoading}
+                iconName="key"
+                variant="secondary"
+              />
+            ))}
+          </View>
+        </View>
+      ) : null}
 
       <Input
         placeholder="bunker://pubkey?relay=wss://... or name@domain"
-        value={input}
-        onChangeText={setInput}
+        value={remoteSignerInput}
+        onChangeText={setRemoteSignerInput}
         autoCapitalize="none"
         autoCorrect={false}
         disabled={isLoading}
@@ -100,54 +206,54 @@ export function RemoteSignerCard({
         placeholderTextColor={colors.textMuted}
       />
 
-      <View style={styles.toggleRow}>
-        <Text style={[styles.toggleLabel, { color: colors.textMuted }]}>
-          Legacy NIP-04 (if bunker doesn't support NIP-44)
-        </Text>
-        <Switch
-          value={forceLegacyNip04}
-          onValueChange={setForceLegacyNip04}
-          disabled={isLoading}
-          trackColor={{ false: colors.border, true: colors.primary }}
-          thumbColor={forceLegacyNip04 ? colors.primary : colors.textMuted}
-        />
-      </View>
-
-      <Button
-        title="Connect to Remote Signer"
-        onPress={onConnect}
+      <LoginActionButton
+        colors={colors}
+        label="Connect signer"
+        onPress={onRemoteSignerLogin}
         disabled={isLoading}
-        containerStyle={styles.buttonContainer}
-        buttonStyle={isIOS ? undefined : { backgroundColor: colors.primaryDark }}
-        icon={<Icon name="login" type="material" size={20} color="#FFFFFF" style={{ marginRight: 8 }} />}
+        iconName="login"
+        variant="primary"
       />
-    </Card>
+
+      <AdvancedOptions
+        colors={colors}
+        isVisible={showAdvanced}
+        onToggle={() => setShowAdvanced((current: boolean) => !current)}
+        forceLegacyNip04={forceLegacyNip04}
+        setForceLegacyNip04={setForceLegacyNip04}
+        isLoading={isLoading}
+      />
+    </>
   );
 }
 
-type NostrConnectCardProps = {
+function NostrConnectMethodBody({
+  colors,
+  nostrConnectRelay,
+  setNostrConnectRelay,
+  isLoading,
+  onGenerate,
+}: {
   colors: ThemeColors;
-  relay: string;
-  setRelay: (value: string) => void;
+  nostrConnectRelay: string;
+  setNostrConnectRelay: (value: string) => void;
   isLoading: boolean;
   onGenerate: () => void;
-};
-
-export function NostrConnectCard({ colors, relay, setRelay, isLoading, onGenerate }: NostrConnectCardProps) {
+}) {
   return (
-    <Card containerStyle={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-      <View style={styles.cardHeader}>
-        <Icon name="link" type="material" size={24} color={colors.primary} />
-        <Text style={[styles.cardTitle, { color: colors.text }]}>Nostr Connect (NIP-46)</Text>
-      </View>
-      <Text style={[styles.cardDescription, { color: colors.textMuted }]}>
-        Generate a nostrconnect:// URI and open it in a signer app.
-      </Text>
+    <>
+      <AuthBodyHeader
+        colors={colors}
+        title="Nostr Connect"
+        subtitle="Connect using a URI"
+        description="Generate a nostrconnect URI and open it in your signer app."
+        accentColor={colors.primary}
+      />
 
       <Input
         placeholder="wss://relay.example.com"
-        value={relay}
-        onChangeText={setRelay}
+        value={nostrConnectRelay}
+        onChangeText={setNostrConnectRelay}
         autoCapitalize="none"
         autoCorrect={false}
         disabled={isLoading}
@@ -158,48 +264,55 @@ export function NostrConnectCard({ colors, relay, setRelay, isLoading, onGenerat
         placeholderTextColor={colors.textMuted}
       />
 
-      <Button
-        title="Generate Nostr Connect"
+      <LoginActionButton
+        colors={colors}
+        label="Generate Nostr Connect"
         onPress={onGenerate}
         disabled={isLoading}
-        containerStyle={styles.buttonContainer}
-        icon={<Icon name="qr-code" type="material" size={20} color="#FFFFFF" style={{ marginRight: 8 }} />}
+        iconName="qr-code"
+        variant="primary"
       />
-    </Card>
+    </>
   );
 }
 
-type ManualLoginCardProps = {
-  colors: ThemeColors;
-  manualKey: string;
-  setManualKey: (value: string) => void;
-  isLoading: boolean;
-  onGenerate: () => void;
-  onLogin: () => void;
-};
-
-export function ManualLoginCard({
+function PrivateKeyMethodBody({
   colors,
   manualKey,
   setManualKey,
   isLoading,
   onGenerate,
   onLogin,
-}: ManualLoginCardProps) {
+}: {
+  colors: ThemeColors;
+  manualKey: string;
+  setManualKey: (value: string) => void;
+  isLoading: boolean;
+  onGenerate: () => void;
+  onLogin: () => void;
+}) {
   return (
-    <Card containerStyle={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-      <View style={styles.cardHeader}>
-        <Icon name="vpn-key" type="material" size={24} color={colors.warning} />
-        <Text style={[styles.cardTitle, { color: colors.text }]}>Manual Login</Text>
-        <View style={[styles.testOnlyBadge, { backgroundColor: colors.warning }]}>
-          <Text style={styles.testOnlyText}>Testing Only</Text>
+    <>
+      <AuthBodyHeader
+        colors={colors}
+        title="Private key"
+        subtitle="Sign in directly"
+        description="Use a private key directly to sign in."
+        accentColor={colors.text}
+      />
+
+      <View style={[styles.warningPanel, { backgroundColor: `${colors.warning}10`, borderColor: `${colors.warning}35` }]}>
+        <Icon name="warning-amber" type="material" size={18} color={colors.warning} />
+        <View style={styles.warningBody}>
+          <Text style={[styles.warningPanelTitle, { color: colors.warning }]}>Use carefully</Text>
+          <Text style={[styles.warningPanelText, { color: colors.textMuted }]}>
+            Never paste a private key you do not control.
+          </Text>
         </View>
       </View>
-      <Text style={[styles.cardDescription, { color: colors.textMuted }]}>
-        Enter your private key directly. Use test keys only!
-      </Text>
 
       <Input
+        testID={automationTestID('login-private-key-input')}
         placeholder="nsec1... or hex private key"
         value={manualKey}
         onChangeText={setManualKey}
@@ -214,44 +327,108 @@ export function ManualLoginCard({
         placeholderTextColor={colors.textMuted}
       />
 
-      <Button
-        title="Create New Test Key"
-        onPress={onGenerate}
-        disabled={isLoading}
-        containerStyle={styles.buttonContainer}
-        type="outline"
-        buttonStyle={{ borderColor: colors.warning }}
-        titleStyle={{ color: colors.warning }}
-        icon={<Icon name="add-circle-outline" type="material" size={20} color={colors.warning} style={{ marginRight: 8 }} />}
-      />
-
-      <Button
-        title="Login with Private Key"
-        onPress={onLogin}
-        disabled={isLoading}
-        containerStyle={styles.buttonContainer}
-        buttonStyle={{ backgroundColor: '#52525B' }}
-        icon={<Icon name="key" type="material" size={20} color="#FFFFFF" style={{ marginRight: 8 }} />}
-      />
-    </Card>
+      <View style={styles.privateKeyActions}>
+        <LoginActionButton
+          testID={automationTestID('login-generate-key')}
+          colors={colors}
+          label="Generate key"
+          onPress={onGenerate}
+          disabled={isLoading}
+          iconName="add-circle-outline"
+          variant="warning"
+          containerStyle={styles.privateKeySecondaryAction}
+        />
+        <LoginActionButton
+          testID={automationTestID('login-private-key-submit')}
+          colors={colors}
+          label="Continue with private key"
+          onPress={onLogin}
+          disabled={isLoading}
+          iconName="key"
+          variant="neutral"
+          containerStyle={styles.privateKeyPrimaryAction}
+        />
+      </View>
+    </>
   );
 }
 
-export function SecurityNoticeCard({ colors, isAndroid }: { colors: ThemeColors; isAndroid: boolean }) {
+export function UnifiedAuthCard({
+  colors,
+  selectedMethod,
+  onSelectMethod,
+  isAndroid,
+  apps,
+  remoteSignerInput,
+  setRemoteSignerInput,
+  forceLegacyNip04,
+  setForceLegacyNip04,
+  nostrConnectRelay,
+  setNostrConnectRelay,
+  manualKey,
+  setManualKey,
+  isLoading,
+  onNip55Login,
+  onRemoteSignerLogin,
+  onGenerateNostrConnect,
+  onGenerateKey,
+  onManualLogin,
+}: UnifiedAuthCardProps) {
   return (
-    <Card containerStyle={[styles.warningCard, { borderColor: `${colors.warning}40` }]}>
-      <View style={styles.cardHeader}>
-        <Icon name="warning" type="material" size={24} color={colors.warning} />
-        <Text style={[styles.warningTitle, { color: colors.warning }]}>Security Notice</Text>
+    <Card containerStyle={[styles.card, styles.authCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+      <SegmentedControl
+        colors={colors}
+        options={LOGIN_METHODS}
+        value={selectedMethod}
+        onChange={onSelectMethod}
+        style={styles.segmentedControl}
+      />
+
+      <View style={styles.authBody}>
+        {selectedMethod === 'signer' ? (
+          <SignerMethodBody
+            colors={colors}
+            isAndroid={isAndroid}
+            apps={apps}
+            remoteSignerInput={remoteSignerInput}
+            setRemoteSignerInput={setRemoteSignerInput}
+            forceLegacyNip04={forceLegacyNip04}
+            setForceLegacyNip04={setForceLegacyNip04}
+            isLoading={isLoading}
+            onNip55Login={onNip55Login}
+            onRemoteSignerLogin={onRemoteSignerLogin}
+          />
+        ) : null}
+
+        {selectedMethod === 'nostrConnect' ? (
+          <NostrConnectMethodBody
+            colors={colors}
+            nostrConnectRelay={nostrConnectRelay}
+            setNostrConnectRelay={setNostrConnectRelay}
+            isLoading={isLoading}
+            onGenerate={onGenerateNostrConnect}
+          />
+        ) : null}
+
+        {selectedMethod === 'privateKey' ? (
+          <PrivateKeyMethodBody
+            colors={colors}
+            manualKey={manualKey}
+            setManualKey={setManualKey}
+            isLoading={isLoading}
+            onGenerate={onGenerateKey}
+            onLogin={onManualLogin}
+          />
+        ) : null}
       </View>
-      <Text style={[styles.warningText, { color: colors.textMuted }]}>
-        {isAndroid
-          ? '• NIP-55 signer apps (Amber) are most secure\n'
-          : '• NIP-46 bunkers are most secure for iOS\n'}
-        • Never share your private key{'\n'}
-        • Use test keys for development only{'\n'}
-        • Keys are encrypted and stored securely
-      </Text>
+
+      <View style={[styles.helpDivider, { borderTopColor: colors.border }]} />
+      <View style={styles.helpNote}>
+        <Text style={[styles.helpNoteTitle, { color: colors.text }]}>Need help choosing?</Text>
+        <Text style={[styles.helpNoteText, { color: colors.textMuted }]}>
+          Use a signer app if you're new to Nostr.
+        </Text>
+      </View>
     </Card>
   );
 }

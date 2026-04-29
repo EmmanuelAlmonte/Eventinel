@@ -46,9 +46,9 @@ export function IncidentFeedEmpty({
     return (
       <View style={styles.emptyState}>
         <Icon name="check-circle" type="material" size={64} color={colors.success} />
-        <Text style={[styles.emptyTitle, { color: colors.text }]}>All Clear</Text>
+        <Text style={[styles.emptyTitle, { color: colors.text }]}>Quiet right now</Text>
         <Text style={[styles.emptySubtitle, { color: colors.textMuted }]}>
-          No incidents reported in your area
+          No nearby incidents have been reported in your current area.
         </Text>
       </View>
     );
@@ -57,9 +57,9 @@ export function IncidentFeedEmpty({
   return (
     <View style={styles.emptyState}>
       <Icon name="hourglass-empty" type="material" size={64} color={colors.textMuted} />
-      <Text style={[styles.emptyTitle, { color: colors.text }]}>Loading...</Text>
+      <Text style={[styles.emptyTitle, { color: colors.text }]}>Checking nearby activity</Text>
       <Text style={[styles.emptySubtitle, { color: colors.textMuted }]}>
-        Fetching incidents from relays
+        Pulling the latest incident reports from your relays.
       </Text>
     </View>
   );

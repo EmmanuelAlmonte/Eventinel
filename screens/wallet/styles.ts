@@ -53,9 +53,49 @@ export const walletScreenStyles = StyleSheet.create({
   buttonContainer: {
     marginTop: 6,
   },
+  actionButton: {
+    minHeight: 50,
+    borderRadius: 14,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  actionButtonSolid: {
+    borderWidth: 1,
+  },
+  actionButtonGhost: {
+    borderWidth: 0,
+  },
+  actionButtonContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+  },
+  actionButtonPressed: {
+    opacity: 0.86,
+    transform: [{ scale: 0.99 }],
+  },
+  actionButtonDisabled: {
+    opacity: 0.58,
+  },
+  actionButtonText: {
+    fontSize: 15,
+    fontWeight: '700',
+  },
+  actionButtonTextSolid: {
+    fontWeight: '700',
+  },
+  actionButtonTextGhost: {
+    fontWeight: '600',
+  },
   rowActions: {
     marginTop: 8,
     alignItems: 'flex-end',
+  },
+  rowActionButton: {
+    marginTop: 0,
   },
   invoiceBox: {
     marginTop: 10,
@@ -78,8 +118,13 @@ export const walletScreenStyles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
+    borderWidth: 1,
+    borderRadius: 999,
     paddingVertical: 8,
-    paddingHorizontal: 10,
+    paddingHorizontal: 12,
+  },
+  smallActionPressed: {
+    opacity: 0.82,
   },
   smallActionText: {
     fontSize: 13,

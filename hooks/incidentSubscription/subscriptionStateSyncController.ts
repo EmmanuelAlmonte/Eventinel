@@ -1,4 +1,4 @@
-import { useCallback } from 'react';
+import { startTransition, useCallback } from 'react';
 import type { Dispatch, MutableRefObject, SetStateAction } from 'react';
 import type { NDKEvent } from '@nostr-dev-kit/mobile';
 
@@ -6,19 +6,36 @@ import { calculateIncidentSinceUnixSeconds } from '@lib/incidentHistoryWindow';
 import { INCIDENT_LIMITS } from '@lib/map/constants';
 import { buildIncidentDisplayState } from './sorting';
 import { applyIncidentEventBatch } from './eventReducer';
+import type { RelayConfirmationMapRef } from './cacheConfirmation';
+import {
+  clearSubscriptionFlushTimer,
+  enqueueIncidentEvents,
+  getIncidentIntakeMetrics,
+  resetIncidentIntakeMetrics,
+  scheduleSubscriptionFlushTimer,
+} from './subscriptionEventQueue';
+import {
+  INITIAL_HISTORY_FLUSH_CHUNK_SIZE,
+  INITIAL_HISTORY_FLUSH_CONTINUATION_MS,
+  INITIAL_HISTORY_RELAY_BUFFER_MS,
+  SUBSCRIPTION_BUFFER_MS,
+} from './types';
 import type {
   IncidentSubscriptionDisplayState,
   IncomingEventSource,
   QueuedEvent,
   ProcessedIncident,
 } from './types';
-import { SUBSCRIPTION_BUFFER_MS } from './types';
+
+export { getIncidentIntakeMetrics, resetIncidentIntakeMetrics };
 
 // Keep subscription logs dev-only and opt-in to reduce noise during normal local runs.
 const DEBUG_CACHE =
   __DEV__ && process.env.EXPO_PUBLIC_DEBUG_INCIDENT_SUBSCRIPTION === '1';
 const DEBUG_HISTORY_WINDOW =
-  __DEV__ && (globalThis as Record<string, unknown>).describe == null;
+  __DEV__ &&
+  process.env.EXPO_PUBLIC_DEBUG_INCIDENT_HISTORY_WINDOW === '1' &&
+  (globalThis as Record<string, unknown>).describe == null;
 
 function logHistoryWindowDebugEvent(
   event: string,
@@ -58,7 +75,8 @@ function recomputeVisibleSubscriptionState(
     hasReceivedHistory: () => boolean;
     setState: Dispatch<SetStateAction<IncidentSubscriptionDisplayState>>;
   },
-  updatedIncidents: ProcessedIncident[] = []
+  updatedIncidents: ProcessedIncident[] = [],
+  removedIncidentIds: string[] = []
 ): void {
   if (!enabled) {
     return;
@@ -77,7 +95,7 @@ function recomputeVisibleSubscriptionState(
     (incident) => incident.occurredAtMs < cutoffMs
   );
 
-  if (updatedIncidents.length > 0) {
+  if (updatedIncidents.length > 0 || removedIncidentIds.length > 0) {
     lastUpdatedRef.current = Date.now();
   }
 
@@ -96,22 +114,19 @@ function recomputeVisibleSubscriptionState(
     })),
   });
 
-  setState({
-    incidents,
-    severityCounts,
-    updatedIncidents,
-    totalEventsReceived: lastTotalEventsRef.current,
-    hasReceivedHistory: hasReceivedHistory(),
+  startTransition(() => {
+    setState((prev) => ({
+      incidents,
+      severityCounts,
+      updatedIncidents:
+        updatedIncidents.length === 0 && removedIncidentIds.length > 0
+          ? prev.updatedIncidents
+          : updatedIncidents,
+      removedIncidentIds,
+      totalEventsReceived: lastTotalEventsRef.current,
+      hasReceivedHistory: hasReceivedHistory(),
+    }));
   });
-}
-
-function clearSubscriptionFlushTimer(
-  flushTimerRef: MutableRefObject<ReturnType<typeof setTimeout> | null>
-): void {
-  if (flushTimerRef.current) {
-    clearTimeout(flushTimerRef.current);
-    flushTimerRef.current = null;
-  }
 }
 
 function flushQueuedIncidentEvents(
@@ -121,6 +136,7 @@ function flushQueuedIncidentEvents(
     incidentMapRef: MutableRefObject<Map<string, ProcessedIncident>>;
     pendingEventsRef: MutableRefObject<QueuedEvent[]>;
     flushTimerRef: MutableRefObject<ReturnType<typeof setTimeout> | null>;
+    flushTimerDelayMsRef: MutableRefObject<number | null>;
     lastTotalEventsRef: MutableRefObject<number>;
     lastUpdatedRef: MutableRefObject<number | null>;
     setState: Dispatch<SetStateAction<IncidentSubscriptionDisplayState>>;
@@ -128,19 +144,25 @@ function flushQueuedIncidentEvents(
   },
   updatedStateCallback: (updatedIncidents: ProcessedIncident[]) => void
 ): void {
-  clearSubscriptionFlushTimer(args.flushTimerRef);
+  clearSubscriptionFlushTimer(args.flushTimerRef, args.flushTimerDelayMsRef);
 
-  const queued = args.pendingEventsRef.current;
+  const shouldChunkInitialHistory = !args.hasReceivedHistory();
+  const queued = shouldChunkInitialHistory
+    ? args.pendingEventsRef.current.slice(0, INITIAL_HISTORY_FLUSH_CHUNK_SIZE)
+    : args.pendingEventsRef.current;
   if (queued.length === 0) {
     return;
   }
 
-  args.pendingEventsRef.current = [];
+  args.pendingEventsRef.current = shouldChunkInitialHistory
+    ? args.pendingEventsRef.current.slice(INITIAL_HISTORY_FLUSH_CHUNK_SIZE)
+    : [];
 
   const reducerResult = applyIncidentEventBatch({
     queuedEvents: queued,
     incidentMap: args.incidentMapRef.current,
     maxCandidateRetention: INCIDENT_LIMITS.CANDIDATE_RETENTION,
+    maxParseCandidates: INCIDENT_LIMITS.MAX_PARSE_CANDIDATES,
     location: args.stableLocation,
     minCreatedAtUnixSeconds: calculateIncidentSinceUnixSeconds(args.sinceDays),
   });
@@ -148,6 +170,14 @@ function flushQueuedIncidentEvents(
 
   const { didUpdate, totalRelevantEvents, cacheCount, relayCount } = reducerResult;
   if (totalRelevantEvents === 0) {
+    if (args.pendingEventsRef.current.length > 0) {
+      scheduleSubscriptionFlushTimer(
+        args.flushTimerRef,
+        args.flushTimerDelayMsRef,
+        () => flushQueuedIncidentEvents(args, updatedStateCallback),
+        INITIAL_HISTORY_FLUSH_CONTINUATION_MS
+      );
+    }
     return;
   }
 
@@ -161,6 +191,14 @@ function flushQueuedIncidentEvents(
 
   if (didUpdate) {
     updatedStateCallback(reducerResult.updatedIncidents);
+    if (args.pendingEventsRef.current.length > 0) {
+      scheduleSubscriptionFlushTimer(
+        args.flushTimerRef,
+        args.flushTimerDelayMsRef,
+        () => flushQueuedIncidentEvents(args, updatedStateCallback),
+        INITIAL_HISTORY_FLUSH_CONTINUATION_MS
+      );
+    }
     return;
   }
 
@@ -168,27 +206,17 @@ function flushQueuedIncidentEvents(
     ...prev,
     totalEventsReceived: args.lastTotalEventsRef.current,
     updatedIncidents: [],
+    removedIncidentIds: [],
     hasReceivedHistory: args.hasReceivedHistory(),
   }));
-}
 
-function enqueueIncidentEvents(
-  events: NDKEvent[],
-  source: IncomingEventSource,
-  pendingEventsRef: MutableRefObject<QueuedEvent[]>,
-  flushTimerRef: MutableRefObject<ReturnType<typeof setTimeout> | null>,
-  flushQueuedEvents: () => void
-): void {
-  if (!events || events.length === 0) {
-    return;
-  }
-
-  for (const event of events) {
-    pendingEventsRef.current.push({ event, source });
-  }
-
-  if (!flushTimerRef.current) {
-    flushTimerRef.current = setTimeout(flushQueuedEvents, SUBSCRIPTION_BUFFER_MS);
+  if (args.pendingEventsRef.current.length > 0) {
+    scheduleSubscriptionFlushTimer(
+      args.flushTimerRef,
+      args.flushTimerDelayMsRef,
+      () => flushQueuedIncidentEvents(args, updatedStateCallback),
+      INITIAL_HISTORY_FLUSH_CONTINUATION_MS
+    );
   }
 }
 
@@ -200,8 +228,10 @@ export function useIncidentSubscriptionStateSyncController({
   incidentMapRef,
   pendingEventsRef,
   flushTimerRef,
+  flushTimerDelayMsRef,
   lastUpdatedRef,
   lastTotalEventsRef,
+  relayConfirmedIncidentIdsBySubscriptionKeyRef,
   hasReceivedHistory,
   setState,
 }: {
@@ -212,14 +242,16 @@ export function useIncidentSubscriptionStateSyncController({
   incidentMapRef: MutableRefObject<Map<string, ProcessedIncident>>;
   pendingEventsRef: MutableRefObject<QueuedEvent[]>;
   flushTimerRef: MutableRefObject<ReturnType<typeof setTimeout> | null>;
+  flushTimerDelayMsRef: MutableRefObject<number | null>;
   lastUpdatedRef: MutableRefObject<number | null>;
   lastTotalEventsRef: MutableRefObject<number>;
+  relayConfirmedIncidentIdsBySubscriptionKeyRef: RelayConfirmationMapRef;
   hasReceivedHistory: () => boolean;
   setState: Dispatch<SetStateAction<IncidentSubscriptionDisplayState>>;
 }) {
   const clearFlushTimer = useCallback(
-    () => clearSubscriptionFlushTimer(flushTimerRef),
-    [flushTimerRef]
+    () => clearSubscriptionFlushTimer(flushTimerRef, flushTimerDelayMsRef),
+    [flushTimerDelayMsRef, flushTimerRef]
   );
 
   const recomputeVisibleState = useCallback(
@@ -251,6 +283,36 @@ export function useIncidentSubscriptionStateSyncController({
     ]
   );
 
+  const recomputeVisibleStateWithRemovals = useCallback(
+    (updatedIncidents: ProcessedIncident[] = [], removedIncidentIds: string[] = []) =>
+      recomputeVisibleSubscriptionState(
+        {
+          enabled,
+          incidentMapRef,
+          sinceDays,
+          stableLocation,
+          effectiveMaxIncidents,
+          lastUpdatedRef,
+          lastTotalEventsRef,
+          hasReceivedHistory,
+          setState,
+        },
+        updatedIncidents,
+        removedIncidentIds
+      ),
+    [
+      enabled,
+      effectiveMaxIncidents,
+      hasReceivedHistory,
+      incidentMapRef,
+      lastUpdatedRef,
+      lastTotalEventsRef,
+      setState,
+      sinceDays,
+      stableLocation,
+    ]
+  );
+
   const flushQueuedEvents = useCallback(() => {
     flushQueuedIncidentEvents(
       {
@@ -259,6 +321,7 @@ export function useIncidentSubscriptionStateSyncController({
         incidentMapRef,
         pendingEventsRef,
         flushTimerRef,
+        flushTimerDelayMsRef,
         lastTotalEventsRef,
         lastUpdatedRef,
         setState,
@@ -272,23 +335,41 @@ export function useIncidentSubscriptionStateSyncController({
     incidentMapRef,
     pendingEventsRef,
     flushTimerRef,
+    flushTimerDelayMsRef,
     lastTotalEventsRef,
     setState,
     hasReceivedHistory,
     recomputeVisibleState,
     lastUpdatedRef,
+    relayConfirmedIncidentIdsBySubscriptionKeyRef,
   ]);
 
   const enqueueEvents = useCallback(
-    (events: NDKEvent[], source: IncomingEventSource) =>
+    (events: NDKEvent[], source: IncomingEventSource, subscriptionKey?: string) =>
       enqueueIncidentEvents(
         events,
         source,
         pendingEventsRef,
         flushTimerRef,
-        flushQueuedEvents
+        flushTimerDelayMsRef,
+        calculateIncidentSinceUnixSeconds(sinceDays),
+        flushQueuedEvents,
+        relayConfirmedIncidentIdsBySubscriptionKeyRef,
+        (eventSource) =>
+          !hasReceivedHistory() && eventSource === 'relay'
+            ? INITIAL_HISTORY_RELAY_BUFFER_MS
+            : SUBSCRIPTION_BUFFER_MS,
+        subscriptionKey
       ),
-    [flushQueuedEvents, flushTimerRef, pendingEventsRef]
+    [
+      flushQueuedEvents,
+      flushTimerRef,
+      flushTimerDelayMsRef,
+      hasReceivedHistory,
+      pendingEventsRef,
+      relayConfirmedIncidentIdsBySubscriptionKeyRef,
+      sinceDays,
+    ]
   );
 
   const clearQueuedEvents = useCallback(() => {
@@ -298,6 +379,7 @@ export function useIncidentSubscriptionStateSyncController({
 
   return {
     recomputeVisibleState,
+    recomputeVisibleStateWithRemovals,
     flushQueuedEvents,
     enqueueEvents,
     clearQueuedEvents,

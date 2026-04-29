@@ -2,96 +2,105 @@ import { StyleSheet } from 'react-native';
 
 export const relayConnectStyles = StyleSheet.create({
   header: {
-    marginBottom: 20,
     marginTop: 8,
+    marginBottom: 18,
   },
   title: {
     marginBottom: 4,
   },
   subtitle: {
-    fontSize: 16,
+    fontSize: 15,
+    lineHeight: 22,
   },
-  card: {
-    borderRadius: 12,
+  summarySection: {
+    marginBottom: 22,
+  },
+  summaryCard: {
+    borderRadius: 18,
     borderWidth: 1,
-    padding: 16,
+    padding: 18,
     margin: 0,
-    marginBottom: 16,
   },
-  cardHeader: {
+  summaryHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
-    marginBottom: 12,
+    justifyContent: 'space-between',
+    gap: 12,
   },
-  cardTitle: {
-    fontSize: 16,
-    fontWeight: '600',
+  summaryHeadline: {
+    fontSize: 18,
+    fontWeight: '700',
+    flex: 1,
   },
-  inputContainer: {
-    paddingHorizontal: 0,
-    marginBottom: 8,
+  summarySubtext: {
+    fontSize: 13,
+    lineHeight: 19,
+    marginTop: 10,
   },
-  input: {
+  healthChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
     borderWidth: 1,
-    borderRadius: 8,
-    paddingHorizontal: 12,
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
   },
-  inputText: {
-    fontSize: 14,
+  healthDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 999,
   },
-  buttonContainer: {
-    marginTop: 4,
+  healthChipText: {
+    fontSize: 12,
+    fontWeight: '700',
   },
   messageContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: 12,
-    borderRadius: 8,
+    padding: 14,
+    borderRadius: 14,
     borderWidth: 1,
-    marginBottom: 16,
+    marginTop: 12,
     gap: 10,
   },
   messageText: {
     fontSize: 14,
     flex: 1,
+    lineHeight: 19,
   },
-  emptyState: {
-    alignItems: 'center',
-    paddingVertical: 24,
-    gap: 8,
+  section: {
+    marginBottom: 22,
   },
-  emptyText: {
-    fontSize: 16,
-    fontWeight: '500',
-    marginTop: 8,
+  sectionHeading: {
+    marginBottom: 10,
   },
-  emptyHint: {
-    fontSize: 14,
+  sectionTitle: {
+    fontSize: 15,
+    fontWeight: '700',
+    marginBottom: 3,
   },
-  relayList: {
-    gap: 10,
+  sectionDescription: {
+    fontSize: 13,
+    lineHeight: 19,
   },
-  relayItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingVertical: 12,
-    paddingHorizontal: 12,
+  sectionCard: {
+    borderRadius: 18,
     borderWidth: 1,
-    borderRadius: 12,
+    padding: 0,
+    margin: 0,
+    overflow: 'hidden',
   },
-  relayLeft: {
+  relayRow: {
     flexDirection: 'row',
-    alignItems: 'center',
-    flex: 1,
-    minWidth: 0,
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    gap: 12,
+    paddingHorizontal: 18,
+    paddingVertical: 16,
   },
-  statusDot: {
-    width: 10,
-    height: 10,
-    borderRadius: 999,
-    marginRight: 10,
+  relayRowDivider: {
+    borderTopWidth: 1,
   },
   relayContent: {
     flex: 1,
@@ -99,62 +108,159 @@ export const relayConnectStyles = StyleSheet.create({
   },
   relayUrl: {
     fontSize: 14,
-    fontWeight: '600',
+    fontWeight: '700',
+    lineHeight: 20,
   },
-  relayStatus: {
-    marginTop: 2,
-    fontSize: 12,
-    fontWeight: '600',
-    textTransform: 'capitalize',
-  },
-  relayActions: {
+  relayMetaRow: {
     flexDirection: 'row',
     alignItems: 'center',
+    flexWrap: 'wrap',
     gap: 8,
-    marginLeft: 12,
+    marginTop: 8,
   },
-  actionButton: {
-    width: 36,
-    height: 36,
-    borderRadius: 10,
+  statusChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    borderWidth: 1,
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+  },
+  statusChipDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 999,
+  },
+  statusChipText: {
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  secondaryMetaText: {
+    fontSize: 12,
+    lineHeight: 18,
+  },
+  relayKindText: {
+    fontSize: 12,
+    lineHeight: 18,
+    marginTop: 6,
+  },
+  relayActions: {
+    alignItems: 'flex-end',
+    gap: 10,
+    paddingTop: 2,
+  },
+  tertiaryAction: {
+    minHeight: 34,
+    borderRadius: 999,
+    borderWidth: 1,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  infoContainer: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    backgroundColor: 'rgba(59, 130, 246, 0.1)',
-    padding: 14,
-    borderRadius: 8,
+  tertiaryActionText: {
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  inlineTextAction: {
+    paddingVertical: 2,
+    paddingHorizontal: 2,
+  },
+  inlineTextActionText: {
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  actionPressed: {
+    opacity: 0.72,
+  },
+  actionDisabled: {
+    opacity: 0.42,
+  },
+  emptyState: {
+    alignItems: 'center',
+    paddingHorizontal: 24,
+    paddingVertical: 30,
+    gap: 8,
+  },
+  emptyText: {
+    fontSize: 16,
+    fontWeight: '600',
+    marginTop: 6,
+  },
+  emptyHint: {
+    fontSize: 14,
+    lineHeight: 20,
+    textAlign: 'center',
+  },
+  inputContainer: {
+    paddingHorizontal: 18,
+    paddingTop: 18,
+    marginBottom: 8,
+  },
+  input: {
     borderWidth: 1,
-    gap: 10,
+    borderRadius: 12,
+    paddingHorizontal: 12,
+  },
+  inputText: {
+    fontSize: 14,
+  },
+  primaryButton: {
+    minHeight: 50,
+    borderRadius: 14,
+    marginHorizontal: 18,
+    marginBottom: 18,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+  },
+  primaryButtonPressed: {
+    opacity: 0.92,
+    transform: [{ scale: 0.99 }],
+  },
+  primaryButtonDisabled: {
+    opacity: 0.5,
+  },
+  primaryButtonText: {
+    color: '#FFFFFF',
+    fontSize: 15,
+    fontWeight: '700',
+  },
+  infoNote: {
+    fontSize: 13,
+    lineHeight: 19,
     marginBottom: 24,
   },
-  infoText: {
-    flex: 1,
-    fontSize: 13,
-    lineHeight: 18,
+  devSection: {
+    marginBottom: 24,
   },
-  toggleRow: {
+  devCard: {
+    borderRadius: 18,
+    borderWidth: 1,
+    padding: 18,
+    margin: 0,
+    opacity: 0.94,
+  },
+  devRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     gap: 12,
   },
-  toggleText: {
+  devText: {
     flex: 1,
   },
-  toggleLabel: {
+  devTitle: {
     fontSize: 15,
     fontWeight: '600',
     marginBottom: 4,
   },
-  toggleDescription: {
+  devDescription: {
     fontSize: 13,
     lineHeight: 18,
-  },
-  toggleNote: {
-    marginTop: 10,
-    fontSize: 12,
   },
 });

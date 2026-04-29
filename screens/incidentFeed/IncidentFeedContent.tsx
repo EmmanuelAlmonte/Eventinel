@@ -37,14 +37,30 @@ export function IncidentFeedContent({
   renderIncidentItem,
 }: IncidentFeedContentProps) {
   const showRelayBanner = !!relayStatus && visibleIncidents.length > 0;
+  const statusLabel = hasReceivedHistory ? 'Updated just now' : 'Updating now';
+  const subtitle = 'Recent incidents and community reports around your current area.';
 
   return (
     <>
       <View style={styles.header}>
         <Text h2 style={[styles.title, { color: colors.text }]}>Incidents</Text>
-        <Text style={[styles.subtitle, { color: colors.textMuted }]}>
-          {visibleIncidents.length} nearby {hasReceivedHistory ? '• Updated' : '• Loading...'}
-        </Text>
+        <Text style={[styles.subtitle, { color: colors.textMuted }]}>{subtitle}</Text>
+
+        <View style={styles.headerMetaRow}>
+          <View
+            style={[
+              styles.summaryPill,
+              { backgroundColor: colors.surface, borderColor: colors.border },
+            ]}
+          >
+            <Text style={[styles.summaryValue, { color: colors.text }]}>
+              {visibleIncidents.length}
+            </Text>
+            <Text style={[styles.summaryLabel, { color: colors.textMuted }]}>nearby</Text>
+          </View>
+
+          <Text style={[styles.headerStatus, { color: colors.textMuted }]}>{statusLabel}</Text>
+        </View>
       </View>
 
       {showRelayBanner && relayStatus && (
@@ -54,13 +70,17 @@ export function IncidentFeedContent({
             { backgroundColor: colors.surface, borderColor: colors.border },
           ]}
         >
-          <View style={styles.relayBannerHeader}>
-            <Icon name={relayStatus.icon} type="material" size={18} color={colors.textMuted} />
-            <Text style={[styles.relayBannerTitle, { color: colors.text }]}>{relayStatus.title}</Text>
+          <View style={styles.relayBannerContent}>
+            <View style={styles.relayBannerHeader}>
+              <Icon name={relayStatus.icon} type="material" size={18} color={colors.textMuted} />
+              <Text style={[styles.relayBannerTitle, { color: colors.text }]}>
+                {relayStatus.title}
+              </Text>
+            </View>
+            <Text style={[styles.relayBannerDescription, { color: colors.textMuted }]}>
+              {relayStatus.description}
+            </Text>
           </View>
-          <Text style={[styles.relayBannerDescription, { color: colors.textMuted }]}>
-            {relayStatus.description}
-          </Text>
           <Button
             title={relayStatus.actionLabel}
             onPress={onRelaySettings}

@@ -1,30 +1,34 @@
 /**
  * ProfileScreen
  *
- * Displays identity metadata, appearance settings, and push notification controls.
+ * Displays identity metadata, app controls, and advanced notification details.
  */
 
-import { useMemo } from 'react';
-import { Alert } from 'react-native';
+import { useCallback, useMemo } from 'react';
+import { Alert, Share } from 'react-native';
+import * as Clipboard from 'expo-clipboard';
 import * as Notifications from 'expo-notifications';
 import { useNavigation } from '@react-navigation/native';
 import { useNDKCurrentPubkey, useNDKCurrentUser, useNDKSessionLogout } from '@nostr-dev-kit/mobile';
 
+import { showToast } from '@components/ui';
 import { type AppNavigation } from '@lib/navigation';
 import { isCashuWalletFeatureEnabled, isLightningWalletFeatureEnabled } from '@lib/featureFlags';
+import { automationTestID } from '@lib/utils';
 import { ScreenContainer } from '@components/ui';
 import { useAppTheme } from '@hooks';
 
 import {
-  AccountCard,
-  AppearanceCard,
+  AppearanceRow,
+  IdentityHeroCard,
+  NetworkRow,
+  NotificationRow,
   permissionLabelFromStatus,
   ProfileHeader,
-  ProfileInfoNote,
-  PublicKeyCard,
-  PushTokenCard,
-  SettingsCard,
-  UserInfoCard,
+  ProfileSection,
+  PublicKeyRow,
+  PushTokenSection,
+  SupportSection,
 } from './profile/ProfileSections';
 import { usePushSettings } from './profile/usePushSettings';
 
@@ -59,6 +63,35 @@ export default function ProfileScreen() {
     ]);
   };
 
+  const handleCopyPubkey = useCallback(async () => {
+    if (!currentPubkey) {
+      return;
+    }
+
+    try {
+      await Clipboard.setStringAsync(currentPubkey);
+      showToast.success('Public key copied');
+    } catch (error) {
+      console.warn('[Profile] Failed to copy public key:', error);
+      showToast.error('Copy failed');
+    }
+  }, [currentPubkey]);
+
+  const handleShareProfile = useCallback(async () => {
+    if (!currentPubkey) {
+      return;
+    }
+
+    try {
+      await Share.share({
+        message: `Eventinel profile\nNostr public key: ${currentPubkey}`,
+      });
+    } catch (error) {
+      console.warn('[Profile] Failed to share profile:', error);
+      showToast.error('Share failed');
+    }
+  }, [currentPubkey]);
+
   const permissionLabel = permissionLabelFromStatus(pushPermissionStatus);
   const lightningEnabled = isLightningWalletFeatureEnabled;
   const cashuEnabled = isCashuWalletFeatureEnabled;
@@ -84,53 +117,86 @@ export default function ProfileScreen() {
   const displayName = currentUser?.profile?.displayName || currentUser?.profile?.name || 'Anonymous';
   const avatarUrl = currentUser?.profile?.image;
   const truncatedPubkey = currentPubkey
-    ? `${currentPubkey.slice(0, 16)}...${currentPubkey.slice(-16)}`
+    ? `${currentPubkey.slice(0, 12)}...${currentPubkey.slice(-12)}`
     : '';
 
   return (
-    <ScreenContainer scroll>
+    <ScreenContainer scroll testID={automationTestID('screen-profile')}>
       <ProfileHeader colors={colors} />
 
-      <UserInfoCard
+      <IdentityHeroCard
         colors={colors}
         displayName={displayName}
         avatarUrl={avatarUrl}
         nip05={currentUser?.profile?.nip05}
         about={currentUser?.profile?.about}
+        onCopyPubkey={handleCopyPubkey}
+        onShareProfile={handleShareProfile}
+        canCopyPubkey={Boolean(currentPubkey)}
+        canShareProfile={Boolean(currentPubkey)}
       />
 
-      {currentPubkey ? (
-        <PublicKeyCard
+      <ProfileSection
+        colors={colors}
+        title="Account"
+        description="Who you are and how this account connects."
+      >
+        {currentPubkey ? (
+          <PublicKeyRow
+            colors={colors}
+            truncatedPubkey={truncatedPubkey}
+            onCopyPubkey={handleCopyPubkey}
+          />
+        ) : null}
+        {walletSettingsEnabled ? (
+          <NetworkRow
+            colors={colors}
+            title="Wallet"
+            description={walletDescription}
+            icon="account-balance-wallet"
+            onPress={() => navigation.navigate('Wallet')}
+            showDivider={Boolean(currentPubkey)}
+          />
+        ) : null}
+        <NetworkRow
           colors={colors}
-          currentPubkey={currentPubkey}
-          truncatedPubkey={truncatedPubkey}
+          title="Relay settings"
+          description="Manage Nostr relay connections"
+          icon="dns"
+          onPress={() => navigation.navigate('Relays')}
+          showDivider={Boolean(currentPubkey) || walletSettingsEnabled}
+        />
+      </ProfileSection>
+
+      <ProfileSection colors={colors} title="App" description="Change how Eventinel behaves on this device.">
+        <AppearanceRow colors={colors} isDark={isDark} onToggle={toggleMode} />
+        <NotificationRow
+          colors={colors}
+          permissionLabel={permissionLabel}
+          permissionColor={permissionColor}
+          isGranted={pushPermissionStatus === Notifications.PermissionStatus.GRANTED}
+          onPress={
+            pushPermissionStatus === Notifications.PermissionStatus.GRANTED ? undefined : requestPermission
+          }
+          showDivider
+        />
+      </ProfileSection>
+
+      <SupportSection colors={colors} onLogout={handleLogout} />
+
+      {__DEV__ ? (
+        <PushTokenSection
+          colors={colors}
+          permissionLabel={permissionLabel}
+          permissionColor={permissionColor}
+          isRequestingPermission={isRequestingPermission}
+          isRegisteringPush={isRegisteringPush}
+          isLoadingPushToken={isLoadingPushToken}
+          pushToken={pushToken}
+          onRequestPermission={requestPermission}
+          onRegisterToken={registerPushToken}
         />
       ) : null}
-
-      <AppearanceCard colors={colors} isDark={isDark} onToggle={toggleMode} />
-
-      <SettingsCard
-        colors={colors}
-        onWalletPress={() => navigation.navigate('Wallet')}
-        onRelayPress={() => navigation.navigate('Relays')}
-        walletEnabled={walletSettingsEnabled}
-        walletDescription={walletDescription}
-      />
-
-      <PushTokenCard
-        colors={colors}
-        permissionLabel={permissionLabel}
-        permissionColor={permissionColor}
-        isRequestingPermission={isRequestingPermission}
-        isRegisteringPush={isRegisteringPush}
-        isLoadingPushToken={isLoadingPushToken}
-        pushToken={pushToken}
-        onRequestPermission={requestPermission}
-        onRegisterToken={registerPushToken}
-      />
-
-      <AccountCard colors={colors} onLogout={handleLogout} />
-      <ProfileInfoNote colors={colors} />
     </ScreenContainer>
   );
 }

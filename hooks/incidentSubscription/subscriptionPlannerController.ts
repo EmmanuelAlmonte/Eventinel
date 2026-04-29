@@ -1,5 +1,5 @@
 import { useCallback } from 'react';
-import type { Dispatch, MutableRefObject, SetStateAction } from 'react';
+import type { MutableRefObject } from 'react';
 import {
   NDKFilter,
   NDKSubscription,
@@ -11,9 +11,14 @@ import { MAP_SUBSCRIPTION } from '@lib/map/constants';
 import { INCIDENT_LIMITS } from '@lib/map/constants';
 import { calculateIncidentSinceUnixSeconds } from '@lib/incidentHistoryWindow';
 import { ndk } from '@lib/ndk';
+import {
+  clearRelayConfirmations,
+  deleteRelayConfirmationsForSubscription,
+  resetRelayConfirmationsForSubscription,
+  type RelayConfirmationMapRef,
+} from './cacheConfirmation';
 import { pruneIncidentsByDesiredCells } from './reconcile';
 import type {
-  IncidentSubscriptionDisplayState,
   IncomingEventSource,
   ProcessedIncident,
 } from './types';
@@ -44,15 +49,25 @@ function startIncidentSubscription(
   key: string,
   args: {
     subscriptionRegistry: RegistryLike;
-    enqueueEvents: (events: NDKEvent[], source: IncomingEventSource) => void;
-    hasReceivedHistory: () => boolean;
+    enqueueEvents: (
+      events: NDKEvent[],
+      source: IncomingEventSource,
+      subscriptionKey?: string
+    ) => void;
+    flushQueuedEvents: () => void;
+    recomputeVisibleStateWithRemovals: (
+      updatedIncidents?: ProcessedIncident[],
+      removedIncidentIds?: string[]
+    ) => void;
     markHistoryRefreshSatisfied: (
       key: string,
       epoch: number,
       source: 'cache' | 'eose'
     ) => void;
-    setState: Dispatch<SetStateAction<IncidentSubscriptionDisplayState>>;
+    setHasReceivedHistoryState: () => void;
     sinceDays: number;
+    relayConfirmedIncidentIdsBySubscriptionKeyRef: RelayConfirmationMapRef;
+    pruneUnconfirmedIncidentsForSubscription: (subscriptionKey: string) => string[];
     historyRefreshEpoch?: number | null;
   }
 ): void {
@@ -60,8 +75,13 @@ function startIncidentSubscription(
   if (DEBUG_CACHE) {
     console.log(
       `🔔 [IncidentSub] Start requested for key ${key} (live before:${beforeCount})`
-    );
+      );
   }
+
+  resetRelayConfirmationsForSubscription(
+    args.relayConfirmedIncidentIdsBySubscriptionKeyRef,
+    key
+  );
 
   const subscription = ndk.subscribe([createIncidentSubscriptionFilter(key, args.sinceDays)], {
     closeOnEose: false,
@@ -75,22 +95,28 @@ function startIncidentSubscription(
       ) {
         args.markHistoryRefreshSatisfied(key, args.historyRefreshEpoch, 'cache');
       }
-      args.enqueueEvents(events, 'cache');
+      args.enqueueEvents(events, 'cache', key);
     },
     onEvent: (event) => {
-      args.enqueueEvents([event], 'relay');
+      args.enqueueEvents([event], 'relay', key);
     },
     onEose: () => {
+      args.flushQueuedEvents();
+      const removedIncidentIds = args.pruneUnconfirmedIncidentsForSubscription(key);
       if (args.historyRefreshEpoch != null) {
         args.markHistoryRefreshSatisfied(key, args.historyRefreshEpoch, 'eose');
+        if (removedIncidentIds.length > 0) {
+          args.recomputeVisibleStateWithRemovals([], removedIncidentIds);
+        }
         return;
       }
 
       args.subscriptionRegistry.setHasReceivedHistory(key);
-      args.setState((prev) => ({
-        ...prev,
-        hasReceivedHistory: args.hasReceivedHistory(),
-      }));
+      if (removedIncidentIds.length > 0) {
+        args.recomputeVisibleStateWithRemovals([], removedIncidentIds);
+        return;
+      }
+      args.setHasReceivedHistoryState();
     },
   });
 
@@ -103,7 +129,8 @@ function startIncidentSubscription(
 
 function stopIncidentSubscription(
   key: string,
-  subscriptionRegistry: RegistryLike
+  subscriptionRegistry: RegistryLike,
+  relayConfirmedIncidentIdsBySubscriptionKeyRef: RelayConfirmationMapRef
 ): void {
   const beforeCount = subscriptionRegistry.subscriptions.size;
   if (DEBUG_CACHE && subscriptionRegistry.subscriptions.has(key)) {
@@ -113,6 +140,10 @@ function stopIncidentSubscription(
   }
 
   subscriptionRegistry.stop(key);
+  deleteRelayConfirmationsForSubscription(
+    relayConfirmedIncidentIdsBySubscriptionKeyRef,
+    key
+  );
 
   if (DEBUG_CACHE) {
     const afterCount = subscriptionRegistry.subscriptions.size;
@@ -122,7 +153,10 @@ function stopIncidentSubscription(
   }
 }
 
-function stopAllIncidentSubscriptions(subscriptionRegistry: RegistryLike): void {
+function stopAllIncidentSubscriptions(
+  subscriptionRegistry: RegistryLike,
+  relayConfirmedIncidentIdsBySubscriptionKeyRef: RelayConfirmationMapRef
+): void {
   if (DEBUG_CACHE) {
     const beforeCount = subscriptionRegistry.subscriptions.size;
     if (beforeCount > 0) {
@@ -131,6 +165,7 @@ function stopAllIncidentSubscriptions(subscriptionRegistry: RegistryLike): void 
   }
 
   subscriptionRegistry.stopAll();
+  clearRelayConfirmations(relayConfirmedIncidentIdsBySubscriptionKeyRef);
 
   if (DEBUG_CACHE) {
     const afterCount = subscriptionRegistry.subscriptions.size;
@@ -160,22 +195,35 @@ function pruneIncidentsToDesiredGeohashes(
 export function useIncidentSubscriptionPlannerController({
   subscriptionRegistry,
   enqueueEvents,
-  hasReceivedHistory,
+  flushQueuedEvents,
+  recomputeVisibleStateWithRemovals,
   markHistoryRefreshSatisfied,
-  setState,
+  setHasReceivedHistoryState,
   incidentMapRef,
+  pruneUnconfirmedIncidentsForSubscription,
+  relayConfirmedIncidentIdsBySubscriptionKeyRef,
   sinceDays,
 }: {
   subscriptionRegistry: RegistryLike;
-  enqueueEvents: (events: NDKEvent[], source: IncomingEventSource) => void;
-  hasReceivedHistory: () => boolean;
+  enqueueEvents: (
+    events: NDKEvent[],
+    source: IncomingEventSource,
+    subscriptionKey?: string
+  ) => void;
+  flushQueuedEvents: () => void;
+  recomputeVisibleStateWithRemovals: (
+    updatedIncidents?: ProcessedIncident[],
+    removedIncidentIds?: string[]
+  ) => void;
   markHistoryRefreshSatisfied: (
     key: string,
     epoch: number,
     source: 'cache' | 'eose'
   ) => void;
-  setState: Dispatch<SetStateAction<IncidentSubscriptionDisplayState>>;
+  setHasReceivedHistoryState: () => void;
   incidentMapRef: MutableRefObject<Map<string, ProcessedIncident>>;
+  pruneUnconfirmedIncidentsForSubscription: (subscriptionKey: string) => string[];
+  relayConfirmedIncidentIdsBySubscriptionKeyRef: RelayConfirmationMapRef;
   sinceDays: number;
 }) {
   const startSubscription = useCallback(
@@ -183,30 +231,45 @@ export function useIncidentSubscriptionPlannerController({
       startIncidentSubscription(key, {
         subscriptionRegistry,
         enqueueEvents,
-        hasReceivedHistory,
+        flushQueuedEvents,
+        recomputeVisibleStateWithRemovals,
         markHistoryRefreshSatisfied,
-        setState,
+        setHasReceivedHistoryState,
+        pruneUnconfirmedIncidentsForSubscription,
+        relayConfirmedIncidentIdsBySubscriptionKeyRef,
         sinceDays,
         historyRefreshEpoch,
       }),
     [
       subscriptionRegistry,
       enqueueEvents,
-      hasReceivedHistory,
+      flushQueuedEvents,
+      recomputeVisibleStateWithRemovals,
       markHistoryRefreshSatisfied,
-      setState,
+      setHasReceivedHistoryState,
+      pruneUnconfirmedIncidentsForSubscription,
+      relayConfirmedIncidentIdsBySubscriptionKeyRef,
       sinceDays,
     ]
   );
 
   const stopSubscription = useCallback(
-    (key: string) => stopIncidentSubscription(key, subscriptionRegistry),
-    [subscriptionRegistry]
+    (key: string) =>
+      stopIncidentSubscription(
+        key,
+        subscriptionRegistry,
+        relayConfirmedIncidentIdsBySubscriptionKeyRef
+      ),
+    [relayConfirmedIncidentIdsBySubscriptionKeyRef, subscriptionRegistry]
   );
 
   const stopAllSubscriptions = useCallback(
-    () => stopAllIncidentSubscriptions(subscriptionRegistry),
-    [subscriptionRegistry]
+    () =>
+      stopAllIncidentSubscriptions(
+        subscriptionRegistry,
+        relayConfirmedIncidentIdsBySubscriptionKeyRef
+      ),
+    [relayConfirmedIncidentIdsBySubscriptionKeyRef, subscriptionRegistry]
   );
 
   const pruneToDesiredGeohashes = useCallback(

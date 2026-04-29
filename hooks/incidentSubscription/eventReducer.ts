@@ -1,6 +1,7 @@
 import type { NDKEvent } from '@nostr-dev-kit/mobile';
 
 import { parseIncidentEvent } from '@lib/nostr/events/incident';
+import { shouldReplaceIncidentByMetadata } from './incidentReplacementOrdering';
 import { type EventBatchInput, type EventBatchResult, INCIDENT_KIND } from './types';
 import { toProcessedIncident, sortIncidentsForDisplay, sortIncidentsForRetention } from './sorting';
 import type { ProcessedIncident } from './types';
@@ -16,6 +17,7 @@ type IncidentEventReducerMetrics = {
   parseFailures: number;
   replacements: number;
   updatesApplied: number;
+  parseCandidateDrops: number;
   retentionTrimEvents: number;
   totalBatchMs: number;
   peakBatchMs: number;
@@ -44,6 +46,10 @@ type QueuedEventCandidate = {
   source: 'cache' | 'relay';
   incidentId?: string;
   createdAt?: number;
+  eventId?: string;
+  rawEventCount?: number;
+  cacheEventCount?: number;
+  relayEventCount?: number;
 };
 
 const DEBUG_INCIDENT_REDUCTION_PERF =
@@ -60,6 +66,7 @@ const REDUCTION_METRICS: IncidentEventReducerMetrics = {
   parseFailures: 0,
   replacements: 0,
   updatesApplied: 0,
+  parseCandidateDrops: 0,
   retentionTrimEvents: 0,
   totalBatchMs: 0,
   peakBatchMs: 0,
@@ -91,19 +98,6 @@ function getIncomingCreatedAt(event: NDKEvent): number | null {
   return event[INCOMING_PARSE_HOT_FIELD];
 }
 
-function shouldReplaceExistingEventByMetadata(
-  existing: ReturnType<EventBatchInput['incidentMap']['get']>,
-  incomingCreatedAt: number,
-  incomingEventId: string
-): boolean {
-  if (!existing) return true;
-  if (incomingCreatedAt > existing.createdAt) return true;
-  if (incomingCreatedAt === existing.createdAt) {
-    return incomingEventId.localeCompare(existing.eventId) > 0;
-  }
-  return false;
-}
-
 export function getIncidentEventReducerMetrics(): IncidentEventReducerMetrics {
   return { ...REDUCTION_METRICS };
 }
@@ -119,6 +113,7 @@ export function resetIncidentEventReducerMetrics(): void {
   REDUCTION_METRICS.parseFailures = 0;
   REDUCTION_METRICS.replacements = 0;
   REDUCTION_METRICS.updatesApplied = 0;
+  REDUCTION_METRICS.parseCandidateDrops = 0;
   REDUCTION_METRICS.retentionTrimEvents = 0;
   REDUCTION_METRICS.totalBatchMs = 0;
   REDUCTION_METRICS.peakBatchMs = 0;
@@ -126,38 +121,28 @@ export function resetIncidentEventReducerMetrics(): void {
   REDUCTION_METRICS.cachePruned = 0;
 }
 
-function recordEventSource(sample: QueuedEventCandidate, metricsInput: IncidentEventReducerMetrics): void {
-  if (sample.source === 'cache') {
-    metricsInput.totalCacheEvents += 1;
-  } else {
-    metricsInput.totalRelayEvents += 1;
-  }
-}
+function recordEventSource(
+  sample: QueuedEventCandidate,
+  metricsInput: IncidentEventReducerMetrics
+): { rawEventCount: number; cacheEventCount: number; relayEventCount: number } {
+  const rawEventCount = sample.rawEventCount ?? 1;
+  const cacheEventCount =
+    sample.cacheEventCount ?? (sample.source === 'cache' ? rawEventCount : 0);
+  const relayEventCount =
+    sample.relayEventCount ?? (sample.source === 'relay' ? rawEventCount : 0);
 
-function shouldReplaceExistingIncident(
-  existing: ReturnType<EventBatchInput['incidentMap']['get']>,
-  incoming: { createdAt: number; eventId: string }
-): boolean {
-  if (!existing) {
-    return true;
-  }
+  metricsInput.totalCacheEvents += cacheEventCount;
+  metricsInput.totalRelayEvents += relayEventCount;
 
-  if (incoming.createdAt > existing.createdAt) {
-    return true;
-  }
-
-  if (incoming.createdAt === existing.createdAt) {
-    return incoming.eventId.localeCompare(existing.eventId) > 0;
-  }
-
-  return false;
+  return { rawEventCount, cacheEventCount, relayEventCount };
 }
 
 function partitionIncidentCandidates(
   queuedEvents: EventBatchInput['queuedEvents'],
   incidentMap: EventBatchInput['incidentMap'],
   metricsInput: IncidentEventReducerMetrics,
-  minCreatedAtUnixSeconds: number | null | undefined
+  minCreatedAtUnixSeconds: number | null | undefined,
+  maxParseCandidates: number | null | undefined
 ): IncidentBatchPartition {
   const candidates: QueuedEventCandidate[] = [];
   let totalRelevantEvents = 0;
@@ -173,9 +158,10 @@ function partitionIncidentCandidates(
       continue;
     }
 
-    const incidentTag = getIncidentIdFromEventTags(event);
-    const incomingCreatedAt = getIncomingCreatedAt(event);
-    const incomingEventId = typeof event.id === 'string' ? event.id : '';
+    const incidentTag = candidate.incidentId ?? getIncidentIdFromEventTags(event);
+    const incomingCreatedAt = candidate.createdAt ?? getIncomingCreatedAt(event);
+    const incomingEventId =
+      candidate.eventId ?? (typeof event.id === 'string' ? event.id : '');
 
     if (
       typeof minCreatedAtUnixSeconds === 'number' &&
@@ -186,17 +172,19 @@ function partitionIncidentCandidates(
       continue;
     }
 
-    totalRelevantEvents += 1;
-    if (source === 'cache') {
-      cacheCount += 1;
-    } else {
-      relayCount += 1;
-    }
-    recordEventSource(candidate, metricsInput);
+    const sourceMetrics = recordEventSource(candidate, metricsInput);
+    totalRelevantEvents += sourceMetrics.rawEventCount;
+    cacheCount += sourceMetrics.cacheEventCount;
+    relayCount += sourceMetrics.relayEventCount;
 
     if (incidentTag && incomingCreatedAt != null && incomingEventId) {
       const existing = incidentMap.get(incidentTag);
-      if (!shouldReplaceExistingEventByMetadata(existing, incomingCreatedAt, incomingEventId)) {
+      if (
+        !shouldReplaceIncidentByMetadata(existing, {
+          createdAt: incomingCreatedAt,
+          eventId: incomingEventId,
+        })
+      ) {
         parseSkips += 1;
         metricsInput.parseSkips += 1;
         continue;
@@ -206,7 +194,41 @@ function partitionIncidentCandidates(
     candidates.push(candidate);
   }
 
-  return { candidates, totalRelevantEvents, cacheCount, relayCount, parseSkips };
+  const normalizedMaxParseCandidates =
+    typeof maxParseCandidates === 'number' && Number.isFinite(maxParseCandidates)
+      ? Math.max(0, Math.floor(maxParseCandidates))
+      : candidates.length;
+
+  if (candidates.length <= normalizedMaxParseCandidates) {
+    return { candidates, totalRelevantEvents, cacheCount, relayCount, parseSkips };
+  }
+
+  const cappedCandidates = [...candidates]
+    .sort((left, right) => {
+      const leftCreatedAt = left.createdAt ?? getIncomingCreatedAt(left.event) ?? 0;
+      const rightCreatedAt = right.createdAt ?? getIncomingCreatedAt(right.event) ?? 0;
+      if (leftCreatedAt !== rightCreatedAt) {
+        return rightCreatedAt - leftCreatedAt;
+      }
+
+      const leftEventId =
+        left.eventId ?? (typeof left.event.id === 'string' ? left.event.id : '');
+      const rightEventId =
+        right.eventId ?? (typeof right.event.id === 'string' ? right.event.id : '');
+
+      return rightEventId.localeCompare(leftEventId);
+    })
+    .slice(0, normalizedMaxParseCandidates);
+
+  metricsInput.parseCandidateDrops += candidates.length - cappedCandidates.length;
+
+  return {
+    candidates: cappedCandidates,
+    totalRelevantEvents,
+    cacheCount,
+    relayCount,
+    parseSkips,
+  };
 }
 
 function applyIncidentEventUpdates(
@@ -216,7 +238,7 @@ function applyIncidentEventUpdates(
   minCreatedAtUnixSeconds: number | null | undefined
 ): IncidentEventParseResult {
   let nextIncidentMap = incidentMap;
-  const updatedIncidents: ProcessedIncident[] = [];
+  const updatedIncidentMap = new Map<string, ProcessedIncident>();
   let didUpdate = false;
   let parsedEvents = 0;
   let parseFailures = 0;
@@ -245,7 +267,7 @@ function applyIncidentEventUpdates(
       continue;
     }
     const existing = nextIncidentMap.get(parsed.incidentId);
-    const shouldReplace = shouldReplaceExistingIncident(existing, {
+    const shouldReplace = shouldReplaceIncidentByMetadata(existing, {
       createdAt: parsed.createdAt,
       eventId: parsed.eventId,
     });
@@ -261,14 +283,17 @@ function applyIncidentEventUpdates(
 
     metricsInput.replacements += 1;
     nextIncidentMap.set(parsed.incidentId, processed);
-    updatedIncidents.push(processed);
+    if (updatedIncidentMap.has(parsed.incidentId)) {
+      updatedIncidentMap.delete(parsed.incidentId);
+    }
+    updatedIncidentMap.set(parsed.incidentId, processed);
     didUpdate = true;
     metricsInput.updatesApplied += 1;
   }
 
   return {
     incidentMap: nextIncidentMap,
-    updatedIncidents,
+    updatedIncidents: Array.from(updatedIncidentMap.values()),
     didUpdate,
     parsedEvents,
     parseFailures,
@@ -326,7 +351,8 @@ export function applyIncidentEventBatch(input: EventBatchInput): EventBatchResul
       input.queuedEvents,
       input.incidentMap,
       REDUCTION_METRICS,
-      input.minCreatedAtUnixSeconds
+      input.minCreatedAtUnixSeconds,
+      input.maxParseCandidates
     );
     totalRelevantEvents = partitioned.totalRelevantEvents;
     cacheCount = partitioned.cacheCount;
