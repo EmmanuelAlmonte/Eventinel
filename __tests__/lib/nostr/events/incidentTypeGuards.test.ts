@@ -71,6 +71,7 @@ describe('Type Guards', () => {
       expect(isDataSource('opendataphilly')).toBe(true);
       expect(isDataSource('radio')).toBe(true);
       expect(isDataSource('community')).toBe(true);
+      expect(isDataSource('eventinel-test')).toBe(true);
       expect(isDataSource('nj_transit_rss')).toBe(true);
       expect(isDataSource('nj_511_rss')).toBe(true);
     });
@@ -116,7 +117,7 @@ describe('Type Guards', () => {
         type: 'medical',
         severity: 4,
         occurredAt: new Date().toISOString(),
-        source: 'crimeometer',
+        source: 'eventinel-test',
         sourceId: 'test-123',
         city: 'Sample City',
         state: 'ST',

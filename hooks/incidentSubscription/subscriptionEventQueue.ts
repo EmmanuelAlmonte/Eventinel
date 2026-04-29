@@ -3,6 +3,7 @@ import type { NDKEvent } from '@nostr-dev-kit/mobile';
 
 import { INCIDENT_LIMITS } from '@lib/map/constants';
 import { markRelayConfirmedIncident, type RelayConfirmationMapRef } from './cacheConfirmation';
+import { shouldReplaceIncidentByMetadata } from './incidentReplacementOrdering';
 import { INCIDENT_KIND } from './types';
 import type { IncomingEventSource, QueuedEvent } from './types';
 
@@ -146,11 +147,15 @@ export function enqueueIncidentEvents(
     if (existingIndex >= 0) {
       const existingQueuedEvent = pendingEventsRef.current[existingIndex];
       if (
-        shouldReplaceQueuedEvent(
-          existingQueuedEvent.createdAt ?? 0,
-          existingQueuedEvent.eventId ?? '',
-          validated.createdAt ?? 0,
-          validated.eventId
+        shouldReplaceIncidentByMetadata(
+          {
+            createdAt: existingQueuedEvent.createdAt ?? 0,
+            eventId: existingQueuedEvent.eventId ?? '',
+          },
+          {
+            createdAt: validated.createdAt ?? 0,
+            eventId: validated.eventId,
+          }
         )
       ) {
         pendingEventsRef.current[existingIndex] = {
@@ -285,21 +290,4 @@ function findQueuedEventIndex(queue: readonly QueuedEvent[], queueKey: string): 
   }
 
   return -1;
-}
-
-function shouldReplaceQueuedEvent(
-  existingCreatedAt: number,
-  existingEventId: string,
-  incomingCreatedAt: number,
-  incomingEventId: string
-): boolean {
-  if (incomingCreatedAt > existingCreatedAt) {
-    return true;
-  }
-
-  if (incomingCreatedAt === existingCreatedAt) {
-    return incomingEventId.localeCompare(existingEventId) > 0;
-  }
-
-  return false;
 }

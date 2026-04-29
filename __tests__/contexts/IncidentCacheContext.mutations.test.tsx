@@ -109,6 +109,80 @@ describe('IncidentCacheContext mutations', () => {
         expect(cacheApi!.getIncident('keep-new')?.title).toBe('Newer Version');
       });
 
+      it('replaces same-createdAt incident when incoming eventId wins reducer tie-break', async () => {
+        const timestamp = 2000;
+        const originalIncident = createMockIncident('same-created-at-replace', timestamp, {
+          eventId: 'event-a',
+          title: 'Original Version',
+        });
+        const replacementIncident = createMockIncident('same-created-at-replace', timestamp, {
+          eventId: 'event-b',
+          title: 'Tie-break Replacement',
+        });
+        let cacheApi: ReturnType<typeof useIncidentCache> | null = null;
+
+        render(
+          <IncidentCacheProvider>
+            <CacheConsumer
+              onReady={(api) => {
+                cacheApi = api;
+              }}
+            />
+          </IncidentCacheProvider>
+        );
+
+        await act(async () => {
+          cacheApi!.upsertMany([originalIncident]);
+        });
+        const versionAfterInsert = cacheApi!.version;
+
+        await act(async () => {
+          cacheApi!.upsertMany([replacementIncident]);
+        });
+
+        expect(cacheApi!.getIncident('same-created-at-replace')?.eventId).toBe('event-b');
+        expect(cacheApi!.getIncident('same-created-at-replace')?.title).toBe(
+          'Tie-break Replacement'
+        );
+        expect(cacheApi!.version).toBe(versionAfterInsert + 1);
+      });
+
+      it('ignores same-createdAt incident when existing eventId wins reducer tie-break', async () => {
+        const timestamp = 2000;
+        const originalIncident = createMockIncident('same-created-at-keep', timestamp, {
+          eventId: 'event-b',
+          title: 'Winning Version',
+        });
+        const losingIncident = createMockIncident('same-created-at-keep', timestamp, {
+          eventId: 'event-a',
+          title: 'Losing Version',
+        });
+        let cacheApi: ReturnType<typeof useIncidentCache> | null = null;
+
+        render(
+          <IncidentCacheProvider>
+            <CacheConsumer
+              onReady={(api) => {
+                cacheApi = api;
+              }}
+            />
+          </IncidentCacheProvider>
+        );
+
+        await act(async () => {
+          cacheApi!.upsertMany([originalIncident]);
+        });
+        const versionAfterInsert = cacheApi!.version;
+
+        await act(async () => {
+          cacheApi!.upsertMany([losingIncident]);
+        });
+
+        expect(cacheApi!.getIncident('same-created-at-keep')?.eventId).toBe('event-b');
+        expect(cacheApi!.getIncident('same-created-at-keep')?.title).toBe('Winning Version');
+        expect(cacheApi!.version).toBe(versionAfterInsert);
+      });
+
       it('handles empty array upsert', async () => {
         let cacheApi: ReturnType<typeof useIncidentCache> | null = null;
         let initialVersion: number;

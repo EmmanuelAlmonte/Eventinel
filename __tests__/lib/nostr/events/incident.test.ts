@@ -283,6 +283,18 @@ describe('parseIncidentEvent', () => {
       expect(result?.type).toBe('weather');
       expect(result?.source).toBe('nj_511_rss');
     });
+
+    it('parses synthetic live incident from eventinel-test source', () => {
+      const event = createMockIncidentEvent({
+        source: 'eventinel-test',
+        sourceId: 'eventinel-test-123',
+      });
+      const result = parseIncidentEvent(event);
+
+      expect(result).not.toBeNull();
+      expect(result?.source).toBe('eventinel-test');
+      expect(result?.sourceId).toBe('eventinel-test-123');
+    });
   });
 
   describe('severity level parsing', () => {

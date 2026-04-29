@@ -17,6 +17,7 @@ import React, {
   useSyncExternalStore,
 } from 'react';
 import type { ProcessedIncident } from '@hooks/useIncidentSubscription';
+import { shouldReplaceIncidentByMetadata } from '@hooks/incidentSubscription/incidentReplacementOrdering';
 import { INCIDENT_LIMITS } from '@lib/map/constants';
 
 export interface IncidentCacheApi {
@@ -75,8 +76,7 @@ export function IncidentCacheProvider({ children }: { children: React.ReactNode 
 
     for (const incident of incidents) {
       const existing = cacheRef.current.get(incident.incidentId);
-      // Only update if newer (by createdAt)
-      if (!existing || incident.createdAt > existing.createdAt) {
+      if (shouldReplaceIncidentByMetadata(existing, incident)) {
         cacheRef.current.set(incident.incidentId, incident);
         didUpdate = true;
       }

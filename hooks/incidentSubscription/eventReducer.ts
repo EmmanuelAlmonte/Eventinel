@@ -1,6 +1,7 @@
 import type { NDKEvent } from '@nostr-dev-kit/mobile';
 
 import { parseIncidentEvent } from '@lib/nostr/events/incident';
+import { shouldReplaceIncidentByMetadata } from './incidentReplacementOrdering';
 import { type EventBatchInput, type EventBatchResult, INCIDENT_KIND } from './types';
 import { toProcessedIncident, sortIncidentsForDisplay, sortIncidentsForRetention } from './sorting';
 import type { ProcessedIncident } from './types';
@@ -97,19 +98,6 @@ function getIncomingCreatedAt(event: NDKEvent): number | null {
   return event[INCOMING_PARSE_HOT_FIELD];
 }
 
-function shouldReplaceExistingEventByMetadata(
-  existing: ReturnType<EventBatchInput['incidentMap']['get']>,
-  incomingCreatedAt: number,
-  incomingEventId: string
-): boolean {
-  if (!existing) return true;
-  if (incomingCreatedAt > existing.createdAt) return true;
-  if (incomingCreatedAt === existing.createdAt) {
-    return incomingEventId.localeCompare(existing.eventId) > 0;
-  }
-  return false;
-}
-
 export function getIncidentEventReducerMetrics(): IncidentEventReducerMetrics {
   return { ...REDUCTION_METRICS };
 }
@@ -147,25 +135,6 @@ function recordEventSource(
   metricsInput.totalRelayEvents += relayEventCount;
 
   return { rawEventCount, cacheEventCount, relayEventCount };
-}
-
-function shouldReplaceExistingIncident(
-  existing: ReturnType<EventBatchInput['incidentMap']['get']>,
-  incoming: { createdAt: number; eventId: string }
-): boolean {
-  if (!existing) {
-    return true;
-  }
-
-  if (incoming.createdAt > existing.createdAt) {
-    return true;
-  }
-
-  if (incoming.createdAt === existing.createdAt) {
-    return incoming.eventId.localeCompare(existing.eventId) > 0;
-  }
-
-  return false;
 }
 
 function partitionIncidentCandidates(
@@ -210,7 +179,12 @@ function partitionIncidentCandidates(
 
     if (incidentTag && incomingCreatedAt != null && incomingEventId) {
       const existing = incidentMap.get(incidentTag);
-      if (!shouldReplaceExistingEventByMetadata(existing, incomingCreatedAt, incomingEventId)) {
+      if (
+        !shouldReplaceIncidentByMetadata(existing, {
+          createdAt: incomingCreatedAt,
+          eventId: incomingEventId,
+        })
+      ) {
         parseSkips += 1;
         metricsInput.parseSkips += 1;
         continue;
@@ -293,7 +267,7 @@ function applyIncidentEventUpdates(
       continue;
     }
     const existing = nextIncidentMap.get(parsed.incidentId);
-    const shouldReplace = shouldReplaceExistingIncident(existing, {
+    const shouldReplace = shouldReplaceIncidentByMetadata(existing, {
       createdAt: parsed.createdAt,
       eventId: parsed.eventId,
     });

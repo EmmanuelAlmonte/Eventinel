@@ -146,6 +146,7 @@ export const DATA_SOURCES = {
   OPENDATAPHILLY: 'opendataphilly',
   RADIO: 'radio',
   COMMUNITY: 'community',
+  EVENTINEL_TEST: 'eventinel-test',
   NJ_TRANSIT_RSS: 'nj_transit_rss',
   NJ_511_RSS: 'nj_511_rss',
 } as const;
