@@ -234,6 +234,17 @@ export function useIncidentSubscriptionReconciler({
       stopSubscription(key);
     }
 
+    if (desiredCells.length === 0 && activeHistoryRefreshRef.current) {
+      const { epoch, expectedKeys, satisfiedKeys } = activeHistoryRefreshRef.current;
+      clearHistoryRefreshWatchdog();
+      activeHistoryRefreshRef.current = null;
+      logHistoryWindowDebugEvent('history-window refresh settled by zero desired cells', {
+        epoch,
+        expectedKeyCount: expectedKeys.size,
+        satisfiedKeyCount: satisfiedKeys.size,
+      });
+    }
+
     for (const key of reconcilePlan.toAdd) {
       const activeRefreshEpoch =
         activeHistoryRefreshRef.current?.expectedKeys.has(key) === true

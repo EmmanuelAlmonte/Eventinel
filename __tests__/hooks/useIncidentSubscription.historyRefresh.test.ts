@@ -277,6 +277,60 @@ describe('useIncidentSubscription history refresh', () => {
         }
       });
 
+      it('settles history immediately when an active refresh loses all desired cells', async () => {
+        const fixedNowMs = 1_735_689_600_000;
+        const nowSpy = jest.spyOn(Date, 'now').mockReturnValue(fixedNowMs);
+
+        try {
+          const seededEvent = createMockIncidentEvent({
+            incidentId: 'seeded-visible',
+            title: 'Seeded Visible',
+            created_at: Math.floor(fixedNowMs / 1000) - 3600,
+            occurredAt: new Date(fixedNowMs - 3600 * 1000).toISOString(),
+          });
+
+          mockSubscription.setEvents([seededEvent]);
+          mockSubscription.setEose(true);
+
+          const { result, rerender } = renderHook(
+            (props: UseIncidentSubscriptionOptions) => useIncidentSubscription(props),
+            {
+              initialProps: {
+                location: [-75.1652, 39.9526],
+                sinceDays: 30,
+              },
+            }
+          );
+
+          await waitFor(() => {
+            expect(result.current.hasReceivedHistory).toBe(true);
+          });
+
+          mockSubscription.setEvents([]);
+          mockSubscription.setEose(false);
+
+          rerender({
+            location: [-75.1652, 39.9526],
+            sinceDays: 7,
+          });
+
+          await waitFor(() => {
+            expect(result.current.hasReceivedHistory).toBe(false);
+          });
+
+          rerender({
+            location: null,
+            sinceDays: 7,
+          });
+
+          await waitFor(() => {
+            expect(result.current.hasReceivedHistory).toBe(true);
+          });
+        } finally {
+          nowSpy.mockRestore();
+        }
+      });
+
       it('does not resurrect removed refresh keys as history-ready after watchdog completion', async () => {
         const fixedNowMs = 1_735_689_600_000;
         const nowSpy = jest.spyOn(Date, 'now').mockReturnValue(fixedNowMs);

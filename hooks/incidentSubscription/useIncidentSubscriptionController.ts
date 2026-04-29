@@ -83,6 +83,15 @@ function getHasReceivedHistory({
   subscriptionRegistry: RegistryLike;
   activeHistoryRefreshRef: MutableRefObject<HistoryRefreshProgress | null>;
 }): boolean {
+  if (desiredSubscriptionCount === 0) {
+    return computeHasReceivedHistory(
+      enabled,
+      subscriptionRegistry.subscriptions.keys(),
+      subscriptionRegistry.eoseBySubscriptionKey,
+      desiredSubscriptionCount
+    );
+  }
+
   const activeHistoryRefresh = activeHistoryRefreshRef.current;
   if (activeHistoryRefresh) {
     return (
