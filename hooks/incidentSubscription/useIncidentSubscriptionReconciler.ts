@@ -9,12 +9,37 @@ import {
   summarizeQueuedEventSources,
   type HistoryRefreshCompletionReason,
 } from './useIncidentHistoryRefresh';
+import {
+  buildIncidentBackfillSubscriptionKey,
+  buildIncidentBackfillWindows,
+  resetIncidentBackfillRuntime,
+} from './backfillWindows';
 import type { SubscriptionController } from './useIncidentSubscriptionController';
 import type { IncidentSubscriptionCoreState } from './useIncidentSubscriptionState';
 import type { IncidentSubscriptionGroup, ProcessedIncident } from './types';
 
 const DEBUG_CACHE =
   __DEV__ && process.env.EXPO_PUBLIC_DEBUG_INCIDENT_SUBSCRIPTION === '1';
+
+function getDisplayableIncidentCount({
+  incidentMap,
+  stableLocation,
+  effectiveMaxIncidents,
+  effectiveSinceDays,
+}: {
+  incidentMap: Map<string, ProcessedIncident>;
+  stableLocation: [number, number] | null;
+  effectiveMaxIncidents: number;
+  effectiveSinceDays: number;
+}): number {
+  const cutoffUnixSeconds = calculateIncidentSinceUnixSeconds(effectiveSinceDays);
+  return buildIncidentDisplayState({
+    incidentMap,
+    location: stableLocation,
+    maxIncidents: effectiveMaxIncidents,
+    minOccurredAtMs: cutoffUnixSeconds * 1000,
+  }).incidents.length;
+}
 
 interface UseIncidentSubscriptionReconcilerArgs {
   enabled: boolean;
@@ -32,9 +57,12 @@ interface UseIncidentSubscriptionReconcilerArgs {
     | 'recomputeVisibleStateWithRemovals'
     | 'flushQueuedEvents'
     | 'startSubscription'
+    | 'startBackfillSubscription'
     | 'stopSubscription'
     | 'pruneToDesiredGeohashes'
     | 'clearQueuedEvents'
+    | 'stopBackfillSubscription'
+    | 'stopAllBackfillSubscriptions'
   >;
   clearHistoryRefreshWatchdog: () => void;
   completeHistoryRefresh: (
@@ -71,23 +99,38 @@ export function useIncidentSubscriptionReconciler({
     refreshWatchdogTimerRef,
     pendingDesiredCellsPruneRef,
     skippedHistoryRefreshKeysRef,
+    historyBackfillRef,
   } = subscriptionState;
   const {
     hasReceivedHistory,
     recomputeVisibleStateWithRemovals,
     flushQueuedEvents,
     startSubscription,
+    startBackfillSubscription,
     stopSubscription,
     pruneToDesiredGeohashes,
     clearQueuedEvents,
+    stopBackfillSubscription,
+    stopAllBackfillSubscriptions,
   } = controller;
 
   useEffect(() => {
     if (!enabled) {
+      const runtime = historyBackfillRef.current;
+      if (runtime.activeSubscriptions.size > 0 || runtime.planKey !== 'disabled') {
+        stopAllBackfillSubscriptions(runtime.activeSubscriptions);
+        resetIncidentBackfillRuntime({
+          runtime,
+          planKey: 'disabled',
+          windows: [],
+          stopReason: 'disabled',
+        });
+      }
       return;
     }
 
     const currentFilterKey = subscriptionFilterKey;
+    const backfillPlanKey = `${currentFilterKey}|sinceDays:${effectiveSinceDays}`;
     const currentTruncated = subscriptionPlanTruncated;
     const previousMeta = lastRefreshMetaRef.current;
     const refreshTriggers: string[] = [];
@@ -115,6 +158,35 @@ export function useIncidentSubscriptionReconciler({
     if (historyWindowChanged) {
       reconcilePlan.toRemove = Array.from(subscriptionRegistry.subscriptions.keys());
       reconcilePlan.toAdd = desiredSubscriptionGroups.map((group) => group.key);
+    }
+    const sameCoverageFilterChanged =
+      !historyWindowChanged &&
+      previousMeta.filterKey !== 'disabled' &&
+      previousMeta.filterKey !== currentFilterKey &&
+      desiredSubscriptionGroups.length > 0 &&
+      reconcilePlan.toAdd.length === 0 &&
+      reconcilePlan.toRemove.length === 0;
+    if (sameCoverageFilterChanged) {
+      const desiredKeys = new Set(desiredSubscriptionGroups.map((group) => group.key));
+      reconcilePlan.toRemove = Array.from(subscriptionRegistry.subscriptions.keys()).filter(
+        (key) => desiredKeys.has(key)
+      );
+      reconcilePlan.toAdd = desiredSubscriptionGroups.map((group) => group.key);
+      refreshTriggers.push('same-coverage-filter-refresh');
+    }
+
+    const backfillRuntime = historyBackfillRef.current;
+    const backfillPlanChanged = backfillRuntime.planKey !== backfillPlanKey;
+    if (backfillPlanChanged && backfillRuntime.activeSubscriptions.size > 0) {
+      stopAllBackfillSubscriptions(backfillRuntime.activeSubscriptions);
+    }
+    if (backfillPlanChanged) {
+      resetIncidentBackfillRuntime({
+        runtime: backfillRuntime,
+        planKey: backfillPlanKey,
+        windows: buildIncidentBackfillWindows({ sinceDays: effectiveSinceDays }),
+        stopReason: historyWindowChanged ? 'history-window-change' : 'coverage-change',
+      });
     }
 
     if (
@@ -342,6 +414,98 @@ export function useIncidentSubscriptionReconciler({
         };
       });
     }
+
+    const startNextBackfillWindow = () => {
+      const runtime = historyBackfillRef.current;
+      if (runtime.planKey !== backfillPlanKey || runtime.activeSubscriptions.size > 0) {
+        return;
+      }
+
+      if (runtime.nextWindowIndex >= runtime.windows.length) {
+        runtime.stopReason = 'complete';
+        return;
+      }
+
+      const displayableIncidentCount = getDisplayableIncidentCount({
+        incidentMap: incidentMapRef.current,
+        stableLocation,
+        effectiveMaxIncidents,
+        effectiveSinceDays,
+      });
+      if (displayableIncidentCount >= effectiveMaxIncidents) {
+        runtime.stopReason = 'capacity';
+        return;
+      }
+
+      const historyWindow = runtime.windows[runtime.nextWindowIndex];
+      const epoch = runtime.epoch;
+      runtime.activeWindowIndex = historyWindow.index;
+      runtime.stopReason = null;
+
+      for (const group of desiredSubscriptionGroups) {
+        const subscriptionKey = buildIncidentBackfillSubscriptionKey({
+          epoch,
+          groupKey: group.key,
+          window: historyWindow,
+        });
+        const subscription = startBackfillSubscription(
+          group,
+          historyWindow,
+          subscriptionKey,
+          (completedSubscriptionKey) => {
+            const currentRuntime = historyBackfillRef.current;
+            if (
+              currentRuntime.epoch !== epoch ||
+              currentRuntime.planKey !== backfillPlanKey
+            ) {
+              return;
+            }
+
+            const activeSubscription =
+              currentRuntime.activeSubscriptions.get(completedSubscriptionKey);
+            if (activeSubscription) {
+              stopBackfillSubscription(completedSubscriptionKey, activeSubscription);
+              currentRuntime.activeSubscriptions.delete(completedSubscriptionKey);
+            }
+
+            if (
+              currentRuntime.activeSubscriptions.size === 0 &&
+              currentRuntime.activeWindowIndex === historyWindow.index
+            ) {
+              currentRuntime.activeWindowIndex = null;
+              currentRuntime.nextWindowIndex = Math.max(
+                currentRuntime.nextWindowIndex,
+                historyWindow.index + 1
+              );
+              startNextBackfillWindow();
+            }
+          }
+        );
+        runtime.activeSubscriptions.set(subscriptionKey, subscription);
+      }
+
+      if (desiredSubscriptionGroups.length === 0) {
+        runtime.activeWindowIndex = null;
+        runtime.stopReason = 'empty-coverage';
+      }
+    };
+
+    if (desiredSubscriptionGroups.length === 0) {
+      if (backfillRuntime.activeSubscriptions.size > 0) {
+        stopAllBackfillSubscriptions(backfillRuntime.activeSubscriptions);
+      }
+      resetIncidentBackfillRuntime({
+        runtime: backfillRuntime,
+        planKey: backfillPlanKey,
+        windows: [],
+        stopReason: 'empty-coverage',
+      });
+      return;
+    }
+
+    if (hasReceivedHistory()) {
+      startNextBackfillWindow();
+    }
   }, [
     enabled,
     desiredCells,
@@ -350,7 +514,10 @@ export function useIncidentSubscriptionReconciler({
     subscriptionPlanTruncated,
     effectiveSinceDays,
     startSubscription,
+    startBackfillSubscription,
     stopSubscription,
+    stopBackfillSubscription,
+    stopAllBackfillSubscriptions,
     recomputeVisibleStateWithRemovals,
     flushQueuedEvents,
     pruneToDesiredGeohashes,
@@ -368,6 +535,7 @@ export function useIncidentSubscriptionReconciler({
     refreshWatchdogTimerRef,
     pendingDesiredCellsPruneRef,
     skippedHistoryRefreshKeysRef,
+    historyBackfillRef,
     clearHistoryRefreshWatchdog,
     completeHistoryRefresh,
   ]);

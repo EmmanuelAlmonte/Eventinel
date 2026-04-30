@@ -1,4 +1,4 @@
-import { useCallback, useRef } from 'react';
+import { useCallback, useEffect, useRef } from 'react';
 import type { Dispatch, MutableRefObject, SetStateAction } from 'react';
 import {
   type NDKEvent,
@@ -10,6 +10,7 @@ import { useIncidentSubscriptionPlannerController } from './subscriptionPlannerC
 import { useIncidentSubscriptionStateSyncController } from './subscriptionStateSyncController';
 import {
   type RelayConfirmationMapRef,
+  type PruneUnconfirmedIncidentOptions,
   pruneUnconfirmedIncidentsForSubscription,
 } from './cacheConfirmation';
 import {
@@ -20,6 +21,7 @@ import {
   type QueuedEvent,
   type ProcessedIncident,
 } from './types';
+import type { IncidentBackfillWindow } from './backfillWindows';
 
 type RegistryLike = {
   subscriptions: Map<string, NDKSubscription>;
@@ -72,8 +74,16 @@ export interface SubscriptionController {
     group: IncidentSubscriptionGroup,
     historyRefreshEpoch?: number | null
   ) => void;
+  startBackfillSubscription: (
+    group: IncidentSubscriptionGroup,
+    historyWindow: IncidentBackfillWindow,
+    subscriptionKey: string,
+    onEose: (subscriptionKey: string) => void
+  ) => NDKSubscription;
   stopSubscription: (key: string) => void;
   stopAllSubscriptions: () => void;
+  stopBackfillSubscription: (key: string, subscription: NDKSubscription) => void;
+  stopAllBackfillSubscriptions: (subscriptions: Map<string, NDKSubscription>) => void;
   pruneToDesiredGeohashes: (desiredKeys: Set<string>) => string[];
   clearQueuedEvents: () => void;
 }
@@ -166,23 +176,44 @@ export function useIncidentSubscriptionController({
     });
 
   const lastRemovedIncidentIdsRef = useRef<string[]>([]);
+  const hasPendingRemovedIncidentIdsSurfaceRef = useRef(false);
+
+  useEffect(() => {
+    if (!hasPendingRemovedIncidentIdsSurfaceRef.current) {
+      return;
+    }
+
+    hasPendingRemovedIncidentIdsSurfaceRef.current = false;
+    lastRemovedIncidentIdsRef.current = [];
+  });
+
   const setHasReceivedHistoryState = useCallback((removedIncidentIds: string[] = []) => {
     if (removedIncidentIds.length > 0) {
       lastRemovedIncidentIdsRef.current = removedIncidentIds;
+      hasPendingRemovedIncidentIdsSurfaceRef.current = true;
     }
+
+    const nextRemovedIncidentIds =
+      removedIncidentIds.length > 0
+        ? removedIncidentIds
+        : lastRemovedIncidentIdsRef.current;
 
     setState((prev) => ({
       ...prev,
-      removedIncidentIds:
-        lastRemovedIncidentIdsRef.current.length > 0
-          ? lastRemovedIncidentIdsRef.current
-          : prev.removedIncidentIds,
+      removedIncidentIds: nextRemovedIncidentIds,
       hasReceivedHistory: hasReceivedHistory(),
     }));
   }, [hasReceivedHistory, setState]);
 
-  const { startSubscription, stopSubscription, stopAllSubscriptions, pruneToDesiredGeohashes } =
-    useIncidentSubscriptionPlannerController({
+  const {
+    startSubscription,
+    stopSubscription,
+    stopAllSubscriptions,
+    startBackfillSubscription,
+    stopBackfillSubscription,
+    stopAllBackfillSubscriptions,
+    pruneToDesiredGeohashes,
+  } = useIncidentSubscriptionPlannerController({
       subscriptionRegistry,
       enqueueEvents,
       flushQueuedEvents,
@@ -193,11 +224,15 @@ export function useIncidentSubscriptionController({
       incidentMapRef,
       pendingDesiredCellsPruneRef,
       skippedHistoryRefreshKeysRef,
-      pruneUnconfirmedIncidentsForSubscription: (subscriptionKey) =>
+      pruneUnconfirmedIncidentsForSubscription: (
+        subscriptionKey,
+        options?: PruneUnconfirmedIncidentOptions
+      ) =>
         pruneUnconfirmedIncidentsForSubscription({
           incidentMapRef,
           relayConfirmedIncidentIdsBySubscriptionKeyRef,
           subscriptionKey,
+          ...options,
         }),
       relayConfirmedIncidentIdsBySubscriptionKeyRef,
       sinceDays,
@@ -210,8 +245,11 @@ export function useIncidentSubscriptionController({
     flushQueuedEvents,
     enqueueEvents,
     startSubscription,
+    startBackfillSubscription,
     stopSubscription,
     stopAllSubscriptions,
+    stopBackfillSubscription,
+    stopAllBackfillSubscriptions,
     pruneToDesiredGeohashes,
     clearQueuedEvents,
   };

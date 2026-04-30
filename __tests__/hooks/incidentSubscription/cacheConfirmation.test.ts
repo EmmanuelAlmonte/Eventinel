@@ -67,4 +67,53 @@ describe('cache confirmation pruning', () => {
       }),
     ]);
   });
+
+  it('uses an explicit cell group key and predicate for bounded backfill pruning', () => {
+    const inBackfillWindow = buildProcessedIncident('backfill-cache-only', {
+      eventId: 'event-backfill',
+      createdAt: 1_735_560_000,
+      createdAtMs: 1_735_560_000_000,
+      location: {
+        lat: 39.9526,
+        lng: -75.1652,
+        city: 'Philadelphia',
+        state: 'PA',
+        geohash: 'dr5reg9',
+      },
+    });
+    const liveWindowIncident = buildProcessedIncident('live-window-cache-only', {
+      eventId: 'event-live-window',
+      createdAt: 1_735_680_000,
+      createdAtMs: 1_735_680_000_000,
+      location: {
+        lat: 39.9526,
+        lng: -75.1652,
+        city: 'Philadelphia',
+        state: 'PA',
+        geohash: 'dr5reg9',
+      },
+    });
+    const incidentMapRef = createRef(
+      new Map<string, ProcessedIncident>([
+        [inBackfillWindow.incidentId, inBackfillWindow],
+        [liveWindowIncident.incidentId, liveWindowIncident],
+      ])
+    );
+    const relayConfirmedIncidentIdsBySubscriptionKeyRef: RelayConfirmationMapRef =
+      createRef(new Map([['backfill:2:1d-2d:g:dr5reg,dr5ref', new Set<string>()]]));
+
+    const removed = pruneUnconfirmedIncidentsForSubscription({
+      incidentMapRef,
+      relayConfirmedIncidentIdsBySubscriptionKeyRef,
+      subscriptionKey: 'backfill:2:1d-2d:g:dr5reg,dr5ref',
+      cellGroupKey: 'g:dr5reg,dr5ref',
+      shouldPruneIncident: (incident) =>
+        incident.createdAtMs >= 1_735_516_800_000 &&
+        incident.createdAtMs < 1_735_603_200_000,
+    });
+
+    expect(removed).toEqual(['backfill-cache-only']);
+    expect(incidentMapRef.current.has('backfill-cache-only')).toBe(false);
+    expect(incidentMapRef.current.has('live-window-cache-only')).toBe(true);
+  });
 });

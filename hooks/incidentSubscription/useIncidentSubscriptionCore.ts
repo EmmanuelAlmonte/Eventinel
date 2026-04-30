@@ -7,6 +7,7 @@
 import { useEffect } from 'react';
 
 import { INCIDENT_LIMITS } from '@lib/map/constants';
+import { resetIncidentBackfillRuntime } from './backfillWindows';
 import { EMPTY_SEVERITY_COUNTS, toProcessedIncident } from './sorting';
 import { useIncidentHistoryRefresh } from './useIncidentHistoryRefresh';
 import { useIncidentSubscriptionController } from './useIncidentSubscriptionController';
@@ -106,6 +107,7 @@ export function useIncidentSubscription({
   const {
     recomputeVisibleState,
     stopAllSubscriptions,
+    stopAllBackfillSubscriptions,
     clearQueuedEvents,
   } = controller;
 
@@ -117,6 +119,14 @@ export function useIncidentSubscription({
 
     clearQueuedEvents();
     stopAllSubscriptions();
+    const backfillRuntime = subscriptionState.historyBackfillRef.current;
+    stopAllBackfillSubscriptions(backfillRuntime.activeSubscriptions);
+    resetIncidentBackfillRuntime({
+      runtime: backfillRuntime,
+      planKey: 'disabled',
+      windows: [],
+      stopReason: 'disabled',
+    });
     clearHistoryRefreshWatchdog();
     activeHistoryRefreshRef.current = null;
     pendingDesiredCellsPruneRef.current = null;
@@ -150,9 +160,11 @@ export function useIncidentSubscription({
     lastUpdatedRef,
     setState,
     stopAllSubscriptions,
+    stopAllBackfillSubscriptions,
     clearHistoryRefreshWatchdog,
     pendingDesiredCellsPruneRef,
     skippedHistoryRefreshKeysRef,
+    subscriptionState.historyBackfillRef,
   ]);
 
   useIncidentSubscriptionReconciler({
@@ -192,6 +204,14 @@ export function useIncidentSubscription({
     return () => {
       clearQueuedEvents();
       stopAllSubscriptions();
+      const backfillRuntime = subscriptionState.historyBackfillRef.current;
+      stopAllBackfillSubscriptions(backfillRuntime.activeSubscriptions);
+      resetIncidentBackfillRuntime({
+        runtime: backfillRuntime,
+        planKey: 'unmount',
+        windows: [],
+        stopReason: 'unmount',
+      });
       clearHistoryRefreshWatchdog();
       activeHistoryRefreshRef.current = null;
       pendingDesiredCellsPruneRef.current = null;
@@ -204,7 +224,9 @@ export function useIncidentSubscription({
     clearQueuedEvents,
     pendingDesiredCellsPruneRef,
     skippedHistoryRefreshKeysRef,
+    stopAllBackfillSubscriptions,
     stopAllSubscriptions,
+    subscriptionState.historyBackfillRef,
     subscriptionRegistry,
   ]);
 

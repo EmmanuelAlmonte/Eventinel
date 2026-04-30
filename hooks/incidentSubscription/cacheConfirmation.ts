@@ -8,6 +8,11 @@ import type { ProcessedIncident } from './types';
 
 export type RelayConfirmationMapRef = MutableRefObject<Map<string, Set<string>>>;
 
+export type PruneUnconfirmedIncidentOptions = {
+  cellGroupKey?: string;
+  shouldPruneIncident?: (incident: ProcessedIncident) => boolean;
+};
+
 export function resetRelayConfirmationsForSubscription(
   relayConfirmedIncidentIdsBySubscriptionKeyRef: RelayConfirmationMapRef,
   subscriptionKey: string
@@ -63,11 +68,13 @@ export function pruneUnconfirmedIncidentsForSubscription({
   incidentMapRef,
   relayConfirmedIncidentIdsBySubscriptionKeyRef,
   subscriptionKey,
+  cellGroupKey = subscriptionKey,
+  shouldPruneIncident,
 }: {
   incidentMapRef: MutableRefObject<Map<string, ProcessedIncident>>;
   relayConfirmedIncidentIdsBySubscriptionKeyRef: RelayConfirmationMapRef;
   subscriptionKey: string;
-}): string[] {
+} & PruneUnconfirmedIncidentOptions): string[] {
   const confirmedIncidentIds =
     relayConfirmedIncidentIdsBySubscriptionKeyRef.current.get(subscriptionKey) ?? new Set();
   const removedIncidentIds: string[] = [];
@@ -75,7 +82,11 @@ export function pruneUnconfirmedIncidentsForSubscription({
   let nextIncidentMap: Map<string, ProcessedIncident> | null = null;
 
   for (const [incidentId, incident] of incidentMapRef.current.entries()) {
-    if (!incidentBelongsToSubscriptionKey(incident, subscriptionKey)) {
+    if (!incidentBelongsToSubscriptionKey(incident, cellGroupKey)) {
+      continue;
+    }
+
+    if (shouldPruneIncident && !shouldPruneIncident(incident)) {
       continue;
     }
 

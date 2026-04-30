@@ -5,6 +5,7 @@ interface BuildIncidentSubscriptionFilterOptions {
   geohashGrid: string[] | null;
   limit: number;
   since?: number | null;
+  until?: number | null;
 }
 
 export function buildIncidentSubscriptionFilter({
@@ -12,6 +13,7 @@ export function buildIncidentSubscriptionFilter({
   geohashGrid,
   limit,
   since,
+  until,
 }: BuildIncidentSubscriptionFilterOptions): NDKFilter[] | false {
   if (!enabled) {
     return false;
@@ -24,6 +26,7 @@ export function buildIncidentSubscriptionFilter({
         '#g': geohashGrid,
         limit,
         ...(since != null ? { since } : {}),
+        ...(until != null ? { until } : {}),
       },
     ];
   }
@@ -33,6 +36,7 @@ export function buildIncidentSubscriptionFilter({
       kinds: [30911 as number],
       limit,
       ...(since != null ? { since } : {}),
+      ...(until != null ? { until } : {}),
     },
   ];
 }
@@ -42,14 +46,15 @@ export function buildIncidentFilterKey({
   geohashGrid,
   limit,
   since,
+  until,
 }: BuildIncidentSubscriptionFilterOptions): string {
   if (!enabled) {
     return 'disabled';
   }
 
   if (geohashGrid && geohashGrid.length > 0) {
-    return `g:${geohashGrid.join('|')}:limit:${limit}:since:${since ?? 'none'}`;
+    return `g:${geohashGrid.join('|')}:limit:${limit}:since:${since ?? 'none'}:until:${until ?? 'none'}`;
   }
 
-  return `global:${limit}:since:${since ?? 'none'}`;
+  return `global:${limit}:since:${since ?? 'none'}:until:${until ?? 'none'}`;
 }

@@ -73,6 +73,15 @@ jest.mock('../../../hooks/incidentSubscription/useIncidentSubscriptionState', ()
         refreshWatchdogTimerRef: React.useRef(null),
         pendingDesiredCellsPruneRef: React.useRef(null),
         skippedHistoryRefreshKeysRef: React.useRef(new Set()),
+        historyBackfillRef: React.useRef({
+          epoch: 0,
+          planKey: 'disabled',
+          windows: [],
+          nextWindowIndex: 1,
+          activeWindowIndex: null,
+          activeSubscriptions: new Map(),
+          stopReason: null,
+        }),
       };
     },
   };
@@ -86,6 +95,10 @@ jest.mock('../../../hooks/incidentSubscription/useIncidentSubscriptionController
       mockMarkHistoryRefreshSatisfiedCallbacks.push(args.markHistoryRefreshSatisfied);
 
       const stableNoop = React.useCallback(() => undefined, []);
+      const stableSubscription = React.useMemo(() => ({ stop: jest.fn() }), []);
+      const stableStartBackfill = React.useCallback(() => stableSubscription, [
+        stableSubscription,
+      ]);
       const stableEmptyList = React.useCallback(() => [], []);
       const stableHasReceivedHistory = React.useCallback(() => true, []);
 
@@ -95,8 +108,11 @@ jest.mock('../../../hooks/incidentSubscription/useIncidentSubscriptionController
         recomputeVisibleStateWithRemovals: stableNoop,
         flushQueuedEvents: stableNoop,
         startSubscription: stableNoop,
+        startBackfillSubscription: stableStartBackfill,
         stopSubscription: stableNoop,
         stopAllSubscriptions: stableNoop,
+        stopBackfillSubscription: stableNoop,
+        stopAllBackfillSubscriptions: stableNoop,
         pruneToDesiredGeohashes: stableEmptyList,
         clearQueuedEvents: stableNoop,
       };

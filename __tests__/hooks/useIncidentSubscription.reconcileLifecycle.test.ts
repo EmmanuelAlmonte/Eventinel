@@ -135,6 +135,49 @@ describe('useIncidentSubscription reconcile lifecycle', () => {
         );
       });
 
+      it('clears removed incident ids after a later history update has no removals', async () => {
+        const cacheOnlyEvent = createMockIncidentEvent({
+          incidentId: 'manual-stale-cache-once',
+          title: 'Manual Stale Cache Once',
+        });
+
+        mockSubscription.setEose(false);
+
+        const { result } = renderHook(() =>
+          useIncidentSubscription({
+            location: [-75.1652, 39.9526],
+          })
+        );
+
+        act(() => {
+          mockSubscription.setEvents([cacheOnlyEvent]);
+        });
+
+        await waitFor(() => {
+          expect(
+            result.current.incidents.some(
+              (incident) => incident.incidentId === 'manual-stale-cache-once'
+            )
+          ).toBe(true);
+        });
+
+        act(() => {
+          mockSubscription.setEose(true);
+        });
+
+        await waitFor(() => {
+          expect(result.current.removedIncidentIds).toContain('manual-stale-cache-once');
+        });
+
+        act(() => {
+          mockSubscription.setEose(true);
+        });
+
+        await waitFor(() => {
+          expect(result.current.removedIncidentIds).toEqual([]);
+        });
+      });
+
       it('keeps relay-confirmed incidents after live relay history completes', async () => {
         const createdAt = Math.floor(Date.now() / 1000);
         const cacheEvent = createMockIncidentEvent({

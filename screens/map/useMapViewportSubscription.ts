@@ -52,6 +52,13 @@ export function useMapViewportSubscription({
   const lastViewportUpdateAtRef = useRef(0);
   const [isViewportCoveredBySubscriptionGrid, setIsViewportCoveredBySubscriptionGrid] = useState(true);
 
+  const clearViewportDebounce = useCallback(() => {
+    if (viewportDebounceTimerRef.current) {
+      clearTimeout(viewportDebounceTimerRef.current);
+      viewportDebounceTimerRef.current = null;
+    }
+  }, []);
+
   const handleMapIdle = useCallback(
     (state: MapIdleState) => {
       if (!isFocused || suppressViewportUpdatesRef.current) {
@@ -101,6 +108,7 @@ export function useMapViewportSubscription({
 
       setIsViewportCoveredBySubscriptionGrid(isViewportCovered);
       if (!isViewportCovered) {
+        clearViewportDebounce();
         if (__DEV__) {
           console.log(
             `[MapScreen] viewport exceeds incident subscription budget (${nextCoverage.visibleCellCount} visible cells, desired:${nextCoverage.desiredCellCount}, missing:${nextCoverage.missingVisibleCellCount}, ratio:${nextCoverage.coverageRatio.toFixed(2)}, truncated:${nextPlan.truncated})`
@@ -109,16 +117,25 @@ export function useMapViewportSubscription({
         return;
       }
 
-      const canReuseActiveCoverage = shouldReuseIncidentSubscriptionPlanForViewport({
-        activeDesiredCells: lastViewportDesiredCellsRef.current,
-        nextVisibleCells: nextPlan.visibleCells,
-        previousZoom: lastViewportZoomRef.current,
-        nextZoom: zoomBucket,
-        maxMissingCells: MAP_SUBSCRIPTION.VIEWPORT_REUSE_MAX_MISSING_CELLS,
-        minCoverageRatio: MAP_SUBSCRIPTION.VIEWPORT_REUSE_MIN_RATIO,
-        maxZoomDelta: MAP_SUBSCRIPTION.VIEWPORT_REUSE_MAX_ZOOM_DELTA,
-      });
+      const previousZoom = lastViewportZoomRef.current;
+      const isFocusedZoomIn =
+        previousZoom != null &&
+        Number.isFinite(previousZoom) &&
+        zoomBucket - previousZoom >=
+          MAP_SUBSCRIPTION.VIEWPORT_ZOOM_IN_REFRESH_MIN_DELTA;
+      const canReuseActiveCoverage =
+        !isFocusedZoomIn &&
+        shouldReuseIncidentSubscriptionPlanForViewport({
+          activeDesiredCells: lastViewportDesiredCellsRef.current,
+          nextVisibleCells: nextPlan.visibleCells,
+          previousZoom,
+          nextZoom: zoomBucket,
+          maxMissingCells: MAP_SUBSCRIPTION.VIEWPORT_REUSE_MAX_MISSING_CELLS,
+          minCoverageRatio: MAP_SUBSCRIPTION.VIEWPORT_REUSE_MIN_RATIO,
+          maxZoomDelta: MAP_SUBSCRIPTION.VIEWPORT_REUSE_MAX_ZOOM_DELTA,
+        });
       if (canReuseActiveCoverage) {
+        clearViewportDebounce();
         return;
       }
 
@@ -126,12 +143,11 @@ export function useMapViewportSubscription({
         lastViewportAnchorHashRef.current === centerGeohash &&
         lastViewportPlanKeyRef.current === nextPlan.key
       ) {
+        clearViewportDebounce();
         return;
       }
 
-      if (viewportDebounceTimerRef.current) {
-        clearTimeout(viewportDebounceTimerRef.current);
-      }
+      clearViewportDebounce();
 
       const nextAnchor: LngLat = [center[0], center[1]];
       const nextAnchorHash = centerGeohash;
@@ -162,15 +178,14 @@ export function useMapViewportSubscription({
         }
       }, MAP_SUBSCRIPTION.VIEWPORT_UPDATE_DEBOUNCE_MS);
     },
-    [isFocused, lastCameraZoomRef, setMapSubscriptionAnchor, setMapSubscriptionViewport]
+    [
+      clearViewportDebounce,
+      isFocused,
+      lastCameraZoomRef,
+      setMapSubscriptionAnchor,
+      setMapSubscriptionViewport,
+    ]
   );
-
-  const clearViewportDebounce = useCallback(() => {
-    if (viewportDebounceTimerRef.current) {
-      clearTimeout(viewportDebounceTimerRef.current);
-      viewportDebounceTimerRef.current = null;
-    }
-  }, []);
 
   const teardownMapFocusState = useCallback(() => {
     setMapFocused(false);

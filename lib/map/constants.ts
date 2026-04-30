@@ -115,6 +115,12 @@ export const MAP_SUBSCRIPTION = {
   VIEWPORT_REUSE_MAX_ZOOM_DELTA: 0.5,
 
   /**
+   * Zooming in by at least this much should create a focused refresh even when
+   * the new viewport is technically covered by the prior geohash cells.
+   */
+  VIEWPORT_ZOOM_IN_REFRESH_MIN_DELTA: 0.25,
+
+  /**
    * Wait this long after map idle before applying a viewport-driven subscription update.
    */
   VIEWPORT_UPDATE_DEBOUNCE_MS: 400,
