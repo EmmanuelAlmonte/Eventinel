@@ -14,6 +14,7 @@ import {
 } from './cacheConfirmation';
 import {
   type HistoryRefreshProgress,
+  type IncidentSubscriptionGroup,
   type IncidentSubscriptionDisplayState,
   type IncomingEventSource,
   type QueuedEvent,
@@ -65,7 +66,10 @@ export interface SubscriptionController {
     source: IncomingEventSource,
     subscriptionKey?: string
   ) => void;
-  startSubscription: (key: string, historyRefreshEpoch?: number | null) => void;
+  startSubscription: (
+    group: IncidentSubscriptionGroup,
+    historyRefreshEpoch?: number | null
+  ) => void;
   stopSubscription: (key: string) => void;
   stopAllSubscriptions: () => void;
   pruneToDesiredGeohashes: (desiredKeys: Set<string>) => boolean;

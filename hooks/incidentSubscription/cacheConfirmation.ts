@@ -1,6 +1,7 @@
 import type { MutableRefObject } from 'react';
 
 import { MAP_SUBSCRIPTION } from '@lib/map/constants';
+import { parseIncidentSubscriptionGroupKey } from '@lib/map/subscriptionPlanner';
 import { deleteIncidentEventsFromNdkCache } from '@lib/ndk';
 import type { IncidentCacheDeleteTarget } from '@lib/nostr/incidentCacheMaintenance';
 import type { ProcessedIncident } from './types';
@@ -54,10 +55,8 @@ function incidentBelongsToSubscriptionKey(
     return false;
   }
 
-  return (
-    geohash.slice(0, MAP_SUBSCRIPTION.GEOHASH_PRECISION) ===
-    subscriptionKey.toLowerCase()
-  );
+  const cell = geohash.slice(0, MAP_SUBSCRIPTION.GEOHASH_PRECISION);
+  return parseIncidentSubscriptionGroupKey(subscriptionKey).includes(cell);
 }
 
 export function pruneUnconfirmedIncidentsForSubscription({

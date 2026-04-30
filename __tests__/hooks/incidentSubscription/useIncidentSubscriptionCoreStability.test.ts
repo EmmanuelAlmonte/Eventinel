@@ -12,6 +12,10 @@ jest.mock('../../../hooks/incidentSubscription/useIncidentSubscriptionPlanner', 
   return {
     useIncidentSubscriptionPlan: () => ({
       desiredCells: React.useMemo(() => ['dr5reg'], []),
+      desiredSubscriptionGroups: React.useMemo(
+        () => [{ key: 'dr5reg', cells: ['dr5reg'] }],
+        []
+      ),
       locationKey: 'location-key',
       stableLocation: React.useMemo(() => [-75.1652, 39.9526], []),
       subscriptionFilterKey: 'filter-key',

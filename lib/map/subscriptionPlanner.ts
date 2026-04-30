@@ -43,7 +43,15 @@ export interface SubscriptionPlan {
   truncated: boolean;
 }
 
+export interface IncidentSubscriptionGroup {
+  /** Stable key used for reconcile, EOSE, and debug accounting */
+  key: string;
+  /** Raw relay-side geohash filters included in this subscription */
+  cells: string[];
+}
+
 const DEFAULT_ZOOM_FALLBACK = 14;
+const GROUPED_SUBSCRIPTION_KEY_PREFIX = 'g:';
 
 function normalizePrecision(precision: number): number {
   if (!Number.isFinite(precision)) {
@@ -60,6 +68,14 @@ function normalizeMaxCells(maxCells: number): number {
   }
 
   return Math.max(0, Math.floor(maxCells));
+}
+
+function normalizeMaxCellsPerGroup(maxCellsPerGroup: number): number {
+  if (!Number.isFinite(maxCellsPerGroup)) {
+    return 1;
+  }
+
+  return Math.max(1, Math.floor(maxCellsPerGroup));
 }
 
 function isFiniteBounds(bounds: ViewportBounds): boolean {
@@ -283,4 +299,47 @@ export function planIncidentCells(
     }),
     truncated,
   };
+}
+
+export function buildIncidentSubscriptionGroupKey(cells: readonly string[]): string {
+  if (cells.length === 1) {
+    return cells[0];
+  }
+
+  return `${GROUPED_SUBSCRIPTION_KEY_PREFIX}${cells.join(',')}`;
+}
+
+export function parseIncidentSubscriptionGroupKey(key: string): string[] {
+  if (!key.startsWith(GROUPED_SUBSCRIPTION_KEY_PREFIX)) {
+    return [key.toLowerCase()];
+  }
+
+  return key
+    .slice(GROUPED_SUBSCRIPTION_KEY_PREFIX.length)
+    .split(',')
+    .map((cell) => cell.trim().toLowerCase())
+    .filter(Boolean);
+}
+
+export function groupIncidentSubscriptionCells(
+  desiredCells: readonly string[],
+  maxCellsPerGroup: number
+): IncidentSubscriptionGroup[] {
+  const safeGroupSize = normalizeMaxCellsPerGroup(maxCellsPerGroup);
+  const normalizedCells = uniqueSorted(
+    desiredCells
+      .map((cell) => cell.trim().toLowerCase())
+      .filter(Boolean)
+  );
+  const groups: IncidentSubscriptionGroup[] = [];
+
+  for (let index = 0; index < normalizedCells.length; index += safeGroupSize) {
+    const cells = normalizedCells.slice(index, index + safeGroupSize);
+    groups.push({
+      key: buildIncidentSubscriptionGroupKey(cells),
+      cells,
+    });
+  }
+
+  return groups;
 }

@@ -18,6 +18,7 @@ import {
   waitFor,
 } from './incidentSubscription/useIncidentSubscriptionTestHarness';
 import type { UseIncidentSubscriptionOptions } from '../../hooks/useIncidentSubscription';
+import { MAP_SUBSCRIPTION } from '../../lib/map/constants';
 
 describe('useIncidentSubscription filters and options', () => {
   beforeEach(() => {
@@ -84,6 +85,27 @@ describe('useIncidentSubscription filters and options', () => {
         } finally {
           nowSpy.mockRestore();
         }
+      });
+
+      it('groups desired geohash cells into fewer live relay subscriptions', () => {
+        renderHook(() =>
+          useIncidentSubscription({
+            location: [-75.1652, 39.9526],
+          })
+        );
+
+        const calls = getSubscribeCalls();
+        expect(calls.length).toBeGreaterThan(1);
+        for (const [filters] of calls) {
+          expect(filters[0]['#g'].length).toBeLessThanOrEqual(
+            MAP_SUBSCRIPTION.MAX_CELLS_PER_GROUPED_SUBSCRIPTION
+          );
+        }
+
+        const requestedCellCount = new Set(
+          calls.flatMap(([filters]) => filters[0]['#g'])
+        ).size;
+        expect(calls.length).toBeLessThan(requestedCellCount);
       });
 
       it('uses a custom sinceDays override when provided', () => {

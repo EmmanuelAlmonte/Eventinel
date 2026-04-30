@@ -11,6 +11,7 @@ import { MAP_SUBSCRIPTION } from '@lib/map/constants';
 import { INCIDENT_LIMITS } from '@lib/map/constants';
 import { calculateIncidentSinceUnixSeconds } from '@lib/incidentHistoryWindow';
 import { ndk } from '@lib/ndk';
+import { buildIncidentSubscriptionFilter } from '@hooks/incidents/buildIncidentSubscriptionFilter';
 import {
   clearRelayConfirmations,
   deleteRelayConfirmationsForSubscription,
@@ -19,6 +20,7 @@ import {
 } from './cacheConfirmation';
 import { pruneIncidentsByDesiredCells } from './reconcile';
 import type {
+  IncidentSubscriptionGroup,
   IncomingEventSource,
   ProcessedIncident,
 } from './types';
@@ -36,17 +38,26 @@ type RegistryLike = {
   setHasReceivedHistory: (key: string) => void;
 };
 
-function createIncidentSubscriptionFilter(key: string, sinceDays: number): NDKFilter {
-  return {
-    kinds: [30911 as number],
-    '#g': [key],
+function createIncidentSubscriptionFilter(
+  group: IncidentSubscriptionGroup,
+  sinceDays: number
+): NDKFilter {
+  const filters = buildIncidentSubscriptionFilter({
+    enabled: true,
+    geohashGrid: group.cells,
     limit: INCIDENT_LIMITS.FETCH_LIMIT,
     since: calculateIncidentSinceUnixSeconds(sinceDays),
-  };
+  });
+
+  if (filters === false) {
+    throw new Error('Incident subscription filter unexpectedly disabled');
+  }
+
+  return filters[0];
 }
 
 function startIncidentSubscription(
-  key: string,
+  group: IncidentSubscriptionGroup,
   args: {
     subscriptionRegistry: RegistryLike;
     enqueueEvents: (
@@ -71,11 +82,12 @@ function startIncidentSubscription(
     historyRefreshEpoch?: number | null;
   }
 ): void {
+  const { key } = group;
   const beforeCount = args.subscriptionRegistry.subscriptions.size;
   if (DEBUG_CACHE) {
     console.log(
-      `🔔 [IncidentSub] Start requested for key ${key} (live before:${beforeCount})`
-      );
+      `🔔 [IncidentSub] Start requested for key ${key} (cells:${group.cells.length}, live before:${beforeCount})`
+    );
   }
 
   resetRelayConfirmationsForSubscription(
@@ -83,9 +95,11 @@ function startIncidentSubscription(
     key
   );
 
-  const subscription = ndk.subscribe([createIncidentSubscriptionFilter(key, args.sinceDays)], {
+  const subscription = ndk.subscribe([createIncidentSubscriptionFilter(group, args.sinceDays)], {
     closeOnEose: false,
     cacheUsage: NDKSubscriptionCacheUsage.CACHE_FIRST,
+    // We group geohashes explicitly into deterministic filters. NDK-level grouping
+    // remains disabled so reconcile and EOSE accounting stay owned by this layer.
     groupable: false,
     onEvents: (events) => {
       if (
@@ -123,7 +137,9 @@ function startIncidentSubscription(
   args.subscriptionRegistry.start(key, subscription);
   if (DEBUG_CACHE) {
     const afterCount = args.subscriptionRegistry.subscriptions.size;
-    console.log(`✅ [IncidentSub] Subscribed key ${key} (live after:${afterCount})`);
+    console.log(
+      `✅ [IncidentSub] Subscribed key ${key} (cells:${group.cells.length}, live after:${afterCount})`
+    );
   }
 }
 
@@ -227,8 +243,8 @@ export function useIncidentSubscriptionPlannerController({
   sinceDays: number;
 }) {
   const startSubscription = useCallback(
-    (key: string, historyRefreshEpoch?: number | null) =>
-      startIncidentSubscription(key, {
+    (group: IncidentSubscriptionGroup, historyRefreshEpoch?: number | null) =>
+      startIncidentSubscription(group, {
         subscriptionRegistry,
         enqueueEvents,
         flushQueuedEvents,

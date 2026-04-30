@@ -4,12 +4,14 @@ interface BuildIncidentSubscriptionFilterOptions {
   enabled: boolean;
   geohashGrid: string[] | null;
   limit: number;
+  since?: number | null;
 }
 
 export function buildIncidentSubscriptionFilter({
   enabled,
   geohashGrid,
   limit,
+  since,
 }: BuildIncidentSubscriptionFilterOptions): NDKFilter[] | false {
   if (!enabled) {
     return false;
@@ -21,6 +23,7 @@ export function buildIncidentSubscriptionFilter({
         kinds: [30911 as number],
         '#g': geohashGrid,
         limit,
+        ...(since != null ? { since } : {}),
       },
     ];
   }
@@ -29,6 +32,7 @@ export function buildIncidentSubscriptionFilter({
     {
       kinds: [30911 as number],
       limit,
+      ...(since != null ? { since } : {}),
     },
   ];
 }
@@ -37,14 +41,15 @@ export function buildIncidentFilterKey({
   enabled,
   geohashGrid,
   limit,
+  since,
 }: BuildIncidentSubscriptionFilterOptions): string {
   if (!enabled) {
     return 'disabled';
   }
 
   if (geohashGrid && geohashGrid.length > 0) {
-    return `g:${geohashGrid.join('|')}:limit:${limit}`;
+    return `g:${geohashGrid.join('|')}:limit:${limit}:since:${since ?? 'none'}`;
   }
 
-  return `global:${limit}`;
+  return `global:${limit}:since:${since ?? 'none'}`;
 }

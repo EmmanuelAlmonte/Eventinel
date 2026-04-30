@@ -43,6 +43,7 @@ export function useIncidentSubscription({
     stableLocation,
     subscriptionPlan,
     desiredCells,
+    desiredSubscriptionGroups,
     subscriptionFilterKey,
     locationKey,
   } = useIncidentSubscriptionPlan({
@@ -81,7 +82,7 @@ export function useIncidentSubscription({
 
   const controller = useIncidentSubscriptionController({
     enabled,
-    desiredSubscriptionCount: desiredCells.length,
+    desiredSubscriptionCount: desiredSubscriptionGroups.length,
     stableLocation,
     sinceDays: effectiveSinceDays,
     effectiveMaxIncidents,
@@ -148,6 +149,7 @@ export function useIncidentSubscription({
   useIncidentSubscriptionReconciler({
     enabled,
     desiredCells,
+    desiredSubscriptionGroups,
     subscriptionFilterKey,
     subscriptionPlanTruncated: subscriptionPlan?.truncated ?? false,
     effectiveSinceDays,

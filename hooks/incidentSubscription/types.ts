@@ -1,7 +1,10 @@
 import type { NDKEvent, NDKFilter, NDKSubscription } from '@nostr-dev-kit/mobile';
 import type { ParsedIncident } from '@lib/nostr/events/types';
 import type { Severity } from '@lib/nostr/config';
-import type { MapSubscriptionViewport } from '@lib/map/subscriptionPlanner';
+import type {
+  IncidentSubscriptionGroup,
+  MapSubscriptionViewport,
+} from '@lib/map/subscriptionPlanner';
 
 export const INCIDENT_KIND = 30911 as const;
 export const SUBSCRIPTION_BUFFER_MS = 100;
@@ -121,7 +124,7 @@ export interface EventBatchResult {
 
 export interface ReconcileInput {
   enabled: boolean;
-  desiredCells: string[];
+  desiredSubscriptionKeys: string[];
   activeSubscriptionKeys: Iterable<string>;
 }
 
@@ -131,3 +134,5 @@ export interface ReconcileResult {
   toRemove: string[];
   shouldPruneByCell: boolean;
 }
+
+export type { IncidentSubscriptionGroup };

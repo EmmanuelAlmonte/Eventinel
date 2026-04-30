@@ -80,6 +80,12 @@ export const MAP_SUBSCRIPTION = {
   MAX_ACTIVE_CELLS: 200,
 
   /**
+   * Maximum geohash cells carried by one relay subscription filter.
+   * Grouping keeps relay fan-out bounded while preserving raw-cell pruning.
+   */
+  MAX_CELLS_PER_GROUPED_SUBSCRIPTION: 8,
+
+  /**
    * Allow small edge mismatch between viewport cells and active subscription grid
    * before showing a "zoom in" warning. Helps avoid false positives at default zoom.
    */

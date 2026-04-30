@@ -14,13 +14,15 @@ export interface PruneIncidentsByCellResult {
 
 export function computeReconcilePlan({
   enabled,
-  desiredCells,
+  desiredSubscriptionKeys,
   activeSubscriptionKeys,
 }: ReconcileInput): ReconcileResult {
-  // Contract: no desired geohash cells means intentionally no subscriptions.
+  // Contract: no desired subscription keys means intentionally no subscriptions.
   // This avoids implicit global fallback and keeps relay coverage strictly
   // tied to the planner output.
-  const desiredKeys = new Set(enabled && desiredCells.length > 0 ? desiredCells : []);
+  const desiredKeys = new Set(
+    enabled && desiredSubscriptionKeys.length > 0 ? desiredSubscriptionKeys : []
+  );
   const activeKeys = new Set(activeSubscriptionKeys);
 
   const toAdd = Array.from(desiredKeys).filter((key) => !activeKeys.has(key));
@@ -30,7 +32,7 @@ export function computeReconcilePlan({
     desiredKeys,
     toAdd,
     toRemove,
-    shouldPruneByCell: enabled && desiredCells.length > 0,
+    shouldPruneByCell: enabled && desiredSubscriptionKeys.length > 0,
   };
 }
 

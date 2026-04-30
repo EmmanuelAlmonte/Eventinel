@@ -11,7 +11,7 @@ import {
 } from './useIncidentHistoryRefresh';
 import type { SubscriptionController } from './useIncidentSubscriptionController';
 import type { IncidentSubscriptionCoreState } from './useIncidentSubscriptionState';
-import type { ProcessedIncident } from './types';
+import type { IncidentSubscriptionGroup, ProcessedIncident } from './types';
 
 const DEBUG_CACHE =
   __DEV__ && process.env.EXPO_PUBLIC_DEBUG_INCIDENT_SUBSCRIPTION === '1';
@@ -19,6 +19,7 @@ const DEBUG_CACHE =
 interface UseIncidentSubscriptionReconcilerArgs {
   enabled: boolean;
   desiredCells: string[];
+  desiredSubscriptionGroups: IncidentSubscriptionGroup[];
   subscriptionFilterKey: string;
   subscriptionPlanTruncated: boolean;
   effectiveSinceDays: number;
@@ -45,6 +46,7 @@ interface UseIncidentSubscriptionReconcilerArgs {
 export function useIncidentSubscriptionReconciler({
   enabled,
   desiredCells,
+  desiredSubscriptionGroups,
   subscriptionFilterKey,
   subscriptionPlanTruncated,
   effectiveSinceDays,
@@ -89,8 +91,8 @@ export function useIncidentSubscriptionReconciler({
     if (previousMeta.filterKey !== currentFilterKey) {
       refreshTriggers.push('filter-key');
     }
-    if (previousMeta.desiredCount !== desiredCells.length) {
-      refreshTriggers.push('desired-cell-count');
+    if (previousMeta.desiredCount !== desiredSubscriptionGroups.length) {
+      refreshTriggers.push('desired-subscription-count');
     }
     if (previousMeta.truncated !== currentTruncated) {
       refreshTriggers.push('truncation-state');
@@ -104,12 +106,12 @@ export function useIncidentSubscriptionReconciler({
 
     const reconcilePlan = computeReconcilePlan({
       enabled,
-      desiredCells,
+      desiredSubscriptionKeys: desiredSubscriptionGroups.map((group) => group.key),
       activeSubscriptionKeys: subscriptionRegistry.subscriptions.keys(),
     });
     if (historyWindowChanged) {
       reconcilePlan.toRemove = Array.from(subscriptionRegistry.subscriptions.keys());
-      reconcilePlan.toAdd = [...desiredCells];
+      reconcilePlan.toAdd = desiredSubscriptionGroups.map((group) => group.key);
     }
 
     if (
@@ -134,7 +136,7 @@ export function useIncidentSubscriptionReconciler({
     lastFilterKeyRef.current = subscriptionFilterKey;
     lastRefreshMetaRef.current = {
       filterKey: currentFilterKey,
-      desiredCount: desiredCells.length,
+      desiredCount: desiredSubscriptionGroups.length,
       truncated: currentTruncated,
       sinceDays: effectiveSinceDays,
     };
@@ -167,10 +169,10 @@ export function useIncidentSubscriptionReconciler({
       const refreshEpoch = refreshEpochRef.current + 1;
       refreshEpochRef.current = refreshEpoch;
       activeHistoryRefreshRef.current =
-        desiredCells.length > 0
+        desiredSubscriptionGroups.length > 0
           ? {
               epoch: refreshEpoch,
-              expectedKeys: new Set(desiredCells),
+              expectedKeys: new Set(desiredSubscriptionGroups.map((group) => group.key)),
               satisfiedKeys: new Set(),
               sawDataSignal: false,
             }
@@ -202,6 +204,8 @@ export function useIncidentSubscriptionReconciler({
         ),
         bufferedSourceCounts: summarizeQueuedEventSources(bufferedQueuedEvents),
         desiredCellCount: desiredCells.length,
+        desiredSubscriptionCount: desiredSubscriptionGroups.length,
+        desiredGroupSizes: desiredSubscriptionGroups.map((group) => group.cells.length),
         toAddCount: reconcilePlan.toAdd.length,
         toRemoveCount: reconcilePlan.toRemove.length,
       });
@@ -234,7 +238,7 @@ export function useIncidentSubscriptionReconciler({
       stopSubscription(key);
     }
 
-    if (desiredCells.length === 0 && activeHistoryRefreshRef.current) {
+    if (desiredSubscriptionGroups.length === 0 && activeHistoryRefreshRef.current) {
       const { epoch, expectedKeys, satisfiedKeys } = activeHistoryRefreshRef.current;
       clearHistoryRefreshWatchdog();
       activeHistoryRefreshRef.current = null;
@@ -245,12 +249,20 @@ export function useIncidentSubscriptionReconciler({
       });
     }
 
+    const desiredSubscriptionGroupByKey = new Map(
+      desiredSubscriptionGroups.map((group) => [group.key, group])
+    );
+
     for (const key of reconcilePlan.toAdd) {
+      const group = desiredSubscriptionGroupByKey.get(key);
+      if (!group) {
+        continue;
+      }
       const activeRefreshEpoch =
         activeHistoryRefreshRef.current?.expectedKeys.has(key) === true
           ? activeHistoryRefreshRef.current.epoch
           : null;
-      startSubscription(key, activeRefreshEpoch);
+      startSubscription(group, activeRefreshEpoch);
     }
 
     if (historyWindowChanged && bufferedQueuedEvents.length > 0) {
@@ -258,7 +270,7 @@ export function useIncidentSubscriptionReconciler({
     }
 
     if (reconcilePlan.shouldPruneByCell) {
-      const didPrune = pruneToDesiredGeohashes(reconcilePlan.desiredKeys);
+      const didPrune = pruneToDesiredGeohashes(new Set(desiredCells));
       if (didPrune) {
         recomputeVisibleState([]);
       }
@@ -293,6 +305,7 @@ export function useIncidentSubscriptionReconciler({
   }, [
     enabled,
     desiredCells,
+    desiredSubscriptionGroups,
     subscriptionFilterKey,
     subscriptionPlanTruncated,
     effectiveSinceDays,
