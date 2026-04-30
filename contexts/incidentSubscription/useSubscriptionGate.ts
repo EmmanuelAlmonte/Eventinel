@@ -11,6 +11,38 @@ const STARTUP_INTERACTION_GATE_TIMEOUT_MS = 750;
 const INITIAL_SUBSCRIPTION_LOCATION_DELAY_MS = 8000;
 const POST_STARTUP_TAB_SUBSCRIPTION_DELAY_MS = 3000;
 
+function areSameLngLat(
+  left: [number, number] | null,
+  right: [number, number] | null
+): boolean {
+  if (left === right) {
+    return true;
+  }
+  if (!left || !right) {
+    return false;
+  }
+  return left[0] === right[0] && left[1] === right[1];
+}
+
+function areSameViewport(
+  left: MapSubscriptionViewport | null,
+  right: MapSubscriptionViewport | null
+): boolean {
+  if (left === right) {
+    return true;
+  }
+  if (!left || !right) {
+    return false;
+  }
+
+  return (
+    left.zoom === right.zoom &&
+    areSameLngLat(left.center, right.center) &&
+    areSameLngLat(left.bounds.ne, right.bounds.ne) &&
+    areSameLngLat(left.bounds.sw, right.bounds.sw)
+  );
+}
+
 export interface SubscriptionGateState {
   location: [number, number] | null;
   subscriptionLocation: [number, number] | null;
@@ -179,15 +211,17 @@ export function useSubscriptionGate(): SubscriptionGateState {
   }, []);
 
   const handleSetMapSubscriptionAnchor = useCallback((anchor: [number, number] | null) => {
-    setMapSubscriptionAnchor(anchor);
+    setMapSubscriptionAnchor((prev) => (areSameLngLat(prev, anchor) ? prev : anchor));
     if (anchor === null) {
-      setMapSubscriptionViewport(null);
+      setMapSubscriptionViewport((prev) => (prev === null ? prev : null));
     }
   }, []);
 
   const handleSetMapSubscriptionViewport = useCallback(
     (viewport: MapSubscriptionViewport | null) => {
-      setMapSubscriptionViewport(viewport);
+      setMapSubscriptionViewport((prev) =>
+        areSameViewport(prev, viewport) ? prev : viewport
+      );
     },
     []
   );
