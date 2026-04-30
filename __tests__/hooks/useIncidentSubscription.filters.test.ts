@@ -100,12 +100,40 @@ describe('useIncidentSubscription filters and options', () => {
           expect(filters[0]['#g'].length).toBeLessThanOrEqual(
             MAP_SUBSCRIPTION.MAX_CELLS_PER_GROUPED_SUBSCRIPTION
           );
+          expect(filters[0].limit).toBeGreaterThanOrEqual(INCIDENT_LIMITS.FETCH_LIMIT);
+          expect(filters[0].limit).toBeLessThanOrEqual(
+            INCIDENT_LIMITS.GROUPED_FETCH_LIMIT_MAX
+          );
         }
 
         const requestedCellCount = new Set(
           calls.flatMap(([filters]) => filters[0]['#g'])
         ).size;
         expect(calls.length).toBeLessThan(requestedCellCount);
+      });
+
+      it('scales grouped fetch limits within a bounded cap', () => {
+        renderHook(() =>
+          useIncidentSubscription({
+            location: [-75.1652, 39.9526],
+          })
+        );
+
+        const groupedCall = getSubscribeCalls().find(
+          ([filters]) => filters[0]['#g'].length > 1
+        );
+
+        expect(groupedCall).toBeDefined();
+        if (!groupedCall) {
+          throw new Error('Expected a grouped incident subscription call');
+        }
+        const filter = groupedCall[0][0];
+        expect(filter.limit).toBe(
+          Math.min(
+            INCIDENT_LIMITS.FETCH_LIMIT * filter['#g'].length,
+            INCIDENT_LIMITS.GROUPED_FETCH_LIMIT_MAX
+          )
+        );
       });
 
       it('uses a custom sinceDays override when provided', () => {
@@ -208,7 +236,10 @@ describe('useIncidentSubscription filters and options', () => {
 
           expect(filters).toBeDefined();
           expect(filters[0].kinds).toEqual([30911]);
-          expect(filters[0].limit).toBe(INCIDENT_LIMITS.FETCH_LIMIT);
+          expect(filters[0].limit).toBeGreaterThanOrEqual(INCIDENT_LIMITS.FETCH_LIMIT);
+          expect(filters[0].limit).toBeLessThanOrEqual(
+            INCIDENT_LIMITS.GROUPED_FETCH_LIMIT_MAX
+          );
           expect(filters[0].since).toBe(
             Math.floor(fixedNowMs / 1000) - INCIDENT_LIMITS.SINCE_DAYS * 86400
           );

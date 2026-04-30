@@ -31,6 +31,8 @@ export interface IncidentSubscriptionCoreState {
   refreshEpochRef: MutableRefObject<number>;
   activeHistoryRefreshRef: MutableRefObject<HistoryRefreshProgress | null>;
   refreshWatchdogTimerRef: MutableRefObject<ReturnType<typeof setTimeout> | null>;
+  pendingDesiredCellsPruneRef: MutableRefObject<Set<string> | null>;
+  skippedHistoryRefreshKeysRef: MutableRefObject<Set<string>>;
 }
 
 export function useIncidentSubscriptionState(): IncidentSubscriptionCoreState {
@@ -54,6 +56,8 @@ export function useIncidentSubscriptionState(): IncidentSubscriptionCoreState {
   const refreshEpochRef = useRef(0);
   const activeHistoryRefreshRef = useRef<HistoryRefreshProgress | null>(null);
   const refreshWatchdogTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pendingDesiredCellsPruneRef = useRef<Set<string> | null>(null);
+  const skippedHistoryRefreshKeysRef = useRef<Set<string>>(new Set());
 
   const [state, setState] = useState<IncidentSubscriptionDisplayState>({
     incidents: [],
@@ -80,5 +84,7 @@ export function useIncidentSubscriptionState(): IncidentSubscriptionCoreState {
     refreshEpochRef,
     activeHistoryRefreshRef,
     refreshWatchdogTimerRef,
+    pendingDesiredCellsPruneRef,
+    skippedHistoryRefreshKeysRef,
   };
 }

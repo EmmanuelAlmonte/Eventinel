@@ -10,6 +10,7 @@ export interface PruneIncidentsByCellInput {
 export interface PruneIncidentsByCellResult {
   incidentMap: Map<string, ProcessedIncident>;
   didPrune: boolean;
+  removedIncidentIds: string[];
 }
 
 export function computeReconcilePlan({
@@ -69,6 +70,7 @@ export function pruneIncidentsByDesiredCells({
   geohashPrecision,
 }: PruneIncidentsByCellInput): PruneIncidentsByCellResult {
   let didPrune = false;
+  const removedIncidentIds: string[] = [];
 
   const next = new Map<string, ProcessedIncident>(incidentMap);
   for (const [incidentId, incident] of incidentMap.entries()) {
@@ -80,6 +82,7 @@ export function pruneIncidentsByDesiredCells({
     const cell = geohash.slice(0, geohashPrecision);
     if (!desiredCells.has(cell)) {
       next.delete(incidentId);
+      removedIncidentIds.push(incidentId);
       didPrune = true;
     }
   }
@@ -87,5 +90,6 @@ export function pruneIncidentsByDesiredCells({
   return {
     incidentMap: didPrune ? next : incidentMap,
     didPrune,
+    removedIncidentIds,
   };
 }

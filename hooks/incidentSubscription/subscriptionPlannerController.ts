@@ -42,10 +42,14 @@ function createIncidentSubscriptionFilter(
   group: IncidentSubscriptionGroup,
   sinceDays: number
 ): NDKFilter {
+  const limit = Math.min(
+    INCIDENT_LIMITS.FETCH_LIMIT * Math.max(1, group.cells.length),
+    INCIDENT_LIMITS.GROUPED_FETCH_LIMIT_MAX
+  );
   const filters = buildIncidentSubscriptionFilter({
     enabled: true,
     geohashGrid: group.cells,
-    limit: INCIDENT_LIMITS.FETCH_LIMIT,
+    limit,
     since: calculateIncidentSinceUnixSeconds(sinceDays),
   });
 
@@ -75,7 +79,9 @@ function startIncidentSubscription(
       epoch: number,
       source: 'cache' | 'eose'
     ) => void;
-    setHasReceivedHistoryState: () => void;
+    setHasReceivedHistoryState: (removedIncidentIds?: string[]) => void;
+    settlePendingDesiredCellPrune: () => void;
+    skippedHistoryRefreshKeysRef: MutableRefObject<Set<string>>;
     sinceDays: number;
     relayConfirmedIncidentIdsBySubscriptionKeyRef: RelayConfirmationMapRef;
     pruneUnconfirmedIncidentsForSubscription: (subscriptionKey: string) => string[];
@@ -115,6 +121,7 @@ function startIncidentSubscription(
       args.enqueueEvents([event], 'relay', key);
     },
     onEose: () => {
+      args.skippedHistoryRefreshKeysRef.current.delete(key);
       args.flushQueuedEvents();
       const removedIncidentIds = args.pruneUnconfirmedIncidentsForSubscription(key);
       if (args.historyRefreshEpoch != null) {
@@ -128,9 +135,12 @@ function startIncidentSubscription(
       args.subscriptionRegistry.setHasReceivedHistory(key);
       if (removedIncidentIds.length > 0) {
         args.recomputeVisibleStateWithRemovals([], removedIncidentIds);
+        args.setHasReceivedHistoryState(removedIncidentIds);
+        args.settlePendingDesiredCellPrune();
         return;
       }
       args.setHasReceivedHistoryState();
+      args.settlePendingDesiredCellPrune();
     },
   });
 
@@ -194,8 +204,8 @@ function stopAllIncidentSubscriptions(
 function pruneIncidentsToDesiredGeohashes(
   desiredKeys: Set<string>,
   incidentMapRef: MutableRefObject<Map<string, ProcessedIncident>>
-): boolean {
-  const { incidentMap, didPrune } = pruneIncidentsByDesiredCells({
+): string[] {
+  const { incidentMap, didPrune, removedIncidentIds } = pruneIncidentsByDesiredCells({
     incidentMap: incidentMapRef.current,
     desiredCells: desiredKeys,
     geohashPrecision: MAP_SUBSCRIPTION.GEOHASH_PRECISION,
@@ -205,7 +215,7 @@ function pruneIncidentsToDesiredGeohashes(
     incidentMapRef.current = incidentMap;
   }
 
-  return didPrune;
+  return removedIncidentIds;
 }
 
 export function useIncidentSubscriptionPlannerController({
@@ -215,7 +225,10 @@ export function useIncidentSubscriptionPlannerController({
   recomputeVisibleStateWithRemovals,
   markHistoryRefreshSatisfied,
   setHasReceivedHistoryState,
+  hasReceivedHistory,
   incidentMapRef,
+  pendingDesiredCellsPruneRef,
+  skippedHistoryRefreshKeysRef,
   pruneUnconfirmedIncidentsForSubscription,
   relayConfirmedIncidentIdsBySubscriptionKeyRef,
   sinceDays,
@@ -236,12 +249,40 @@ export function useIncidentSubscriptionPlannerController({
     epoch: number,
     source: 'cache' | 'eose'
   ) => void;
-  setHasReceivedHistoryState: () => void;
+  setHasReceivedHistoryState: (removedIncidentIds?: string[]) => void;
+  hasReceivedHistory: () => boolean;
   incidentMapRef: MutableRefObject<Map<string, ProcessedIncident>>;
+  pendingDesiredCellsPruneRef: MutableRefObject<Set<string> | null>;
+  skippedHistoryRefreshKeysRef: MutableRefObject<Set<string>>;
   pruneUnconfirmedIncidentsForSubscription: (subscriptionKey: string) => string[];
   relayConfirmedIncidentIdsBySubscriptionKeyRef: RelayConfirmationMapRef;
   sinceDays: number;
 }) {
+  const settlePendingDesiredCellPrune = useCallback(() => {
+    if (!hasReceivedHistory()) {
+      return;
+    }
+
+    const pendingDesiredCells = pendingDesiredCellsPruneRef.current;
+    if (!pendingDesiredCells) {
+      return;
+    }
+
+    pendingDesiredCellsPruneRef.current = null;
+    const removedIncidentIds = pruneIncidentsToDesiredGeohashes(
+      pendingDesiredCells,
+      incidentMapRef
+    );
+    if (removedIncidentIds.length > 0) {
+      recomputeVisibleStateWithRemovals([], removedIncidentIds);
+    }
+  }, [
+    hasReceivedHistory,
+    incidentMapRef,
+    pendingDesiredCellsPruneRef,
+    recomputeVisibleStateWithRemovals,
+  ]);
+
   const startSubscription = useCallback(
     (group: IncidentSubscriptionGroup, historyRefreshEpoch?: number | null) =>
       startIncidentSubscription(group, {
@@ -251,6 +292,8 @@ export function useIncidentSubscriptionPlannerController({
         recomputeVisibleStateWithRemovals,
         markHistoryRefreshSatisfied,
         setHasReceivedHistoryState,
+        settlePendingDesiredCellPrune,
+        skippedHistoryRefreshKeysRef,
         pruneUnconfirmedIncidentsForSubscription,
         relayConfirmedIncidentIdsBySubscriptionKeyRef,
         sinceDays,
@@ -263,6 +306,8 @@ export function useIncidentSubscriptionPlannerController({
       recomputeVisibleStateWithRemovals,
       markHistoryRefreshSatisfied,
       setHasReceivedHistoryState,
+      settlePendingDesiredCellPrune,
+      skippedHistoryRefreshKeysRef,
       pruneUnconfirmedIncidentsForSubscription,
       relayConfirmedIncidentIdsBySubscriptionKeyRef,
       sinceDays,

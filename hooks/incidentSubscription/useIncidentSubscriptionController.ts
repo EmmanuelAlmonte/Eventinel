@@ -1,4 +1,4 @@
-import { useCallback } from 'react';
+import { useCallback, useRef } from 'react';
 import type { Dispatch, MutableRefObject, SetStateAction } from 'react';
 import {
   type NDKEvent,
@@ -46,6 +46,8 @@ export interface SubscriptionControllerArgs {
   setState: Dispatch<SetStateAction<IncidentSubscriptionDisplayState>>;
   subscriptionRegistry: RegistryLike;
   activeHistoryRefreshRef: MutableRefObject<HistoryRefreshProgress | null>;
+  pendingDesiredCellsPruneRef: MutableRefObject<Set<string> | null>;
+  skippedHistoryRefreshKeysRef: MutableRefObject<Set<string>>;
   markHistoryRefreshSatisfied: (
     key: string,
     epoch: number,
@@ -72,7 +74,7 @@ export interface SubscriptionController {
   ) => void;
   stopSubscription: (key: string) => void;
   stopAllSubscriptions: () => void;
-  pruneToDesiredGeohashes: (desiredKeys: Set<string>) => boolean;
+  pruneToDesiredGeohashes: (desiredKeys: Set<string>) => string[];
   clearQueuedEvents: () => void;
 }
 
@@ -128,6 +130,8 @@ export function useIncidentSubscriptionController({
   setState,
   subscriptionRegistry,
   activeHistoryRefreshRef,
+  pendingDesiredCellsPruneRef,
+  skippedHistoryRefreshKeysRef,
   markHistoryRefreshSatisfied,
 }: SubscriptionControllerArgs): SubscriptionController {
   const hasReceivedHistory = useCallback(() => {
@@ -161,9 +165,18 @@ export function useIncidentSubscriptionController({
       setState,
     });
 
-  const setHasReceivedHistoryState = useCallback(() => {
+  const lastRemovedIncidentIdsRef = useRef<string[]>([]);
+  const setHasReceivedHistoryState = useCallback((removedIncidentIds: string[] = []) => {
+    if (removedIncidentIds.length > 0) {
+      lastRemovedIncidentIdsRef.current = removedIncidentIds;
+    }
+
     setState((prev) => ({
       ...prev,
+      removedIncidentIds:
+        lastRemovedIncidentIdsRef.current.length > 0
+          ? lastRemovedIncidentIdsRef.current
+          : prev.removedIncidentIds,
       hasReceivedHistory: hasReceivedHistory(),
     }));
   }, [hasReceivedHistory, setState]);
@@ -176,7 +189,10 @@ export function useIncidentSubscriptionController({
       recomputeVisibleStateWithRemovals,
       markHistoryRefreshSatisfied,
       setHasReceivedHistoryState,
+      hasReceivedHistory,
       incidentMapRef,
+      pendingDesiredCellsPruneRef,
+      skippedHistoryRefreshKeysRef,
       pruneUnconfirmedIncidentsForSubscription: (subscriptionKey) =>
         pruneUnconfirmedIncidentsForSubscription({
           incidentMapRef,

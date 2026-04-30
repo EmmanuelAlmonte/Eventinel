@@ -65,9 +65,10 @@ export const MAP_SUBSCRIPTION = {
   /**
    * Grid planner mode.
    * - 'center-grid': builds a center radius grid from zoom tiers.
-   * - 'viewport-ring': builds a ring around current viewport cells.
+   * - 'viewport-ring': builds from current viewport cells, with center-grid
+   *   fallback until the native map reports real bounds.
    */
-  SUBSCRIPTION_PLANNER_MODE: 'center-grid' as const,
+  SUBSCRIPTION_PLANNER_MODE: 'viewport-ring' as const,
 
   /**
    * Number of additional rings to include as prefetch after computing visible cells.
@@ -95,6 +96,23 @@ export const MAP_SUBSCRIPTION = {
    * Minimum coverage ratio for soft coverage mode.
    */
   VIEWPORT_SOFT_COVERAGE_MIN_RATIO: 0.8,
+
+  /**
+   * Existing active coverage may be reused for small pans when it still covers
+   * most of the newly visible viewport. This avoids churn at geohash edges.
+   */
+  VIEWPORT_REUSE_MAX_MISSING_CELLS: 4,
+
+  /**
+   * Minimum visible-cell coverage required before reusing active subscriptions.
+   */
+  VIEWPORT_REUSE_MIN_RATIO: 0.9,
+
+  /**
+   * Zoom changes below this threshold can reuse active coverage if cells still
+   * cover the viewport.
+   */
+  VIEWPORT_REUSE_MAX_ZOOM_DELTA: 0.5,
 
   /**
    * Wait this long after map idle before applying a viewport-driven subscription update.
@@ -125,6 +143,12 @@ export const INCIDENT_LIMITS = {
    * Maximum number of events requested per active relay subscription filter.
    */
   FETCH_LIMIT: 200,
+
+  /**
+   * Upper bound for grouped subscription filters. A grouped query gets more
+   * room than a single-cell query, but stays below the old per-cell fan-out.
+   */
+  GROUPED_FETCH_LIMIT_MAX: 600,
 
   /**
    * Maximum incidents rendered from the live subscription set.

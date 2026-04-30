@@ -29,7 +29,7 @@ interface UseIncidentSubscriptionReconcilerArgs {
   controller: Pick<
     SubscriptionController,
     | 'hasReceivedHistory'
-    | 'recomputeVisibleState'
+    | 'recomputeVisibleStateWithRemovals'
     | 'flushQueuedEvents'
     | 'startSubscription'
     | 'stopSubscription'
@@ -58,6 +58,7 @@ export function useIncidentSubscriptionReconciler({
   completeHistoryRefresh,
 }: UseIncidentSubscriptionReconcilerArgs) {
   const {
+    state,
     setState,
     incidentMapRef,
     lastFilterKeyRef,
@@ -68,10 +69,12 @@ export function useIncidentSubscriptionReconciler({
     refreshEpochRef,
     activeHistoryRefreshRef,
     refreshWatchdogTimerRef,
+    pendingDesiredCellsPruneRef,
+    skippedHistoryRefreshKeysRef,
   } = subscriptionState;
   const {
     hasReceivedHistory,
-    recomputeVisibleState,
+    recomputeVisibleStateWithRemovals,
     flushQueuedEvents,
     startSubscription,
     stopSubscription,
@@ -165,6 +168,8 @@ export function useIncidentSubscriptionReconciler({
         : [];
 
     if (historyWindowChanged) {
+      pendingDesiredCellsPruneRef.current = null;
+      skippedHistoryRefreshKeysRef.current.clear();
       clearHistoryRefreshWatchdog();
       const refreshEpoch = refreshEpochRef.current + 1;
       refreshEpochRef.current = refreshEpoch;
@@ -270,9 +275,44 @@ export function useIncidentSubscriptionReconciler({
     }
 
     if (reconcilePlan.shouldPruneByCell) {
-      const didPrune = pruneToDesiredGeohashes(new Set(desiredCells));
-      if (didPrune) {
-        recomputeVisibleState([]);
+      const includesSkippedHistoryRefreshKey = desiredSubscriptionGroups.some((group) =>
+        skippedHistoryRefreshKeysRef.current.has(group.key)
+      );
+      const shouldDeferMapPrune =
+        !historyWindowChanged &&
+        reconcilePlan.toAdd.length > 0 &&
+        state.hasReceivedHistory &&
+        !hasReceivedHistory() &&
+        !includesSkippedHistoryRefreshKey;
+
+      if (shouldDeferMapPrune) {
+        pendingDesiredCellsPruneRef.current = new Set(desiredCells);
+        if (hasReceivedHistory()) {
+          pendingDesiredCellsPruneRef.current = null;
+          const removedIncidentIds = pruneToDesiredGeohashes(new Set(desiredCells));
+          if (removedIncidentIds.length > 0) {
+            recomputeVisibleStateWithRemovals([], removedIncidentIds);
+          }
+          setState((prev) =>
+            prev.hasReceivedHistory
+              ? prev
+              : {
+                  ...prev,
+                  hasReceivedHistory: true,
+                }
+          );
+        }
+      } else {
+        pendingDesiredCellsPruneRef.current = null;
+      }
+
+      if (shouldDeferMapPrune) {
+        return;
+      }
+
+      const removedIncidentIds = pruneToDesiredGeohashes(new Set(desiredCells));
+      if (removedIncidentIds.length > 0) {
+        recomputeVisibleStateWithRemovals([], removedIncidentIds);
       }
     }
 
@@ -311,10 +351,11 @@ export function useIncidentSubscriptionReconciler({
     effectiveSinceDays,
     startSubscription,
     stopSubscription,
-    recomputeVisibleState,
+    recomputeVisibleStateWithRemovals,
     flushQueuedEvents,
     pruneToDesiredGeohashes,
     hasReceivedHistory,
+    state.hasReceivedHistory,
     setState,
     subscriptionRegistry,
     lastRefreshMetaRef,
@@ -325,6 +366,8 @@ export function useIncidentSubscriptionReconciler({
     refreshEpochRef,
     activeHistoryRefreshRef,
     refreshWatchdogTimerRef,
+    pendingDesiredCellsPruneRef,
+    skippedHistoryRefreshKeysRef,
     clearHistoryRefreshWatchdog,
     completeHistoryRefresh,
   ]);

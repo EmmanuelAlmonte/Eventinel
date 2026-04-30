@@ -67,6 +67,8 @@ export function useIncidentSubscription({
     flushTimerDelayMsRef,
     subscriptionRegistry,
     activeHistoryRefreshRef,
+    pendingDesiredCellsPruneRef,
+    skippedHistoryRefreshKeysRef,
   } = subscriptionState;
 
   const {
@@ -76,6 +78,7 @@ export function useIncidentSubscription({
   } = useIncidentHistoryRefresh({
     activeHistoryRefreshRef,
     refreshWatchdogTimerRef: subscriptionState.refreshWatchdogTimerRef,
+    skippedHistoryRefreshKeysRef,
     setState,
     subscriptionRegistry,
   });
@@ -96,6 +99,8 @@ export function useIncidentSubscription({
     setState,
     subscriptionRegistry,
     activeHistoryRefreshRef,
+    pendingDesiredCellsPruneRef,
+    skippedHistoryRefreshKeysRef,
     markHistoryRefreshSatisfied,
   });
   const {
@@ -114,6 +119,8 @@ export function useIncidentSubscription({
     stopAllSubscriptions();
     clearHistoryRefreshWatchdog();
     activeHistoryRefreshRef.current = null;
+    pendingDesiredCellsPruneRef.current = null;
+    skippedHistoryRefreshKeysRef.current.clear();
 
     // Preserve last-known incidents during transient disables (navigation focus/app inactive)
     // to avoid a 2-3s empty-map flash while subscriptions restart. Hard-clear only when the
@@ -144,6 +151,8 @@ export function useIncidentSubscription({
     setState,
     stopAllSubscriptions,
     clearHistoryRefreshWatchdog,
+    pendingDesiredCellsPruneRef,
+    skippedHistoryRefreshKeysRef,
   ]);
 
   useIncidentSubscriptionReconciler({
@@ -166,8 +175,17 @@ export function useIncidentSubscription({
     if (!enabled) {
       return;
     }
+    if (pendingDesiredCellsPruneRef.current && state.hasReceivedHistory) {
+      return;
+    }
     recomputeVisibleState([]);
-  }, [enabled, locationKey, effectiveMaxIncidents, recomputeVisibleState]);
+  }, [
+    enabled,
+    locationKey,
+    effectiveMaxIncidents,
+    pendingDesiredCellsPruneRef,
+    recomputeVisibleState,
+  ]);
 
   // Cleanup on unmount.
   useEffect(() => {
@@ -176,12 +194,16 @@ export function useIncidentSubscription({
       stopAllSubscriptions();
       clearHistoryRefreshWatchdog();
       activeHistoryRefreshRef.current = null;
+      pendingDesiredCellsPruneRef.current = null;
+      skippedHistoryRefreshKeysRef.current.clear();
       subscriptionRegistry.clear();
     };
   }, [
     activeHistoryRefreshRef,
     clearHistoryRefreshWatchdog,
     clearQueuedEvents,
+    pendingDesiredCellsPruneRef,
+    skippedHistoryRefreshKeysRef,
     stopAllSubscriptions,
     subscriptionRegistry,
   ]);
