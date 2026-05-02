@@ -127,6 +127,96 @@ describe('IncidentNotificationBridge refresh and reconnect behavior', () => {
     nowSpy.mockRestore();
   });
 
+  it('toasts a live incident delivered while an ordinary subscription refresh settles', async () => {
+    const nowSpy = jest.spyOn(Date, 'now').mockReturnValue(10_000);
+    const { rerender } = renderIncidentNotificationBridge();
+    const preservedIncident = createIncident('a', {
+      eventId: 'event-a-v1',
+      createdAtMs: 1_000,
+    });
+    const liveIncident = createIncident('b', {
+      eventId: 'event-b-v1',
+      createdAtMs: 11_000,
+    });
+
+    setSharedIncidentsState({
+      incidents: [preservedIncident],
+      updatedIncidents: [],
+      hasReceivedHistory: true,
+      historyWindowDays: 7,
+    });
+    rerender(incidentNotificationBridgeElement());
+
+    setSharedIncidentsState({
+      incidents: [preservedIncident],
+      updatedIncidents: [],
+      hasReceivedHistory: false,
+      historyWindowDays: 7,
+    });
+    rerender(incidentNotificationBridgeElement());
+
+    setSharedIncidentsState({
+      incidents: [preservedIncident, liveIncident],
+      updatedIncidents: [liveIncident],
+      hasReceivedHistory: true,
+      historyWindowDays: 7,
+    });
+    rerender(incidentNotificationBridgeElement());
+
+    await waitFor(() => {
+      expect(mockShowToastShow).toHaveBeenCalledTimes(1);
+      expect(mockShowToastShow).toHaveBeenCalledWith(
+        expect.objectContaining({
+          text1: 'Incident b',
+          text2: 'Address b',
+        })
+      );
+    });
+
+    nowSpy.mockRestore();
+  });
+
+  it('keeps history-window refresh backlog silent even when an event is recent', () => {
+    const nowSpy = jest.spyOn(Date, 'now').mockReturnValue(10_000);
+    const { rerender } = renderIncidentNotificationBridge();
+    const preservedIncident = createIncident('a', {
+      eventId: 'event-a-v1',
+      createdAtMs: 1_000,
+    });
+    const recentBackfill = createIncident('b', {
+      eventId: 'event-b-v1',
+      createdAtMs: 11_000,
+    });
+
+    setSharedIncidentsState({
+      incidents: [preservedIncident],
+      updatedIncidents: [],
+      hasReceivedHistory: true,
+      historyWindowDays: 7,
+    });
+    rerender(incidentNotificationBridgeElement());
+
+    setSharedIncidentsState({
+      incidents: [preservedIncident],
+      updatedIncidents: [],
+      hasReceivedHistory: false,
+      historyWindowDays: 30,
+    });
+    rerender(incidentNotificationBridgeElement());
+
+    setSharedIncidentsState({
+      incidents: [preservedIncident, recentBackfill],
+      updatedIncidents: [recentBackfill],
+      hasReceivedHistory: true,
+      historyWindowDays: 30,
+    });
+    rerender(incidentNotificationBridgeElement());
+
+    expect(mockShowToastShow).not.toHaveBeenCalled();
+
+    nowSpy.mockRestore();
+  });
+
   it('keeps a same revision silent after a baseline reset and reconnect replay', async () => {
     const { rerender } = renderIncidentNotificationBridge();
     const incidentB = createIncident('b', { eventId: 'event-b-v1' });
