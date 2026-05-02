@@ -3,6 +3,7 @@
  */
 
 import { act, renderHook, waitFor } from '@testing-library/react-native';
+import { AppState, type AppStateStatus } from 'react-native';
 
 import {
   Accuracy,
@@ -11,6 +12,7 @@ import {
   getForegroundPermissionsAsync,
   mockLocation,
   renderUserLocationHook,
+  requestForegroundPermissionsAsync,
   resetUserLocationMocks,
   useUserLocation,
   watchPositionAsync,
@@ -159,6 +161,93 @@ describe('useUserLocation errors, refresh, options, and edge cases', () => {
 
       expect(result.current.isLoading).toBe(true);
       expect(result.current.error).toBeNull();
+    });
+
+    it('clears stale coordinates when refresh finds permission denied', async () => {
+      mockLocation.setCurrentPosition(40.7128, -74.006);
+
+      const { result } = renderUserLocationHook();
+
+      await waitFor(() => {
+        expect(result.current.location).toEqual([-74.006, 40.7128]);
+        expect(result.current.permission).toBe('granted');
+      });
+
+      mockLocation.setPermissionStatus('denied');
+
+      await act(async () => {
+        await result.current.refresh();
+      });
+
+      await waitFor(() => {
+        expect(result.current.permission).toBe('denied');
+        expect(result.current.location).toBeNull();
+        expect(result.current.source).toBe('none');
+        expect(result.current.isLoading).toBe(false);
+      });
+    });
+  });
+
+  describe('runtime permission updates', () => {
+    let appStateChangeListener: ((nextState: AppStateStatus) => void) | null = null;
+    let appStateSubscriptionRemove: jest.Mock;
+
+    beforeEach(() => {
+      appStateChangeListener = null;
+      appStateSubscriptionRemove = jest.fn();
+
+      Object.defineProperty(AppState, 'currentState', {
+        value: 'active',
+        configurable: true,
+      });
+
+      jest.spyOn(AppState, 'addEventListener').mockImplementation((_, listener: any) => {
+        appStateChangeListener = listener;
+        return {
+          remove: appStateSubscriptionRemove,
+        } as any;
+      });
+    });
+
+    afterEach(() => {
+      jest.restoreAllMocks();
+    });
+
+    function triggerAppState(nextState: AppStateStatus) {
+      if (!appStateChangeListener) {
+        throw new Error('AppState listener was not registered');
+      }
+
+      act(() => {
+        appStateChangeListener?.(nextState);
+      });
+    }
+
+    it('clears stale coordinates after foreground permission is revoked while app is running', async () => {
+      mockLocation.setPermissionStatus('granted');
+      mockLocation.setCurrentPosition(40.7128, -74.006);
+
+      const { result } = renderUserLocationHook();
+
+      await waitFor(() => {
+        expect(result.current.location).toEqual([-74.006, 40.7128]);
+        expect(result.current.permission).toBe('granted');
+      });
+
+      expect(requestForegroundPermissionsAsync).not.toHaveBeenCalled();
+
+      mockLocation.setPermissionStatus('denied');
+      triggerAppState('background');
+      triggerAppState('active');
+
+      await waitFor(() => {
+        expect(result.current.permission).toBe('denied');
+        expect(result.current.location).toBeNull();
+        expect(result.current.source).toBe('none');
+        expect(result.current.isLoading).toBe(false);
+      });
+
+      expect(requestForegroundPermissionsAsync).not.toHaveBeenCalled();
     });
   });
 

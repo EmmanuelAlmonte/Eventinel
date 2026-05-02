@@ -148,6 +148,39 @@ describe('useIncidentSubscription lifecycle', () => {
         expect(result.current.incidents[0].title).toBe('Persist Me');
         expect(result.current.incidents[0].severity).toBe(2);
       });
+
+      it('clears incidents when runtime permission loss removes location', async () => {
+        const mockEvent = createMockIncidentEvent({
+          title: 'Clear After Permission Loss',
+          severity: 4,
+        });
+        mockSubscription.setEvents([mockEvent]);
+        mockSubscription.setEose(true);
+
+        const { result, rerender } = renderHook(
+          (props: UseIncidentSubscriptionOptions) => useIncidentSubscription(props),
+          {
+            initialProps: {
+              location: [-75.1652, 39.9526],
+              enabled: true,
+            },
+          }
+        );
+
+        await waitFor(() => {
+          expect(result.current.incidents.length).toBe(1);
+        });
+
+        rerender({
+          location: null,
+          enabled: false,
+        });
+
+        expect(result.current.incidents).toEqual([]);
+        expect(result.current.totalEventsReceived).toBe(0);
+        expect(result.current.hasReceivedHistory).toBe(false);
+        expect(result.current.isInitialLoading).toBe(false);
+      });
     });
 
     describe('Loading States', () => {
