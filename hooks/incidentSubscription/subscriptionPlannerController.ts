@@ -49,11 +49,11 @@ type StartBackfillSubscriptionArgs = {
   onEose: (subscriptionKey: string) => void;
 };
 
-function createIncidentSubscriptionFilter(
+function createIncidentSubscriptionFilters(
   group: IncidentSubscriptionGroup,
   sinceDays: number,
   historyWindow: IncidentBackfillWindow = getLiveIncidentWindow(sinceDays)
-): NDKFilter {
+): NDKFilter[] {
   const limit = Math.min(
     INCIDENT_LIMITS.FETCH_LIMIT * Math.max(1, group.cells.length),
     INCIDENT_LIMITS.GROUPED_FETCH_LIMIT_MAX
@@ -62,6 +62,7 @@ function createIncidentSubscriptionFilter(
     enabled: true,
     geohashGrid: group.cells,
     limit,
+    cellCatchUpLimit: INCIDENT_LIMITS.GROUPED_CELL_CATCH_UP_LIMIT,
     since: historyWindow.since,
     until: historyWindow.until,
   });
@@ -70,7 +71,7 @@ function createIncidentSubscriptionFilter(
     throw new Error('Incident subscription filter unexpectedly disabled');
   }
 
-  return filters[0];
+  return filters;
 }
 
 function startIncidentSubscription(
@@ -119,7 +120,7 @@ function startIncidentSubscription(
 
   const liveHistoryWindow = getLiveIncidentWindow(args.sinceDays);
   const subscription = ndk.subscribe(
-    [createIncidentSubscriptionFilter(group, args.sinceDays, liveHistoryWindow)],
+    createIncidentSubscriptionFilters(group, args.sinceDays, liveHistoryWindow),
     {
       closeOnEose: false,
       cacheUsage: NDKSubscriptionCacheUsage.CACHE_FIRST,
@@ -248,7 +249,7 @@ function startIncidentBackfillSubscription(
   );
 
   const subscription = ndk.subscribe(
-    [createIncidentSubscriptionFilter(group, args.sinceDays, historyWindow)],
+    createIncidentSubscriptionFilters(group, args.sinceDays, historyWindow),
     {
       closeOnEose: true,
       cacheUsage: NDKSubscriptionCacheUsage.CACHE_FIRST,

@@ -32,6 +32,14 @@ function createSubscriptionViewport(zoom: number): MapSubscriptionViewport {
   };
 }
 
+type IncidentSubscriptionFilter = {
+  kinds: number[];
+  '#g'?: string[];
+  limit: number;
+  since?: number;
+  until?: number;
+};
+
 describe('useIncidentSubscription filters and options', () => {
   beforeEach(() => {
     resetIncidentSubscriptionTestHarness();
@@ -189,6 +197,68 @@ describe('useIncidentSubscription filters and options', () => {
         );
       });
 
+      it('adds bounded per-cell catch-up filters without adding subscribe calls', () => {
+        const fixedNowMs = 1_735_689_600_000;
+        const nowSpy = jest.spyOn(Date, 'now').mockReturnValue(fixedNowMs);
+
+        try {
+          renderHook(() =>
+            useIncidentSubscription({
+              location: [-75.1652, 39.9526],
+            })
+          );
+
+          const liveCalls = getSubscribeCalls().filter(
+            ([, options]) => options.closeOnEose === false
+          );
+          const groupedCalls = liveCalls.filter(
+            ([filters]) => filters[0]['#g'].length > 1
+          );
+
+          expect(groupedCalls.length).toBeGreaterThan(0);
+
+          const requestedCellCount = new Set(
+            liveCalls.flatMap(([filters]) => filters[0]['#g'])
+          ).size;
+          expect(liveCalls.length).toBeLessThan(requestedCellCount);
+
+          for (const [filters] of groupedCalls) {
+            const [groupedFilter, ...cellFilters] =
+              filters as IncidentSubscriptionFilter[];
+            const groupedCells = groupedFilter['#g'] ?? [];
+
+            expect(cellFilters).toHaveLength(groupedCells.length);
+            expect(groupedFilter.limit).toBe(
+              Math.min(
+                INCIDENT_LIMITS.FETCH_LIMIT * groupedCells.length,
+                INCIDENT_LIMITS.GROUPED_FETCH_LIMIT_MAX
+              )
+            );
+
+            const cellFilterCells = cellFilters
+              .map((filter) => filter['#g']?.[0])
+              .filter((cell): cell is string => cell != null);
+            expect(cellFilterCells).toHaveLength(groupedCells.length);
+            expect(cellFilterCells.sort()).toEqual([...groupedCells].sort());
+
+            for (const filter of cellFilters) {
+              expect(filter.kinds).toEqual([30911]);
+              expect(filter['#g']).toHaveLength(1);
+              expect(filter.limit).toBe(
+                INCIDENT_LIMITS.GROUPED_CELL_CATCH_UP_LIMIT
+              );
+            }
+
+            for (const filter of filters) {
+              expect(filter.since).toBe(Math.floor(fixedNowMs / 1000) - 86400);
+              expect(filter.until).toBeUndefined();
+            }
+          }
+        } finally {
+          nowSpy.mockRestore();
+        }
+      });
+
       it('keeps live subscription filters on the newest window when sinceDays is broader', () => {
         const fixedNowMs = 1_735_689_600_000;
         const nowSpy = jest.spyOn(Date, 'now').mockReturnValue(fixedNowMs);
@@ -233,9 +303,14 @@ describe('useIncidentSubscription filters and options', () => {
               .find(([, options]) => options.closeOnEose === true);
             expect(backfillCall).toBeDefined();
 
-            const filter = backfillCall?.[0]?.[0];
-            expect(filter.since).toBe(Math.floor(fixedNowMs / 1000) - 2 * 86400);
-            expect(filter.until).toBe(Math.floor(fixedNowMs / 1000) - 86400);
+            const filters = backfillCall?.[0] ?? [];
+            expect(filters.length).toBeGreaterThan(0);
+            for (const filter of filters) {
+              expect(filter.since).toBe(
+                Math.floor(fixedNowMs / 1000) - 2 * 86400
+              );
+              expect(filter.until).toBe(Math.floor(fixedNowMs / 1000) - 86400);
+            }
           });
         } finally {
           nowSpy.mockRestore();

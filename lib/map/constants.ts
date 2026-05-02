@@ -157,6 +157,13 @@ export const INCIDENT_LIMITS = {
   GROUPED_FETCH_LIMIT_MAX: 600,
 
   /**
+   * Per-cell fairness slice sent alongside grouped filters. This keeps one
+   * subscription per grouped key while preventing dense cells from exhausting
+   * the grouped relay limit before sparse cells can return recent events.
+   */
+  GROUPED_CELL_CATCH_UP_LIMIT: 25,
+
+  /**
    * Maximum incidents rendered from the live subscription set.
    */
   MAX_VISIBLE: 200,
