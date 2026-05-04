@@ -4,7 +4,7 @@
  * Coordinates incident subscriptions and cache/relay event queueing.
  */
 
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 
 import { INCIDENT_LIMITS } from '@lib/map/constants';
 import { resetIncidentBackfillRuntime } from './backfillWindows';
@@ -110,6 +110,12 @@ export function useIncidentSubscription({
     stopAllBackfillSubscriptions,
     clearQueuedEvents,
   } = controller;
+  const lastResortInputsRef = useRef<{
+    effectiveMaxIncidents: number;
+    locationKey: string;
+    recomputeVisibleState: typeof recomputeVisibleState;
+  } | null>(null);
+  const skippedResortForPendingPruneRef = useRef(false);
 
   // Handle enabled/disabled lifecycle.
   useEffect(() => {
@@ -185,18 +191,37 @@ export function useIncidentSubscription({
   // Resort existing incidents on location/max changes.
   useEffect(() => {
     if (!enabled) {
+      lastResortInputsRef.current = null;
+      skippedResortForPendingPruneRef.current = false;
+      return;
+    }
+    const lastResortInputs = lastResortInputsRef.current;
+    const resortInputsChanged =
+      !lastResortInputs ||
+      lastResortInputs.locationKey !== locationKey ||
+      lastResortInputs.effectiveMaxIncidents !== effectiveMaxIncidents ||
+      lastResortInputs.recomputeVisibleState !== recomputeVisibleState;
+    if (!resortInputsChanged && !skippedResortForPendingPruneRef.current) {
       return;
     }
     if (pendingDesiredCellsPruneRef.current && state.hasReceivedHistory) {
+      skippedResortForPendingPruneRef.current = true;
       return;
     }
     recomputeVisibleState([]);
+    lastResortInputsRef.current = {
+      effectiveMaxIncidents,
+      locationKey,
+      recomputeVisibleState,
+    };
+    skippedResortForPendingPruneRef.current = false;
   }, [
     enabled,
     locationKey,
     effectiveMaxIncidents,
     pendingDesiredCellsPruneRef,
     recomputeVisibleState,
+    state.hasReceivedHistory,
   ]);
 
   // Cleanup on unmount.

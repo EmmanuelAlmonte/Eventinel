@@ -270,6 +270,71 @@ describe('useIncidentSubscription reconcile lifecycle', () => {
         });
       });
 
+      it('retries location resort while deferred map replacement history is pending', async () => {
+        const fixedOccurredAt = '2026-01-01T12:00:00.000Z';
+        const fixedCreatedAt = Math.floor(Date.parse(fixedOccurredAt) / 1000);
+        const phillyIncident = createMockIncidentEvent({
+          id: 'event-philly-preserved',
+          incidentId: 'incident-philly-preserved',
+          title: 'Philadelphia Preserved',
+          created_at: fixedCreatedAt,
+          occurredAt: fixedOccurredAt,
+          lat: 39.9526,
+          lng: -75.1652,
+          tags: [['g', 'gh4075']],
+        });
+        const nycIncident = createMockIncidentEvent({
+          id: 'event-nyc-preserved',
+          incidentId: 'incident-nyc-preserved',
+          title: 'NYC Preserved',
+          created_at: fixedCreatedAt,
+          occurredAt: fixedOccurredAt,
+          lat: 40.7128,
+          lng: -74.006,
+          tags: [['g', 'gh4075']],
+        });
+
+        mockSubscription.setEvents([]);
+        mockSubscription.setEose(false);
+
+        const { result, rerender } = renderHook(
+          ({ location }) =>
+            useIncidentSubscription({
+              location,
+              sinceDays: 365,
+            }),
+          {
+            initialProps: { location: [-75.1652, 39.9526] as [number, number] },
+          }
+        );
+
+        act(() => {
+          mockSubscription.addEvent(nycIncident);
+          mockSubscription.addEvent(phillyIncident);
+          mockSubscription.setEose(true);
+        });
+
+        await waitFor(() => {
+          expect(result.current.hasReceivedHistory).toBe(true);
+          expect(result.current.incidents[0].incidentId).toBe(
+            'incident-philly-preserved'
+          );
+        });
+
+        mockSubscription.setEvents([]);
+        mockSubscription.setEose(false);
+
+        rerender({ location: [-74.006, 40.7128] as [number, number] });
+
+        await waitFor(() => {
+          expect(result.current.hasReceivedHistory).toBe(false);
+          expect(result.current.incidents.map((incident) => incident.incidentId)).toEqual([
+            'incident-nyc-preserved',
+            'incident-philly-preserved',
+          ]);
+        });
+      });
+
       it('starts historical backfill after deferred map replacement history settles', async () => {
         const fixedNowMs = 1_735_689_600_000;
         const nowSpy = jest.spyOn(Date, 'now').mockReturnValue(fixedNowMs);
