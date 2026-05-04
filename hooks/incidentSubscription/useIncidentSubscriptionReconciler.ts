@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useCallback, useEffect, useRef } from 'react';
 
 import { calculateIncidentSinceUnixSeconds } from '@lib/incidentHistoryWindow';
 import { computeReconcilePlan } from './reconcile';
@@ -20,6 +20,8 @@ import type { IncidentSubscriptionGroup, ProcessedIncident } from './types';
 
 const DEBUG_CACHE =
   __DEV__ && process.env.EXPO_PUBLIC_DEBUG_INCIDENT_SUBSCRIPTION === '1';
+
+const DEFERRED_DESIRED_CELLS_PRUNE_WATCHDOG_MS = HISTORY_REFRESH_WATCHDOG_MS;
 
 function getDisplayableIncidentCount({
   incidentMap,
@@ -85,6 +87,8 @@ export function useIncidentSubscriptionReconciler({
   clearHistoryRefreshWatchdog,
   completeHistoryRefresh,
 }: UseIncidentSubscriptionReconcilerArgs) {
+  const pendingDesiredCellsPruneWatchdogRef =
+    useRef<ReturnType<typeof setTimeout> | null>(null);
   const {
     state,
     setState,
@@ -114,8 +118,32 @@ export function useIncidentSubscriptionReconciler({
     stopAllBackfillSubscriptions,
   } = controller;
 
+  const clearPendingDesiredCellsPruneWatchdog = useCallback(() => {
+    if (!pendingDesiredCellsPruneWatchdogRef.current) {
+      return;
+    }
+
+    clearTimeout(pendingDesiredCellsPruneWatchdogRef.current);
+    pendingDesiredCellsPruneWatchdogRef.current = null;
+  }, []);
+
+  useEffect(() => {
+    if (pendingDesiredCellsPruneRef.current !== null) {
+      return;
+    }
+
+    clearPendingDesiredCellsPruneWatchdog();
+  }, [clearPendingDesiredCellsPruneWatchdog, pendingDesiredCellsPruneRef, state]);
+
+  useEffect(() => {
+    return () => {
+      clearPendingDesiredCellsPruneWatchdog();
+    };
+  }, [clearPendingDesiredCellsPruneWatchdog]);
+
   useEffect(() => {
     if (!enabled) {
+      clearPendingDesiredCellsPruneWatchdog();
       const runtime = historyBackfillRef.current;
       if (runtime.activeSubscriptions.size > 0 || runtime.planKey !== 'disabled') {
         stopAllBackfillSubscriptions(runtime.activeSubscriptions);
@@ -241,6 +269,7 @@ export function useIncidentSubscriptionReconciler({
 
     if (historyWindowChanged) {
       pendingDesiredCellsPruneRef.current = null;
+      clearPendingDesiredCellsPruneWatchdog();
       skippedHistoryRefreshKeysRef.current.clear();
       clearHistoryRefreshWatchdog();
       const refreshEpoch = refreshEpochRef.current + 1;
@@ -359,8 +388,23 @@ export function useIncidentSubscriptionReconciler({
 
       if (shouldDeferMapPrune) {
         pendingDesiredCellsPruneRef.current = new Set(desiredCells);
+        clearPendingDesiredCellsPruneWatchdog();
+        pendingDesiredCellsPruneWatchdogRef.current = setTimeout(() => {
+          pendingDesiredCellsPruneWatchdogRef.current = null;
+          const pendingDesiredCells = pendingDesiredCellsPruneRef.current;
+          if (!pendingDesiredCells) {
+            return;
+          }
+
+          pendingDesiredCellsPruneRef.current = null;
+          const removedIncidentIds = pruneToDesiredGeohashes(pendingDesiredCells);
+          if (removedIncidentIds.length > 0) {
+            recomputeVisibleStateWithRemovals([], removedIncidentIds);
+          }
+        }, DEFERRED_DESIRED_CELLS_PRUNE_WATCHDOG_MS);
         if (hasReceivedHistory()) {
           pendingDesiredCellsPruneRef.current = null;
+          clearPendingDesiredCellsPruneWatchdog();
           const removedIncidentIds = pruneToDesiredGeohashes(new Set(desiredCells));
           if (removedIncidentIds.length > 0) {
             recomputeVisibleStateWithRemovals([], removedIncidentIds);
@@ -376,6 +420,7 @@ export function useIncidentSubscriptionReconciler({
         }
       } else {
         pendingDesiredCellsPruneRef.current = null;
+        clearPendingDesiredCellsPruneWatchdog();
       }
 
       if (shouldDeferMapPrune) {
@@ -538,5 +583,6 @@ export function useIncidentSubscriptionReconciler({
     historyBackfillRef,
     clearHistoryRefreshWatchdog,
     completeHistoryRefresh,
+    clearPendingDesiredCellsPruneWatchdog,
   ]);
 }

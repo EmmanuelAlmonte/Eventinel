@@ -18,6 +18,7 @@ import {
   waitFor,
 } from './incidentSubscription/useIncidentSubscriptionTestHarness';
 import type { UseIncidentSubscriptionOptions } from '../../hooks/useIncidentSubscription';
+import { HISTORY_REFRESH_WATCHDOG_MS } from '../../hooks/incidentSubscription/useIncidentHistoryRefresh';
 
 describe('useIncidentSubscription reconcile lifecycle', () => {
   beforeEach(() => {
@@ -268,6 +269,66 @@ describe('useIncidentSubscription reconcile lifecycle', () => {
             'visible-before-pan'
           );
         });
+      });
+
+      it('prunes stale map incidents when replacement history never settles', async () => {
+        const phillyIncident = createMockIncidentEvent({
+          incidentId: 'visible-before-stalled-pan',
+          title: 'Visible Before Stalled Pan',
+          tags: [['g', 'gh4075']],
+        });
+
+        mockSubscription.setEvents([]);
+        mockSubscription.setEose(false);
+
+        const { result, rerender } = renderHook(
+          ({ location }) =>
+            useIncidentSubscription({
+              location,
+            }),
+          {
+            initialProps: { location: [-75.1652, 39.9526] as [number, number] },
+          }
+        );
+
+        act(() => {
+          mockSubscription.addEvent(phillyIncident);
+          mockSubscription.setEose(true);
+        });
+
+        await waitFor(() => {
+          expect(result.current.hasReceivedHistory).toBe(true);
+          expect(result.current.incidents.map((incident) => incident.incidentId)).toContain(
+            'visible-before-stalled-pan'
+          );
+        });
+
+        jest.useFakeTimers();
+        try {
+          mockSubscription.setEvents([]);
+          mockSubscription.setEose(false);
+
+          rerender({ location: [-74.006, 40.7128] as [number, number] });
+
+          expect(result.current.hasReceivedHistory).toBe(true);
+          expect(result.current.incidents.map((incident) => incident.incidentId)).toContain(
+            'visible-before-stalled-pan'
+          );
+
+          await act(async () => {
+            jest.advanceTimersByTime(HISTORY_REFRESH_WATCHDOG_MS);
+            await Promise.resolve();
+          });
+
+          expect(result.current.incidents.map((incident) => incident.incidentId)).not.toContain(
+            'visible-before-stalled-pan'
+          );
+          expect(result.current.removedIncidentIds).toContain(
+            'visible-before-stalled-pan'
+          );
+        } finally {
+          jest.useRealTimers();
+        }
       });
     });
 });
