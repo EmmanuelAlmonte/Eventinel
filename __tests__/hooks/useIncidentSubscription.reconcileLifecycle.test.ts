@@ -252,7 +252,6 @@ describe('useIncidentSubscription reconcile lifecycle', () => {
 
         rerender({ location: [-74.006, 40.7128] as [number, number] });
 
-        expect(result.current.hasReceivedHistory).toBe(true);
         expect(result.current.incidents.map((incident) => incident.incidentId)).toContain(
           'visible-before-pan'
         );
@@ -269,6 +268,96 @@ describe('useIncidentSubscription reconcile lifecycle', () => {
             'visible-before-pan'
           );
         });
+      });
+
+      it('starts historical backfill after deferred map replacement history settles', async () => {
+        const fixedNowMs = 1_735_689_600_000;
+        const nowSpy = jest.spyOn(Date, 'now').mockReturnValue(fixedNowMs);
+        const phillyIncident = createMockIncidentEvent({
+          incidentId: 'visible-before-backfill-pan',
+          title: 'Visible Before Backfill Pan',
+          tags: [['g', 'gh4075']],
+        });
+
+        try {
+          mockSubscription.setEvents([]);
+          mockSubscription.setEose(false);
+
+          const { result, rerender } = renderHook(
+            ({ location }) =>
+              useIncidentSubscription({
+                location,
+                sinceDays: 3,
+              }),
+            {
+              initialProps: { location: [-75.1652, 39.9526] as [number, number] },
+            }
+          );
+
+          const initialLiveCalls = getSubscribeCalls().filter(
+            ([, options]) => options.closeOnEose === false
+          );
+          expect(initialLiveCalls.length).toBeGreaterThan(0);
+
+          act(() => {
+            mockSubscription.addEvent(phillyIncident);
+            initialLiveCalls.forEach(([, options]) => {
+              options.onEose();
+            });
+          });
+
+          await waitFor(() => {
+            expect(result.current.hasReceivedHistory).toBe(true);
+            expect(result.current.incidents.map((incident) => incident.incidentId)).toContain(
+              'visible-before-backfill-pan'
+            );
+            expect(
+              getSubscribeCalls().some(([, options]) => options.closeOnEose === true)
+            ).toBe(true);
+          });
+
+          mockSubscription.setEvents([]);
+          mockSubscription.setEose(false);
+          const callCountBeforePan = getSubscribeCalls().length;
+
+          rerender({ location: [-74.006, 40.7128] as [number, number] });
+
+          await waitFor(() => {
+            const replacementLiveCalls = getSubscribeCalls()
+              .slice(callCountBeforePan)
+              .filter(([, options]) => options.closeOnEose === false);
+            expect(replacementLiveCalls.length).toBeGreaterThan(0);
+            expect(result.current.incidents.map((incident) => incident.incidentId)).toContain(
+              'visible-before-backfill-pan'
+            );
+          });
+
+          const replacementLiveCalls = getSubscribeCalls()
+            .slice(callCountBeforePan)
+            .filter(([, options]) => options.closeOnEose === false);
+
+          act(() => {
+            replacementLiveCalls.forEach(([, options]) => {
+              options.onEose();
+            });
+          });
+
+          await waitFor(() => {
+            const replacementBackfillCall = getSubscribeCalls()
+              .slice(callCountBeforePan)
+              .find(([, options]) => options.closeOnEose === true);
+            expect(replacementBackfillCall).toBeDefined();
+
+            const filters = replacementBackfillCall?.[0] ?? [];
+            expect(filters.length).toBeGreaterThan(0);
+            for (const filter of filters) {
+              expect(filter.since).toBe(Math.floor(fixedNowMs / 1000) - 2 * 86400);
+              expect(filter.until).toBe(Math.floor(fixedNowMs / 1000) - 86400);
+            }
+          });
+        } finally {
+          nowSpy.mockRestore();
+        }
       });
 
       it('prunes stale map incidents when replacement history never settles', async () => {
@@ -310,7 +399,6 @@ describe('useIncidentSubscription reconcile lifecycle', () => {
 
           rerender({ location: [-74.006, 40.7128] as [number, number] });
 
-          expect(result.current.hasReceivedHistory).toBe(true);
           expect(result.current.incidents.map((incident) => incident.incidentId)).toContain(
             'visible-before-stalled-pan'
           );

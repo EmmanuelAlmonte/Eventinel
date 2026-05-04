@@ -385,6 +385,9 @@ export function useIncidentSubscriptionReconciler({
         state.hasReceivedHistory &&
         !hasReceivedHistory() &&
         !includesSkippedHistoryRefreshKey;
+      const hasPendingDesiredCellsPrune = pendingDesiredCellsPruneRef.current !== null;
+      const shouldSkipImmediateMapPrune =
+        shouldDeferMapPrune || hasPendingDesiredCellsPrune;
 
       if (shouldDeferMapPrune) {
         pendingDesiredCellsPruneRef.current = new Set(desiredCells);
@@ -418,18 +421,16 @@ export function useIncidentSubscriptionReconciler({
                 }
           );
         }
-      } else {
+      } else if (!hasPendingDesiredCellsPrune) {
         pendingDesiredCellsPruneRef.current = null;
         clearPendingDesiredCellsPruneWatchdog();
       }
 
-      if (shouldDeferMapPrune) {
-        return;
-      }
-
-      const removedIncidentIds = pruneToDesiredGeohashes(new Set(desiredCells));
-      if (removedIncidentIds.length > 0) {
-        recomputeVisibleStateWithRemovals([], removedIncidentIds);
+      if (!shouldSkipImmediateMapPrune) {
+        const removedIncidentIds = pruneToDesiredGeohashes(new Set(desiredCells));
+        if (removedIncidentIds.length > 0) {
+          recomputeVisibleStateWithRemovals([], removedIncidentIds);
+        }
       }
     }
 
