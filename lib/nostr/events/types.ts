@@ -6,6 +6,8 @@
  */
 
 import type { NDKEvent } from '@nostr-dev-kit/mobile';
+import type { BlossomMediaMetadataInput } from '@lib/media/blossomMetadata';
+import type { BlossomMediaDescriptor } from '@lib/media/blossomRender';
 import { DATA_SOURCES } from '../config';
 import type { IncidentType, Severity, DataSource } from '../config';
 
@@ -187,6 +189,9 @@ export interface ParsedIncident {
 
   /** Additional metadata */
   metadata?: Record<string, unknown>;
+
+  /** Parsed Blossom media attached to this incident report event */
+  mediaAttachments?: readonly BlossomMediaDescriptor[];
 }
 
 // =============================================================================
@@ -232,6 +237,9 @@ export interface CreateIncidentInput {
 
   /** Additional metadata */
   metadata?: Record<string, unknown>;
+
+  /** Uploaded Blossom media metadata to publish on this incident report event */
+  mediaAttachments?: readonly BlossomMediaMetadataInput[];
 }
 
 // =============================================================================

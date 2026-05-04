@@ -18,6 +18,7 @@ import { IncidentDetailUpdatesSection } from './IncidentDetailUpdatesSection';
 type ThemeColors = {
   background: string;
   border: string;
+  error: string;
   primary: string;
   surface: string;
   success: string;
@@ -30,7 +31,6 @@ type IncidentDetailCommentsController = {
   commentText: string;
   setCommentText: (value: string) => void;
   isSubmitting: boolean;
-  isUploadingMedia: boolean;
   comments: IncidentComment[];
   isLoadingComments: boolean;
   commentsAreStale: boolean;
@@ -40,7 +40,6 @@ type IncidentDetailCommentsController = {
   setShowAllComments: (value: boolean) => void;
   deletingCommentId: string | null;
   handleCommentSubmit: () => Promise<void>;
-  handleAddMedia: () => Promise<void>;
   confirmDeleteComment: (comment: IncidentComment) => void;
 };
 
@@ -149,8 +148,6 @@ export function IncidentDetailScreenView({
         commentText={comments.commentText}
         setCommentText={comments.setCommentText}
         isSubmitting={comments.isSubmitting}
-        isUploadingMedia={comments.isUploadingMedia}
-        onAddMedia={() => void comments.handleAddMedia()}
         onSubmitComment={() => void comments.handleCommentSubmit()}
       />
     </KeyboardAvoidingView>

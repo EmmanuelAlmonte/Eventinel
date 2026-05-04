@@ -4,16 +4,21 @@ import { Icon, Text } from '@rneui/themed';
 import { formatRelativeTime } from '@lib/utils/time';
 import type { ProcessedIncident } from '@hooks/useIncidentSubscription';
 
+import { IncidentReportMediaSection } from './IncidentReportMediaSection';
+
 type TypeConfig = {
   color: string;
   label: string;
 };
 
 type ThemeColors = {
+  border: string;
+  primary: string;
   success: string;
   surface: string;
   text: string;
   textMuted: string;
+  warning: string;
 };
 
 type IncidentDetailInfoCardsProps = {
@@ -88,6 +93,8 @@ export function IncidentDetailInfoCards({
       <Text style={[styles.incidentTitle, { color: colors.text }]}>{incident.title}</Text>
 
       <Text style={[styles.description, { color: colors.textMuted }]}>{incident.description}</Text>
+
+      <IncidentReportMediaSection colors={colors} mediaAttachments={incident.mediaAttachments} />
 
       <Text style={[styles.metaLine, { color: colors.textMuted }]}>{metaLine}</Text>
 

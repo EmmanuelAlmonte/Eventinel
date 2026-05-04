@@ -9,9 +9,14 @@ import {
 import { Text } from '@rneui/themed';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import Constants from 'expo-constants';
 
-import { useAppTheme } from '@hooks';
 import { useReportDraft, useSharedLocation } from '@contexts';
+import { useAppTheme } from '@hooks';
+import { buildBlossomCapabilityState, buildBlossomConfig } from '@lib/media/blossomConfig';
+import { pickMediaFromLibrary } from '@lib/media/pickMedia';
+import { reportMediaAttachmentFromBlossomUpload } from '@contexts/ReportDraftContext';
+import { uploadToBlossom, type BlossomUploadError } from '@lib/media/blossomUpload';
 import { getReportRadiusState } from '@lib/utils/reportLocationRadius';
 import type { RootStackParamList } from '@lib/navigation';
 
@@ -29,6 +34,9 @@ export default function ReportIncidentScreen({ navigation, route }: ReportIncide
   const { draft, startDraft, updateDraft, setAdjustEntryMode, resetDraft } = useReportDraft();
   const [hasAttemptedContinue, setHasAttemptedContinue] = useState(false);
   const [descriptionTouched, setDescriptionTouched] = useState(false);
+  const [isUploadingMedia, setIsUploadingMedia] = useState(false);
+  const [mediaUploadProgress, setMediaUploadProgress] = useState<number | null>(null);
+  const [mediaUploadError, setMediaUploadError] = useState<string | null>(null);
   const currentDeviceLocation = useMemo(
     () =>
       sharedLocation
@@ -39,6 +47,13 @@ export default function ReportIncidentScreen({ navigation, route }: ReportIncide
         : null,
     [sharedLocation]
   );
+  const blossomCapability = useMemo(() => {
+    const config = buildBlossomConfig({
+      ...process.env,
+      ...(Constants?.expoConfig?.extra ?? {}),
+    });
+    return buildBlossomCapabilityState(config);
+  }, []);
 
   useEffect(() => {
     startDraft(route.params.sessionKey);
@@ -85,7 +100,8 @@ export default function ReportIncidentScreen({ navigation, route }: ReportIncide
     reportRadiusState.isWithinRadius &&
     Boolean(draft.incidentType) &&
     draft.stillActive !== null &&
-    isDescriptionValid;
+    isDescriptionValid &&
+    !isUploadingMedia;
   const shouldShowTypeError = hasAttemptedContinue && !draft.incidentType;
   const shouldShowStillActiveError = hasAttemptedContinue && draft.stillActive === null;
   const shouldShowDescriptionError =
@@ -111,6 +127,55 @@ export default function ReportIncidentScreen({ navigation, route }: ReportIncide
       origin: 'report_edit',
       sessionKey: route.params.sessionKey,
     });
+  }
+
+  async function handleAddMedia() {
+    if (isUploadingMedia) return;
+
+    setMediaUploadError(null);
+
+    if (blossomCapability.status === 'missing-upload-server') {
+      setMediaUploadError('No Blossom upload server is configured for report media.');
+      return;
+    }
+
+    try {
+      const pickedMedia = await pickMediaFromLibrary();
+      if (!pickedMedia) return;
+
+      setIsUploadingMedia(true);
+      setMediaUploadProgress(0);
+
+      const outcome = await uploadToBlossom({
+        media: pickedMedia,
+        capability: blossomCapability,
+        onProgress: (progress) => {
+          setMediaUploadProgress(progress.fraction);
+        },
+      });
+
+      if (!outcome.ok) {
+        setMediaUploadError(formatMediaUploadError(outcome.error));
+        return;
+      }
+
+      const attachment = reportMediaAttachmentFromBlossomUpload(outcome.result);
+      updateDraft({
+        mediaAttachments: [...draft.mediaAttachments, attachment],
+      });
+    } catch (error) {
+      setMediaUploadError(error instanceof Error ? error.message : 'Failed to add report media.');
+    } finally {
+      setIsUploadingMedia(false);
+      setMediaUploadProgress(null);
+    }
+  }
+
+  function handleRemoveMediaAttachment(attachmentId: string) {
+    updateDraft({
+      mediaAttachments: draft.mediaAttachments.filter((attachment) => attachment.id !== attachmentId),
+    });
+    setMediaUploadError(null);
   }
 
   return (
@@ -154,6 +219,10 @@ export default function ReportIncidentScreen({ navigation, route }: ReportIncide
             incidentType={draft.incidentType}
             stillActive={draft.stillActive}
             description={draft.description}
+            mediaAttachments={draft.mediaAttachments}
+            isUploadingMedia={isUploadingMedia}
+            mediaUploadProgress={mediaUploadProgress}
+            mediaUploadError={mediaUploadError}
             shouldShowTypeError={shouldShowTypeError}
             shouldShowStillActiveError={shouldShowStillActiveError}
             shouldShowDescriptionError={shouldShowDescriptionError}
@@ -161,6 +230,8 @@ export default function ReportIncidentScreen({ navigation, route }: ReportIncide
             onStillActiveChange={(value) => updateDraft({ stillActive: value })}
             onDescriptionChange={(value) => updateDraft({ description: value })}
             onDescriptionBlur={() => setDescriptionTouched(true)}
+            onAddMedia={handleAddMedia}
+            onRemoveMediaAttachment={handleRemoveMediaAttachment}
           />
         </ScrollView>
 
@@ -177,6 +248,28 @@ export default function ReportIncidentScreen({ navigation, route }: ReportIncide
       </View>
     </KeyboardAvoidingView>
   );
+}
+
+function formatMediaUploadError(error: BlossomUploadError): string {
+  switch (error.type) {
+    case 'validation':
+    case 'server-rejected':
+    case 'auth-missing':
+    case 'auth-failed':
+    case 'file-read-failed':
+    case 'hash-failed':
+    case 'invalid-response':
+    case 'retry-exhausted':
+      return error.message;
+    case 'cancelled':
+      return 'Media upload was cancelled.';
+    case 'network':
+      return `Network error while uploading media: ${error.message}`;
+    case 'timeout':
+      return 'Media upload timed out. Try again.';
+    default:
+      return 'Failed to upload report media.';
+  }
 }
 
 const styles = StyleSheet.create({

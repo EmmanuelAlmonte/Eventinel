@@ -5,6 +5,7 @@ import type { EdgeInsets } from 'react-native-safe-area-context';
 type ThemeColors = {
   background: string;
   border: string;
+  error: string;
   primary: string;
   surface: string;
   text: string;
@@ -18,8 +19,6 @@ type IncidentDetailActionBarProps = {
   commentText: string;
   setCommentText: (value: string) => void;
   isSubmitting: boolean;
-  isUploadingMedia: boolean;
-  onAddMedia: () => void;
   onSubmitComment: () => void;
 };
 
@@ -30,8 +29,6 @@ export function IncidentDetailActionBar({
   commentText,
   setCommentText,
   isSubmitting,
-  isUploadingMedia,
-  onAddMedia,
   onSubmitComment,
 }: IncidentDetailActionBarProps) {
   return (
@@ -47,18 +44,6 @@ export function IncidentDetailActionBar({
     >
       {isAuthenticated ? (
         <View style={styles.composerRow}>
-          <Pressable
-            onPress={onAddMedia}
-            disabled={isSubmitting || isUploadingMedia}
-            style={[styles.attachButton, { backgroundColor: colors.surface, borderColor: colors.border }]}
-            hitSlop={8}
-          >
-            {isUploadingMedia ? (
-              <ActivityIndicator size="small" color={colors.primary} />
-            ) : (
-              <Icon name="attach-file" type="material" size={20} color={colors.textMuted} />
-            )}
-          </Pressable>
           <TextInput
             style={[
               styles.composerInput,
@@ -73,7 +58,7 @@ export function IncidentDetailActionBar({
           />
           <Pressable
             onPress={onSubmitComment}
-            disabled={!commentText.trim() || isSubmitting || isUploadingMedia}
+            disabled={!commentText.trim() || isSubmitting}
             style={[
               styles.sendButton,
               { backgroundColor: commentText.trim() ? colors.primary : colors.surface },
@@ -124,14 +109,6 @@ const styles = StyleSheet.create({
   signInPromptText: {
     fontSize: 13,
     textAlign: 'center',
-  },
-  attachButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 12,
-    borderWidth: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
   },
   composerInput: {
     flex: 1,

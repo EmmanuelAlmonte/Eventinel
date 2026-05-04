@@ -18,6 +18,8 @@ class MockNDK {
   explicitRelayUrls: string[] = ['wss://localhost:8443'];
 }
 
+const MEDIA_HASH = 'a'.repeat(64);
+
 /**
  * Creates a mock NDKEvent for testing incident parsing
  */
@@ -232,6 +234,41 @@ describe('parseIncidentEvent', () => {
       const result = parseIncidentEvent(event);
 
       expect(result).not.toHaveProperty('rawEvent');
+    });
+
+    it('parses Blossom media metadata from incident report event tags', () => {
+      const event = createMockIncidentEvent();
+      event.tags.push(
+        [
+          'imeta',
+          `url https://cdn.example.com/${MEDIA_HASH}.jpg`,
+          `x ${MEDIA_HASH}`,
+          'm image/jpeg',
+          'size 12345',
+          'dim 640x480',
+        ],
+        ['r', `https://cdn.example.com/${MEDIA_HASH}.jpg`],
+        ['x', MEDIA_HASH],
+        ['m', 'image/jpeg'],
+        ['size', '12345'],
+        ['dim', '640x480']
+      );
+
+      const result = parseIncidentEvent(event);
+
+      expect(result?.mediaAttachments).toEqual([
+        expect.objectContaining({
+          url: `https://cdn.example.com/${MEDIA_HASH}.jpg`,
+          sha256: MEDIA_HASH,
+          mimeType: 'image/jpeg',
+          size: 12345,
+          width: 640,
+          height: 480,
+          source: 'imeta',
+          renderKind: 'image',
+          status: 'renderable',
+        }),
+      ]);
     });
   });
 

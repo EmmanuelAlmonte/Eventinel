@@ -20,8 +20,8 @@ import {
 import { ReportIncidentReviewEmptyState } from './reportIncident/ReportIncidentReviewEmptyState';
 import { ReportIncidentReviewFooter } from './reportIncident/ReportIncidentReviewFooter';
 import {
-  ReportReviewAttachmentNotice,
   ReportReviewLocationSection,
+  ReportReviewMediaSection,
   ReportReviewSummarySection,
 } from './reportIncident/ReportIncidentReviewSections';
 import { buildLocationPresentation, useResolvedReportLocation } from './reportIncident/locationPresentation';
@@ -148,6 +148,7 @@ export default function ReportIncidentReviewScreen({ navigation, route }: Report
         sourceTab: draft.sourceTab,
         locationNote: draft.locationNote,
         stillActive: draft.stillActive,
+        mediaAttachments: draft.mediaAttachments,
       });
 
       const nextRoute = {
@@ -229,7 +230,7 @@ export default function ReportIncidentReviewScreen({ navigation, route }: Report
           onEditDetails={handleEditDetails}
         />
 
-        <ReportReviewAttachmentNotice colors={colors} />
+        <ReportReviewMediaSection colors={colors} attachments={draft.mediaAttachments} />
       </ScrollView>
 
       <ReportIncidentReviewFooter

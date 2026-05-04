@@ -6,6 +6,8 @@ class MockNDK {
   explicitRelayUrls: string[] = ['wss://localhost:8443'];
 }
 
+const MEDIA_HASH = 'b'.repeat(64);
+
 describe('createIncidentEvent report metadata', () => {
   it('preserves stillActive report metadata in the event content', () => {
     const input = buildIncidentReportInput({
@@ -48,6 +50,42 @@ describe('createIncidentEvent report metadata', () => {
     const altTag = event.tags.find((tag) => tag[0] === 'alt')?.[1];
 
     expect(altTag).toBe('Incident report: Structure Fire near warehouse');
+  });
+
+  it('publishes report media metadata on the incident event tags', () => {
+    const input = buildIncidentReportInput({
+      incidentId: 'community-test-media',
+      mediaAttachments: [
+        {
+          url: `https://cdn.example.com/${MEDIA_HASH}.png`,
+          sha256: MEDIA_HASH,
+          type: 'image/png',
+          size: 2048,
+          width: 320,
+          height: 240,
+        },
+      ],
+    });
+
+    const event = createIncidentEvent(new MockNDK() as any, input);
+
+    expect(event.tags).toEqual(
+      expect.arrayContaining([
+        [
+          'imeta',
+          `url https://cdn.example.com/${MEDIA_HASH}.png`,
+          `x ${MEDIA_HASH}`,
+          'm image/png',
+          'size 2048',
+          'dim 320x240',
+        ],
+        ['r', `https://cdn.example.com/${MEDIA_HASH}.png`],
+        ['x', MEDIA_HASH],
+        ['m', 'image/png'],
+        ['size', '2048'],
+        ['dim', '320x240'],
+      ])
+    );
   });
 
   it('caps generated alt tags to the intake tag-value contract', () => {

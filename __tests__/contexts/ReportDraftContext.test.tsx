@@ -4,6 +4,26 @@ import { fireEvent, render } from '@testing-library/react-native';
 
 import { ReportDraftProvider, useReportDraft } from '../../contexts/ReportDraftContext';
 
+const firstAttachment = {
+  id: 'first-image',
+  url: 'https://cdn.example.com/first.jpg',
+  sha256: 'a'.repeat(64),
+  mimeType: 'image/jpeg',
+  size: 1234.9,
+  width: 640.9,
+  height: 480.2,
+  mediaKind: 'image' as const,
+};
+
+const secondAttachment = {
+  id: 'second-image',
+  url: 'https://cdn.example.com/second.png',
+  sha256: 'b'.repeat(64),
+  mimeType: 'image/png',
+  size: 987,
+  mediaKind: 'image' as const,
+};
+
 function ReportDraftProbe() {
   const { draft, sessionKey, startDraft, updateDraft, resetDraft } = useReportDraft();
 
@@ -14,6 +34,8 @@ function ReportDraftProbe() {
       <Text testID="draft-location-note">{draft.locationNote || 'empty'}</Text>
       <Text testID="draft-incident-type">{draft.incidentType ?? 'none'}</Text>
       <Text testID="draft-still-active">{draft.stillActive === null ? 'unset' : String(draft.stillActive)}</Text>
+      <Text testID="draft-media-count">{draft.mediaAttachments.length}</Text>
+      <Text testID="draft-media-url">{draft.mediaAttachments[0]?.url ?? 'none'}</Text>
       <Pressable
         testID="start-draft"
         onPress={() =>
@@ -24,6 +46,7 @@ function ReportDraftProbe() {
             locationNote: 'Warehouse entrance',
             location: { latitude: 40.0, longitude: -75.0 },
             stillActive: true,
+            mediaAttachments: [firstAttachment],
           })
         }
       />
@@ -33,6 +56,7 @@ function ReportDraftProbe() {
           updateDraft({
             description: 'Updated draft',
             locationNote: 'Rear alley',
+            mediaAttachments: [secondAttachment],
           })
         }
       />
@@ -72,6 +96,7 @@ describe('ReportDraftContext', () => {
 
     expect(screen.getByTestId('session-key').props.children).toBe('none');
     expect(screen.getByTestId('draft-description').props.children).toBe('empty');
+    expect(screen.getByTestId('draft-media-count').props.children).toBe(0);
 
     fireEvent.press(screen.getByTestId('start-draft'));
 
@@ -80,6 +105,8 @@ describe('ReportDraftContext', () => {
     expect(screen.getByTestId('draft-location-note').props.children).toBe('Warehouse entrance');
     expect(screen.getByTestId('draft-incident-type').props.children).toBe('fire');
     expect(screen.getByTestId('draft-still-active').props.children).toBe('true');
+    expect(screen.getByTestId('draft-media-count').props.children).toBe(1);
+    expect(screen.getByTestId('draft-media-url').props.children).toBe('https://cdn.example.com/first.jpg');
 
     fireEvent.press(screen.getByTestId('update-draft'));
     fireEvent.press(screen.getByTestId('set-still-active-false'));
@@ -87,6 +114,8 @@ describe('ReportDraftContext', () => {
     expect(screen.getByTestId('draft-description').props.children).toBe('Updated draft');
     expect(screen.getByTestId('draft-location-note').props.children).toBe('Rear alley');
     expect(screen.getByTestId('draft-still-active').props.children).toBe('false');
+    expect(screen.getByTestId('draft-media-count').props.children).toBe(1);
+    expect(screen.getByTestId('draft-media-url').props.children).toBe('https://cdn.example.com/second.png');
 
     fireEvent.press(screen.getByTestId('resume-same-session'));
 
@@ -94,6 +123,7 @@ describe('ReportDraftContext', () => {
     expect(screen.getByTestId('draft-description').props.children).toBe('Updated draft');
     expect(screen.getByTestId('draft-incident-type').props.children).toBe('fire');
     expect(screen.getByTestId('draft-still-active').props.children).toBe('false');
+    expect(screen.getByTestId('draft-media-url').props.children).toBe('https://cdn.example.com/second.png');
 
     fireEvent.press(screen.getByTestId('restart-draft'));
 
@@ -102,6 +132,8 @@ describe('ReportDraftContext', () => {
     expect(screen.getByTestId('draft-location-note').props.children).toBe('empty');
     expect(screen.getByTestId('draft-incident-type').props.children).toBe('medical');
     expect(screen.getByTestId('draft-still-active').props.children).toBe('true');
+    expect(screen.getByTestId('draft-media-count').props.children).toBe(0);
+    expect(screen.getByTestId('draft-media-url').props.children).toBe('none');
 
     fireEvent.press(screen.getByTestId('reset-draft'));
 
@@ -109,5 +141,6 @@ describe('ReportDraftContext', () => {
     expect(screen.getByTestId('draft-description').props.children).toBe('empty');
     expect(screen.getByTestId('draft-location-note').props.children).toBe('empty');
     expect(screen.getByTestId('draft-still-active').props.children).toBe('unset');
+    expect(screen.getByTestId('draft-media-count').props.children).toBe(0);
   });
 });

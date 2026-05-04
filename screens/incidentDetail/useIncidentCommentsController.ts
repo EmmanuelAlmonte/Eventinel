@@ -1,12 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Alert } from 'react-native';
-import Constants from 'expo-constants';
 
 import { showToast } from '@components/ui';
 import { useIncidentComments, type IncidentComment } from '@hooks';
 import type { ProcessedIncident } from '@hooks/useIncidentSubscription';
-import { pickMediaFromLibrary } from '@lib/media/pickMedia';
-import { uploadToNip96 } from '@lib/media/nip96';
 
 type CurrentUser = {
   pubkey: string;
@@ -23,25 +20,12 @@ function formatRelayList(relays: string[]): string {
   return `${cleaned.slice(0, 2).join(', ')} +${cleaned.length - 2} more`;
 }
 
-function resolveNip96Endpoint(): string {
-  const extra = (Constants?.expoConfig?.extra ?? {}) as Record<string, unknown>;
-  return (
-    process.env.EXPO_PUBLIC_EVENTINEL_NIP96_ENDPOINT ||
-    process.env.EVENTINEL_NIP96_ENDPOINT ||
-    (typeof extra.EVENTINEL_NIP96_ENDPOINT === 'string' ? extra.EVENTINEL_NIP96_ENDPOINT : '') ||
-    (typeof extra.EVENTINEL_NIP96_UPLOAD_URL === 'string' ? extra.EVENTINEL_NIP96_UPLOAD_URL : '') ||
-    process.env.EVENTINEL_NIP96_UPLOAD_URL ||
-    ''
-  );
-}
-
 export function useIncidentCommentsController(
   incident: ProcessedIncident | undefined,
   currentUser: CurrentUser
 ) {
   const [commentText, setCommentText] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [isUploadingMedia, setIsUploadingMedia] = useState(false);
   const [showAllComments, setShowAllComments] = useState(false);
   const [deletingCommentId, setDeletingCommentId] = useState<string | null>(null);
   const lastDeletionNoticeRef = useRef<string | null>(null);
@@ -58,10 +42,11 @@ export function useIncidentCommentsController(
   } = useIncidentComments(incident);
 
   const handleCommentSubmit = useCallback(async () => {
-    if (!commentText.trim() || isSubmitting || isUploadingMedia) return;
+    if (!commentText.trim() || isSubmitting) return;
     setIsSubmitting(true);
     try {
-      await postComment(commentText.trim());
+      const trimmed = commentText.trim();
+      await postComment(trimmed);
       setCommentText('');
     } catch (error) {
       console.warn('[Comments] Failed to publish comment:', error);
@@ -69,42 +54,7 @@ export function useIncidentCommentsController(
     } finally {
       setIsSubmitting(false);
     }
-  }, [commentText, isSubmitting, isUploadingMedia, postComment]);
-
-  const handleAddMedia = useCallback(async () => {
-    const endpoint = resolveNip96Endpoint();
-    if (!endpoint) {
-      showToast.error(
-        'Upload server not configured',
-        'Set EVENTINEL_NIP96_ENDPOINT in .env.local (dev) or .env (prod)'
-      );
-      return;
-    }
-    if (isUploadingMedia) return;
-
-    setIsUploadingMedia(true);
-    try {
-      const picked = await pickMediaFromLibrary();
-      if (!picked) return;
-
-      const fileName = picked.fileName || `eventinel-${Date.now()}`;
-      const mimeType = picked.mimeType || (picked.type === 'video' ? 'video/mp4' : 'image/jpeg');
-      const response = await uploadToNip96({
-        endpoint,
-        fileUri: picked.uri,
-        fileName,
-        mimeType,
-      });
-
-      setCommentText((previous) => (previous.trim() ? `${previous.trim()}\n${response.url}` : response.url));
-      showToast.success('Uploaded', 'Link added to your comment');
-    } catch (error) {
-      console.warn('[Media] Upload failed:', error);
-      showToast.error('Upload failed', error instanceof Error ? error.message : 'Please try again');
-    } finally {
-      setIsUploadingMedia(false);
-    }
-  }, [isUploadingMedia]);
+  }, [commentText, isSubmitting, postComment]);
 
   useEffect(() => {
     if (!hasMountedRef.current) {
@@ -155,7 +105,6 @@ export function useIncidentCommentsController(
     commentText,
     setCommentText,
     isSubmitting,
-    isUploadingMedia,
     comments,
     isLoadingComments,
     commentsAreStale,
@@ -165,7 +114,6 @@ export function useIncidentCommentsController(
     setShowAllComments,
     deletingCommentId,
     handleCommentSubmit,
-    handleAddMedia,
     confirmDeleteComment,
   };
 }

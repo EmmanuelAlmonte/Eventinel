@@ -27,6 +27,7 @@ As of `2026-02-16`, this page reflects the split implementation under
 - `IncidentDetailHeaderBar` for back/share and live indicator.
 - `IncidentDetailMiniMap` for location context.
 - `IncidentDetailInfoCards` for type/severity/location metadata cards.
+- `IncidentReportMediaSection` for report media parsed from incident event metadata.
 - `IncidentCommentsSection` for timeline, stale-state banner, and deletion notices.
 - `IncidentDetailActionBar` for authenticated composer or guest quick actions.
 - `IncidentDetailScreenView` composes all subcomponents into a single layout.
@@ -61,12 +62,18 @@ As of `2026-02-16`, this page reflects the split implementation under
 - Shows stale/relay delay retry messaging via explicit banner.
 - Shows recent deletion feedback when relay deletion requests succeed.
 
-### Media in comments
+### Comment media boundary
 
-- Supports media picker + NIP-96 upload.
-- Uploaded URL is appended to comment composer text.
-- Requires upload endpoint configuration.
-- Error path shows a toast when upload endpoint env vars are missing.
+- Incident comments are text-only.
+- Comment events are not used for Blossom upload, media metadata tags, server-list lookup, or media previews.
+- Blossom media support belongs to the Report Incident flow and incident event surfaces.
+
+### Report media
+
+- Report media is uploaded from the Report Incident flow before submission.
+- Submitted incident events may include Blossom metadata tags such as `imeta`, `r`, `x`, `m`, `size`, and `dim`.
+- Incident detail renders report image media from the incident event metadata.
+- Unsupported video appears as a blocked placeholder; playback is not enabled.
 
 ## Related architecture docs
 

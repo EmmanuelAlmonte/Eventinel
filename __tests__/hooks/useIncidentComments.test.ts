@@ -18,13 +18,13 @@
 import { renderHook, waitFor, act } from '@testing-library/react-native';
 
 // Mock lib/ndk before importing anything else
-const mockNdk = {
-  fetchEvents: jest.fn().mockResolvedValue(new Set()),
-};
-
 jest.mock('@lib/ndk', () => ({
-  ndk: mockNdk,
+  ndk: {
+    fetchEvents: jest.fn().mockResolvedValue(new Set()),
+  },
 }));
+
+const mockNdk = jest.requireMock('@lib/ndk').ndk as { fetchEvents: jest.Mock };
 
 // Mock NOSTR_KINDS
 jest.mock('@lib/nostr/config', () => ({
@@ -144,6 +144,20 @@ function setDeletionEvents(events: any[]) {
   events.forEach((e) => stableDeletionEvents.push(e));
 }
 
+function capturePublishedEvents() {
+  const events: Array<{ kind: number; content: string; tags: string[][] }> = [];
+  const spy = jest.spyOn(NDKEvent.prototype, 'publish').mockImplementation(function (this: any) {
+    events.push({
+      kind: this.kind,
+      content: this.content,
+      tags: this.tags,
+    });
+    return Promise.resolve(new Set() as any);
+  });
+
+  return { events, spy };
+}
+
 // =============================================================================
 // TEST SETUP
 // =============================================================================
@@ -153,6 +167,7 @@ describe('useIncidentComments', () => {
     stableCommentEvents.length = 0;
     stableDeletionEvents.length = 0;
     jest.clearAllMocks();
+    mockNdk.fetchEvents.mockResolvedValue(new Set());
   });
 
   // =============================================================================
@@ -349,6 +364,44 @@ describe('useIncidentComments', () => {
 
       expect(result.current.comments[0].content).toBe('Valid content');
     });
+
+    it('keeps media-looking comment tags as text-only comment data', async () => {
+      const incident = createMockIncident();
+      const mediaUrl = `https://cdn.example.com/${'a'.repeat(64)}.png`;
+
+      setCommentEvents([
+        createMockCommentEvent({
+          id: 'comment-with-media-looking-tags',
+          content: `See ${mediaUrl}`,
+          tags: [
+            ['e', 'incident_event_123', '', 'root'],
+            ['a', '30911:incident_author_pubkey:incident_123', '', 'root'],
+            ['p', 'incident_author_pubkey'],
+            [
+              'imeta',
+              `url ${mediaUrl}`,
+              `x ${'a'.repeat(64)}`,
+              'm image/png',
+              'size 1234',
+              'dim 640x480',
+            ],
+          ],
+        }),
+      ]);
+
+      const { result } = renderHook(() => useIncidentComments(incident));
+
+      await waitFor(() => {
+        expect(result.current.comments.length).toBe(1);
+      });
+
+      expect(result.current.comments[0].content).toBe(`See ${mediaUrl}`);
+      expect((result.current.comments[0] as any).media).toBeUndefined();
+      expect(mockNdk.fetchEvents).not.toHaveBeenCalledWith(
+        expect.objectContaining({ kinds: [10063] }),
+        expect.any(Object)
+      );
+    });
   });
 
   // =============================================================================
@@ -381,6 +434,71 @@ describe('useIncidentComments', () => {
       await act(async () => {
         await result.current.postComment('');
       });
+    });
+
+    it('publishes text-only comments with the existing incident tags', async () => {
+      const incident = createMockIncident();
+      const { events, spy } = capturePublishedEvents();
+      const { result } = renderHook(() => useIncidentComments(incident));
+
+      await act(async () => {
+        await result.current.postComment('  Text only comment  ');
+      });
+
+      expect(events).toHaveLength(1);
+      expect(events[0]).toMatchObject({
+        kind: 1,
+        content: 'Text only comment',
+      });
+      expect(events[0].tags).toEqual(
+        expect.arrayContaining([
+          ['a', '30911:incident_author_pubkey:incident_123'],
+          ['e', 'incident_event_123'],
+          ['p', 'incident_author_pubkey'],
+        ])
+      );
+      expect(events[0].tags.some((tag) => tag[0] === 'imeta')).toBe(false);
+      spy.mockRestore();
+    });
+
+    it('preserves the legacy replyTo argument when posting a reply', async () => {
+      const incident = createMockIncident();
+      const { events, spy } = capturePublishedEvents();
+      const { result } = renderHook(() => useIncidentComments(incident));
+
+      await act(async () => {
+        await result.current.postComment('Reply with context', {
+          id: 'reply-comment-id',
+          authorPubkey: 'reply-author-pubkey',
+          content: 'original',
+          createdAt: 1700000000,
+          createdAtMs: 1700000000000,
+          displayName: 'Reply Author',
+        });
+      });
+
+      expect(events[0].tags).toEqual(
+        expect.arrayContaining([
+          ['e', 'reply-comment-id'],
+          ['p', 'reply-author-pubkey'],
+        ])
+      );
+      spy.mockRestore();
+    });
+
+    it('publishes URL text without media metadata tags', async () => {
+      const incident = createMockIncident();
+      const { events, spy } = capturePublishedEvents();
+      const { result } = renderHook(() => useIncidentComments(incident));
+
+      await act(async () => {
+        await result.current.postComment('https://cdn.example.com/media.jpg');
+      });
+
+      expect(events).toHaveLength(1);
+      expect(events[0].content).toBe('https://cdn.example.com/media.jpg');
+      expect(events[0].tags.some((tag) => ['imeta', 'r', 'x', 'm', 'size', 'dim'].includes(tag[0]))).toBe(false);
+      spy.mockRestore();
     });
   });
 

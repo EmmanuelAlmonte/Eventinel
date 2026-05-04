@@ -1,6 +1,7 @@
 import geohash from 'ngeohash';
 
 import { INCIDENT_LIMITS } from '@lib/map/constants';
+import { buildBlossomMediaMetadataTags } from '@lib/media/blossomMetadata';
 
 import {
   TAGS,
@@ -75,6 +76,7 @@ export function buildIncidentTags(input: CreateIncidentInput): string[][] {
     [TAGS.HASHTAG, EVENTINEL_TAGS.APP],
     [TAGS.HASHTAG, EVENTINEL_TAGS.INCIDENT],
     [TAGS.HASHTAG, input.type],
+    ...buildBlossomMediaMetadataTags({ media: input.mediaAttachments ?? [] }),
   ];
 }
 

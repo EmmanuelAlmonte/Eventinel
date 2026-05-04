@@ -8,6 +8,7 @@
 import NDK, { NDKEvent } from '@nostr-dev-kit/mobile';
 import geohash from 'ngeohash';
 
+import { parseBlossomMediaFromEvent } from '@lib/media/blossomRender';
 import {
   NOSTR_KINDS,
   TAGS,
@@ -240,6 +241,7 @@ export function parseIncidentEvent(
 
   const isVerified = resolveVerification(event, verifiedPubkeys);
   logIncidentVerification(event, parsedTags.sourceTag, isVerified, verifiedPubkeys);
+  const mediaAttachments = parseBlossomMediaFromEvent({ tags: event.tags });
 
   return {
     eventId: event.id,
@@ -265,6 +267,7 @@ export function parseIncidentEvent(
     sourceId: content.sourceId,
     isVerified,
     metadata: content.metadata,
+    mediaAttachments,
   };
 }
 

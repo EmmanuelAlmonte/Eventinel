@@ -17,6 +17,11 @@ export type CommentDeletionNotice = {
   timestampMs: number;
 };
 
+export type PostComment = {
+  (content: string): Promise<void>;
+  (content: string, replyTo: IncidentComment): Promise<void>;
+};
+
 export type ProfileSummary = {
   displayName?: string;
   name?: string;
@@ -28,7 +33,7 @@ export type UseIncidentCommentsResult = {
   isLoading: boolean;
   isStale: boolean;
   retry: () => void;
-  postComment: (content: string, replyTo?: IncidentComment) => Promise<void>;
+  postComment: PostComment;
   deleteComment: (comment: IncidentComment) => Promise<void>;
   recentDeletions: CommentDeletionNotice[];
 };

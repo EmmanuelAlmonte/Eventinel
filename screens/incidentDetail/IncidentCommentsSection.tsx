@@ -170,7 +170,11 @@ export function IncidentCommentsSection({
                             ) : null}
                           </View>
                         </View>
-                        <Text style={[styles.commentText, { color: colors.text }]}>{comment.content}</Text>
+                        {comment.content ? (
+                          <Text style={[styles.commentText, { color: colors.text }]}>
+                            {comment.content}
+                          </Text>
+                        ) : null}
                       </View>
                     </View>
                   </Pressable>

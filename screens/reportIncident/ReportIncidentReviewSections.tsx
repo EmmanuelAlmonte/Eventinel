@@ -2,11 +2,17 @@ import { Pressable, StyleSheet, View } from 'react-native';
 import { Text } from '@rneui/themed';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 
+import type { ReportMediaAttachment } from '../../contexts/ReportDraftContext';
 import { REPORT_TYPE_LABELS, type ReportIncidentType } from '../../domain/report';
 import type { ReportRadiusState } from '../../lib/utils/reportLocationRadius';
 import type { ReportFormColors } from './reportFormTypes';
 import { ReportLocationPreview } from './ReportLocationPreview';
 import type { LocationPresentation } from './locationPresentation';
+import {
+  buildReportMediaAttachmentCountLabel,
+  buildReportMediaAttachmentMeta,
+  getReportMediaAttachmentTitle,
+} from './mediaAttachmentPresentation';
 
 type ReportReviewLocationSectionProps = {
   colors: ReportFormColors;
@@ -22,6 +28,11 @@ type ReportReviewSummarySectionProps = {
   stillActive: boolean;
   description: string;
   onEditDetails: () => void;
+};
+
+type ReportReviewMediaSectionProps = {
+  colors: ReportFormColors;
+  attachments: readonly ReportMediaAttachment[];
 };
 
 export function ReportReviewLocationSection({
@@ -102,13 +113,43 @@ export function ReportReviewSummarySection({
   );
 }
 
-export function ReportReviewAttachmentNotice({ colors }: { colors: ReportFormColors }) {
+export function ReportReviewMediaSection({ colors, attachments }: ReportReviewMediaSectionProps) {
+  if (attachments.length === 0) {
+    return (
+      <View style={[styles.infoRow, { backgroundColor: colors.background, borderColor: colors.border }]}>
+        <MaterialCommunityIcons name="paperclip" size={16} color={colors.textMuted} />
+        <Text style={[styles.infoText, { color: colors.textMuted }]}>No media attached to this report.</Text>
+      </View>
+    );
+  }
+
   return (
-    <View style={[styles.infoRow, { backgroundColor: colors.background, borderColor: colors.border }]}>
-      <MaterialCommunityIcons name="paperclip" size={16} color={colors.textMuted} />
-      <Text style={[styles.infoText, { color: colors.textMuted }]}>
-        Photos, links, and any extra follow-up context can be added in a later step.
-      </Text>
+    <View style={[styles.sectionCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+      <View style={styles.sectionHeaderRow}>
+        <Text style={[styles.sectionTitle, { color: colors.text }]}>Media</Text>
+        <Text style={[styles.attachmentCount, { color: colors.textMuted }]}>
+          {buildReportMediaAttachmentCountLabel(attachments)}
+        </Text>
+      </View>
+      <View style={styles.attachmentList}>
+        {attachments.map((attachment) => (
+          <View key={attachment.id} style={[styles.attachmentRow, { borderColor: colors.border }]}>
+            <MaterialCommunityIcons
+              name={attachment.mediaKind === 'video' ? 'video-outline' : 'image-outline'}
+              size={20}
+              color={colors.primary}
+            />
+            <View style={styles.attachmentText}>
+              <Text style={[styles.attachmentTitle, { color: colors.text }]}>
+                {getReportMediaAttachmentTitle(attachment)}
+              </Text>
+              <Text style={[styles.attachmentMeta, { color: colors.textMuted }]}>
+                {buildReportMediaAttachmentMeta(attachment)}
+              </Text>
+            </View>
+          </View>
+        ))}
+      </View>
     </View>
   );
 }
@@ -217,6 +258,34 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 10,
     lineHeight: 15,
+  },
+  attachmentCount: {
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  attachmentList: {
+    gap: 10,
+  },
+  attachmentRow: {
+    borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  attachmentText: {
+    flex: 1,
+  },
+  attachmentTitle: {
+    fontSize: 13,
+    lineHeight: 18,
+    fontWeight: '700',
+  },
+  attachmentMeta: {
+    fontSize: 11,
+    lineHeight: 16,
   },
   buttonPressed: {
     opacity: 0.92,

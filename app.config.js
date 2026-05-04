@@ -123,11 +123,15 @@ module.exports = {
       eas: {
         projectId: '095741fd-0726-4560-9b50-528a8e167252',
       },
-      // Media upload (NIP-96). This is safe to expose in app config (it's just a URL).
-      // Prefer the unprefixed var per repo docs, but allow EXPO_PUBLIC_ as a fallback.
-      EVENTINEL_NIP96_ENDPOINT:
-        process.env.EVENTINEL_NIP96_ENDPOINT ?? process.env.EXPO_PUBLIC_EVENTINEL_NIP96_ENDPOINT,
-      EVENTINEL_NIP96_UPLOAD_URL: process.env.EVENTINEL_NIP96_UPLOAD_URL,
+      // Blossom media configuration. Values are public client policy only; no secrets.
+      EVENTINEL_BLOSSOM_SERVERS:
+        process.env.EVENTINEL_BLOSSOM_SERVERS ?? process.env.EXPO_PUBLIC_EVENTINEL_BLOSSOM_SERVERS,
+      EVENTINEL_BLOSSOM_IMAGE_MIME_TYPES: process.env.EVENTINEL_BLOSSOM_IMAGE_MIME_TYPES,
+      EVENTINEL_BLOSSOM_VIDEO_ENABLED: process.env.EVENTINEL_BLOSSOM_VIDEO_ENABLED,
+      EVENTINEL_BLOSSOM_VIDEO_MIME_TYPES: process.env.EVENTINEL_BLOSSOM_VIDEO_MIME_TYPES,
+      EVENTINEL_BLOSSOM_MAX_BYTES: process.env.EVENTINEL_BLOSSOM_MAX_BYTES,
+      EVENTINEL_BLOSSOM_USE_MEDIA_ENDPOINT: process.env.EVENTINEL_BLOSSOM_USE_MEDIA_ENDPOINT,
+      EVENTINEL_BLOSSOM_MIRROR_ENABLED: process.env.EVENTINEL_BLOSSOM_MIRROR_ENABLED,
     },
   },
 };

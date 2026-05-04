@@ -96,6 +96,8 @@ const mockIncident: ParsedIncident = {
   occurredAt: new Date(Date.now() - 1800 * 1000),
 };
 
+const BLOSSOM_HASH = 'a'.repeat(64);
+
 const mockGetIncident = jest.fn((id: string) => (id === 'test-incident-id' ? mockIncident : undefined));
 
 jest.mock('@contexts', () => ({
@@ -238,6 +240,55 @@ describe('IncidentDetailScreen', () => {
     expect(getByText('30 minutes ago · New York, NY · Community')).toBeTruthy();
   });
 
+  it('renders report image media from the incident event metadata', () => {
+    const imageUrl = `https://cdn.example.com/${BLOSSOM_HASH}.jpg`;
+    mockGetIncident.mockReturnValue({
+      ...mockIncident,
+      mediaAttachments: [
+        {
+          id: `imeta:${BLOSSOM_HASH}:0`,
+          url: imageUrl,
+          sha256: BLOSSOM_HASH,
+          mimeType: 'image/jpeg',
+          source: 'imeta',
+          renderKind: 'image',
+          status: 'renderable',
+          fallbackUrls: [],
+        },
+      ],
+    });
+
+    const { getByText, getByTestId } = render(<IncidentDetailScreen />);
+
+    expect(getByText('Report media')).toBeTruthy();
+    expect(getByTestId('incident-report-media-image').props.source.uri).toBe(imageUrl);
+  });
+
+  it('renders blocked video report media as a safe placeholder', () => {
+    mockGetIncident.mockReturnValue({
+      ...mockIncident,
+      mediaAttachments: [
+        {
+          id: `imeta:${BLOSSOM_HASH}:0`,
+          url: `https://cdn.example.com/${BLOSSOM_HASH}.mp4`,
+          sha256: BLOSSOM_HASH,
+          mimeType: 'video/mp4',
+          source: 'imeta',
+          renderKind: 'video',
+          status: 'blocked',
+          reason: 'video-unsupported',
+          fallbackUrls: [],
+        },
+      ],
+    });
+
+    const { getByText, getByTestId } = render(<IncidentDetailScreen />);
+
+    expect(getByTestId('incident-report-media-placeholder')).toBeTruthy();
+    expect(getByText('Video attachment')).toBeTruthy();
+    expect(getByText('Video preview is not supported.')).toBeTruthy();
+  });
+
   it('shares the incident from the action bar', async () => {
     const shareSpy = jest.spyOn(Share, 'share').mockResolvedValue({ action: 'sharedAction' });
     mockCurrentUser = null;
@@ -282,5 +333,34 @@ describe('IncidentDetailScreen', () => {
     });
 
     expect(getByText('Incident not available')).toBeTruthy();
+  });
+
+  it('shows comment URLs as plain text and has no comment media preview surface', () => {
+    const imageUrl = `https://cdn.example.com/${BLOSSOM_HASH}.png`;
+
+    mockUseIncidentComments.mockReturnValue({
+      comments: [
+        {
+          id: 'comment-with-url',
+          authorPubkey: 'comment-author',
+          content: `See ${imageUrl}`,
+          createdAt: 1700000000,
+          createdAtMs: 1700000000000,
+          displayName: 'Comment Author',
+        },
+      ],
+      isLoading: false,
+      isStale: false,
+      retry: jest.fn(),
+      postComment: jest.fn().mockResolvedValue(undefined),
+      deleteComment: jest.fn().mockResolvedValue(undefined),
+      recentDeletions: [],
+    });
+
+    const { getByText, queryByTestId } = render(<IncidentDetailScreen />);
+
+    expect(getByText(`See ${imageUrl}`)).toBeTruthy();
+    expect(queryByTestId('comment-media-image')).toBeNull();
+    expect(queryByTestId('comment-media-placeholder')).toBeNull();
   });
 });

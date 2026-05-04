@@ -17,6 +17,7 @@ let mockDraft = buildReportDraft();
 let mockResolvedReportLocation = buildResolvedReportLocation();
 const mockResetDraft = jest.fn();
 const mockSetAdjustEntryMode = jest.fn();
+const MEDIA_HASH = 'c'.repeat(64);
 
 const mockUseRelayStatus = jest.fn<any, []>(() => buildRelayStatus());
 
@@ -156,6 +157,68 @@ describe('ReportIncidentReviewScreen', () => {
 
     expect(screen.getByText('Ready to publish to 1 connected relay.')).toBeTruthy();
     expect(screen.getByLabelText('Submit report').props.accessibilityState?.disabled).not.toBe(true);
+  });
+
+  it('summarizes report media attachments from the draft', () => {
+    mockDraft = buildReportDraft({
+      mediaAttachments: [
+        {
+          id: 'report-image',
+          url: 'https://cdn.example.com/report-image.jpg',
+          sha256: 'a'.repeat(64),
+          mimeType: 'image/jpeg',
+          size: 12345,
+          width: 640,
+          height: 480,
+          mediaKind: 'image',
+        },
+      ],
+    });
+
+    const screen = render(<ReportIncidentReviewScreen {...buildReportReviewScreenProps()} />);
+
+    expect(screen.getByText('Media')).toBeTruthy();
+    expect(screen.getByText('1 image attached')).toBeTruthy();
+    expect(screen.getByText('Image attachment')).toBeTruthy();
+    expect(screen.getByText('image/jpeg - 12 KB - 640x480')).toBeTruthy();
+  });
+
+  it('passes draft media attachments into incident report submission', async () => {
+    const publish = jest.fn().mockResolvedValue(undefined);
+    jest.mocked(createIncidentEvent).mockReturnValue({ publish } as any);
+    mockDraft = buildReportDraft({
+      mediaAttachments: [
+        {
+          id: 'report-image',
+          url: `https://cdn.example.com/${MEDIA_HASH}.jpg`,
+          sha256: MEDIA_HASH,
+          mimeType: 'image/jpeg',
+          size: 12345,
+          width: 640,
+          height: 480,
+          mediaKind: 'image',
+        },
+      ],
+    });
+    mockUseRelayStatus.mockReturnValue(
+      buildRelayStatus({
+        relays: [buildRelayInfo()],
+      })
+    );
+
+    const screen = render(<ReportIncidentReviewScreen {...buildReportReviewScreenProps()} />);
+    fireEvent.press(screen.getByLabelText('Submit report'));
+
+    await waitFor(() => {
+      expect(publish).toHaveBeenCalledTimes(1);
+    });
+
+    expect(createIncidentEvent).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        mediaAttachments: mockDraft.mediaAttachments,
+      })
+    );
   });
 
   it.each(['Map', 'Incidents'] as const)(

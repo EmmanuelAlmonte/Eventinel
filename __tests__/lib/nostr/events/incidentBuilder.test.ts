@@ -9,6 +9,8 @@ class MockNDK {
   explicitRelayUrls: string[] = ['wss://localhost:8443'];
 }
 
+const MEDIA_HASH = 'a'.repeat(64);
+
 describe('createIncidentEvent', () => {
   let mockNDK: any;
 
@@ -177,5 +179,48 @@ describe('createIncidentEvent', () => {
 
     expect(geohashTag).toBeDefined();
     expect(geohashTag?.length).toBe(6); // Current default precision
+  });
+
+  it('adds Blossom media metadata tags to incident report events', () => {
+    const input: CreateIncidentInput = {
+      type: 'fire',
+      severity: 4,
+      title: 'Test',
+      description: 'Test',
+      location: { lat: 39.95, lng: -75.16, address: 'Test' },
+      occurredAt: new Date(),
+      source: 'community',
+      sourceId: 'community-media-test',
+      mediaAttachments: [
+        {
+          url: `https://cdn.example.com/${MEDIA_HASH}.jpg`,
+          sha256: MEDIA_HASH,
+          mimeType: 'image/jpeg',
+          size: 12345,
+          width: 640,
+          height: 480,
+        },
+      ],
+    };
+
+    const event = createIncidentEvent(mockNDK, input);
+
+    expect(event.tags).toEqual(
+      expect.arrayContaining([
+        [
+          'imeta',
+          `url https://cdn.example.com/${MEDIA_HASH}.jpg`,
+          `x ${MEDIA_HASH}`,
+          'm image/jpeg',
+          'size 12345',
+          'dim 640x480',
+        ],
+        ['r', `https://cdn.example.com/${MEDIA_HASH}.jpg`],
+        ['x', MEDIA_HASH],
+        ['m', 'image/jpeg'],
+        ['size', '12345'],
+        ['dim', '640x480'],
+      ])
+    );
   });
 });

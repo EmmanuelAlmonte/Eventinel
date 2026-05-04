@@ -2,9 +2,14 @@ import { Pressable, StyleSheet, View } from 'react-native';
 import { Input, Text } from '@rneui/themed';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 
+import type { ReportMediaAttachment } from '../../contexts/ReportDraftContext';
 import type { ReportIncidentType } from '@lib/navigation';
 
 import type { ReportFormColors } from './reportFormTypes';
+import {
+  buildReportMediaAttachmentMeta,
+  getReportMediaAttachmentTitle,
+} from './mediaAttachmentPresentation';
 
 export const MIN_DESCRIPTION_LENGTH = 24;
 
@@ -39,6 +44,10 @@ type ReportIncidentDetailsSectionProps = {
   incidentType: ReportIncidentType | null;
   stillActive: boolean | null;
   description: string;
+  mediaAttachments: readonly ReportMediaAttachment[];
+  isUploadingMedia: boolean;
+  mediaUploadProgress: number | null;
+  mediaUploadError: string | null;
   shouldShowTypeError: boolean;
   shouldShowStillActiveError: boolean;
   shouldShowDescriptionError: boolean;
@@ -46,6 +55,8 @@ type ReportIncidentDetailsSectionProps = {
   onStillActiveChange: (value: boolean) => void;
   onDescriptionChange: (value: string) => void;
   onDescriptionBlur: () => void;
+  onAddMedia: () => void;
+  onRemoveMediaAttachment: (attachmentId: string) => void;
 };
 
 export function ReportIncidentDetailsSection({
@@ -53,6 +64,10 @@ export function ReportIncidentDetailsSection({
   incidentType,
   stillActive,
   description,
+  mediaAttachments,
+  isUploadingMedia,
+  mediaUploadProgress,
+  mediaUploadError,
   shouldShowTypeError,
   shouldShowStillActiveError,
   shouldShowDescriptionError,
@@ -60,59 +75,67 @@ export function ReportIncidentDetailsSection({
   onStillActiveChange,
   onDescriptionChange,
   onDescriptionBlur,
+  onAddMedia,
+  onRemoveMediaAttachment,
 }: ReportIncidentDetailsSectionProps) {
   return (
-    <>
-      <View style={[styles.detailsSection, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-        <View style={styles.sectionHeader}>
-          <Text style={[styles.stepLabel, { color: colors.textMuted }]}>Step 2</Text>
-          <Text style={[styles.sectionTitle, { color: colors.text }]}>What happened</Text>
-        </View>
-
-        <Text style={[styles.sectionHelper, { color: colors.textMuted }]}>
-          Choose the closest report type, then describe what happened, where on the block it is happening, and whether it is still active.
-        </Text>
-
-        <ReportTypePicker
-          colors={colors}
-          incidentType={incidentType}
-          onIncidentTypeChange={onIncidentTypeChange}
-        />
-
-        {shouldShowTypeError ? (
-          <Text style={[styles.validationText, { color: '#F97316' }]}>
-            Choose the report type before continuing.
-          </Text>
-        ) : null}
-
-        <ActiveStatusPicker
-          colors={colors}
-          stillActive={stillActive}
-          onStillActiveChange={onStillActiveChange}
-        />
-
-        {shouldShowStillActiveError ? (
-          <Text style={[styles.validationText, { color: '#F97316' }]}>
-            Choose whether the incident is still active before continuing.
-          </Text>
-        ) : null}
-
-        <ReportDescriptionInput
-          colors={colors}
-          description={description}
-          onDescriptionChange={onDescriptionChange}
-          onDescriptionBlur={onDescriptionBlur}
-        />
-
-        {shouldShowDescriptionError ? (
-          <Text style={[styles.validationText, { color: '#F97316' }]}>
-            Add at least {MIN_DESCRIPTION_LENGTH} characters so the report is specific enough to review.
-          </Text>
-        ) : null}
+    <View style={[styles.detailsSection, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+      <View style={styles.sectionHeader}>
+        <Text style={[styles.stepLabel, { color: colors.textMuted }]}>Step 2</Text>
+        <Text style={[styles.sectionTitle, { color: colors.text }]}>What happened</Text>
       </View>
 
-      <ReportOptionalContext colors={colors} />
-    </>
+      <Text style={[styles.sectionHelper, { color: colors.textMuted }]}>
+        Choose the closest report type, then describe what happened, where on the block it is happening, and whether it is still active.
+      </Text>
+
+      <ReportTypePicker
+        colors={colors}
+        incidentType={incidentType}
+        onIncidentTypeChange={onIncidentTypeChange}
+      />
+
+      {shouldShowTypeError ? (
+        <Text style={[styles.validationText, { color: '#F97316' }]}>
+          Choose the report type before continuing.
+        </Text>
+      ) : null}
+
+      <ActiveStatusPicker
+        colors={colors}
+        stillActive={stillActive}
+        onStillActiveChange={onStillActiveChange}
+      />
+
+      {shouldShowStillActiveError ? (
+        <Text style={[styles.validationText, { color: '#F97316' }]}>
+          Choose whether the incident is still active before continuing.
+        </Text>
+      ) : null}
+
+      <ReportDescriptionInput
+        colors={colors}
+        description={description}
+        onDescriptionChange={onDescriptionChange}
+        onDescriptionBlur={onDescriptionBlur}
+      />
+
+      {shouldShowDescriptionError ? (
+        <Text style={[styles.validationText, { color: '#F97316' }]}>
+          Add at least {MIN_DESCRIPTION_LENGTH} characters so the report is specific enough to review.
+        </Text>
+      ) : null}
+
+      <ReportMediaAttachmentsSection
+        colors={colors}
+        attachments={mediaAttachments}
+        isUploadingMedia={isUploadingMedia}
+        mediaUploadProgress={mediaUploadProgress}
+        mediaUploadError={mediaUploadError}
+        onAddMedia={onAddMedia}
+        onRemoveMediaAttachment={onRemoveMediaAttachment}
+      />
+    </View>
   );
 }
 
@@ -234,15 +257,97 @@ function ReportDescriptionInput({
   );
 }
 
-function ReportOptionalContext({ colors }: { colors: ReportFormColors }) {
+function ReportMediaAttachmentsSection({
+  colors,
+  attachments,
+  isUploadingMedia,
+  mediaUploadProgress,
+  mediaUploadError,
+  onAddMedia,
+  onRemoveMediaAttachment,
+}: {
+  colors: ReportFormColors;
+  attachments: readonly ReportMediaAttachment[];
+  isUploadingMedia: boolean;
+  mediaUploadProgress: number | null;
+  mediaUploadError: string | null;
+  onAddMedia: () => void;
+  onRemoveMediaAttachment: (attachmentId: string) => void;
+}) {
+  const percent = mediaUploadProgress === null ? 0 : Math.round(Math.max(0, Math.min(1, mediaUploadProgress)) * 100);
+
   return (
-    <View style={[styles.optionalRow, { backgroundColor: colors.background, borderColor: colors.border }]}>
-      <MaterialCommunityIcons name="paperclip" size={16} color={colors.textMuted} />
-      <View style={styles.optionalCopy}>
-        <Text style={[styles.optionalBody, { color: colors.textMuted }]}>
-          Photos, links, and extra context can be added after you review the core report.
-        </Text>
+    <View style={styles.mediaSection}>
+      <View style={styles.mediaHeaderRow}>
+        <Text style={[styles.fieldLabel, styles.mediaLabel, { color: colors.text }]}>Media</Text>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Add report media"
+          accessibilityState={{ disabled: isUploadingMedia }}
+          disabled={isUploadingMedia}
+          onPress={onAddMedia}
+          style={({ pressed }) => [
+            styles.addMediaButton,
+            { backgroundColor: colors.background, borderColor: colors.border },
+            pressed && styles.typeChipPressed,
+            isUploadingMedia && styles.disabledButton,
+          ]}
+        >
+          <MaterialCommunityIcons name="image-plus" size={16} color={colors.text} />
+          <Text style={[styles.addMediaText, { color: colors.text }]}>
+            {isUploadingMedia ? 'Uploading' : 'Add media'}
+          </Text>
+        </Pressable>
       </View>
+
+      {attachments.length === 0 ? (
+        <Text style={[styles.mediaEmptyText, { color: colors.textMuted }]}>No media attached yet.</Text>
+      ) : (
+        <View style={styles.mediaAttachmentList}>
+          {attachments.map((attachment) => (
+            <View key={attachment.id} style={[styles.mediaAttachmentRow, { borderColor: colors.border }]}>
+              <MaterialCommunityIcons
+                name={attachment.mediaKind === 'video' ? 'video-outline' : 'image-outline'}
+                size={20}
+                color={colors.primary}
+              />
+              <View style={styles.mediaAttachmentText}>
+                <Text style={[styles.mediaAttachmentTitle, { color: colors.text }]}>
+                  {getReportMediaAttachmentTitle(attachment)}
+                </Text>
+                <Text style={[styles.mediaAttachmentMeta, { color: colors.textMuted }]}>
+                  {buildReportMediaAttachmentMeta(attachment)}
+                </Text>
+              </View>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={`Remove ${getReportMediaAttachmentTitle(attachment).toLowerCase()}`}
+                onPress={() => onRemoveMediaAttachment(attachment.id)}
+                style={({ pressed }) => [styles.removeMediaButton, pressed && styles.typeChipPressed]}
+              >
+                <MaterialCommunityIcons name="close" size={18} color={colors.textMuted} />
+              </Pressable>
+            </View>
+          ))}
+        </View>
+      )}
+
+      {isUploadingMedia ? (
+        <View style={styles.uploadStatus}>
+          <View style={[styles.uploadTrack, { backgroundColor: colors.background }]}>
+            <View style={[styles.uploadFill, { width: `${percent}%`, backgroundColor: colors.primary }]} />
+          </View>
+          <Text style={[styles.uploadStatusText, { color: colors.textMuted }]}>
+            Uploading media {percent}%
+          </Text>
+        </View>
+      ) : null}
+
+      {mediaUploadError ? (
+        <Text style={[styles.validationText, styles.mediaErrorText, { color: '#F97316' }]}>
+          {mediaUploadError}
+        </Text>
+      ) : null}
     </View>
   );
 }
@@ -351,20 +456,88 @@ const styles = StyleSheet.create({
     lineHeight: 18,
     marginBottom: 12,
   },
-  optionalRow: {
-    borderRadius: 14,
-    borderWidth: StyleSheet.hairlineWidth,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
+  mediaSection: {
+    marginTop: 16,
+  },
+  mediaHeaderRow: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 10,
+    marginBottom: 10,
+  },
+  mediaLabel: {
+    marginBottom: 0,
+  },
+  addMediaButton: {
+    minHeight: 36,
+    paddingHorizontal: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  addMediaText: {
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  disabledButton: {
+    opacity: 0.65,
+  },
+  mediaEmptyText: {
+    fontSize: 12,
+    lineHeight: 18,
+  },
+  mediaAttachmentList: {
     gap: 10,
   },
-  optionalCopy: {
+  mediaAttachmentRow: {
+    borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  mediaAttachmentText: {
     flex: 1,
   },
-  optionalBody: {
-    fontSize: 10,
-    lineHeight: 15,
+  mediaAttachmentTitle: {
+    fontSize: 13,
+    lineHeight: 18,
+    fontWeight: '700',
+  },
+  mediaAttachmentMeta: {
+    fontSize: 11,
+    lineHeight: 16,
+  },
+  removeMediaButton: {
+    width: 34,
+    height: 34,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  uploadStatus: {
+    marginTop: 10,
+  },
+  uploadTrack: {
+    height: 6,
+    borderRadius: 999,
+    overflow: 'hidden',
+  },
+  uploadFill: {
+    height: 6,
+    borderRadius: 999,
+  },
+  uploadStatusText: {
+    fontSize: 11,
+    lineHeight: 16,
+    marginTop: 6,
+  },
+  mediaErrorText: {
+    marginTop: 10,
+    marginBottom: 0,
   },
 });

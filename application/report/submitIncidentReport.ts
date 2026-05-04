@@ -7,6 +7,7 @@ import {
   type ReportSourceTab,
 } from '../../domain/report';
 import { createIncidentEvent } from '../../lib/nostr/events/incident';
+import type { BlossomMediaMetadataInput } from '../../lib/media/blossomMetadata';
 
 export type SubmitIncidentReportInput = {
   ndk: NDK;
@@ -20,6 +21,7 @@ export type SubmitIncidentReportInput = {
   sourceTab?: ReportSourceTab;
   locationNote?: string;
   stillActive: boolean;
+  mediaAttachments?: readonly BlossomMediaMetadataInput[];
   occurredAt?: Date;
   sourceId?: string;
 };
@@ -33,6 +35,7 @@ export async function submitIncidentReport({
   sourceTab,
   locationNote,
   stillActive,
+  mediaAttachments = [],
   occurredAt = new Date(),
   sourceId = `community-${Date.now()}`,
 }: SubmitIncidentReportInput) {
@@ -49,6 +52,7 @@ export async function submitIncidentReport({
     occurredAt,
     source: 'community',
     sourceId,
+    mediaAttachments,
     metadata: {
       sourceTab,
       entrypoint: 'report-incident-flow',

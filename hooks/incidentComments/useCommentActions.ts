@@ -5,7 +5,7 @@ import { ndk } from '@lib/ndk';
 import { NOSTR_KINDS } from '@lib/nostr/config';
 import type { ParsedIncident } from '@lib/nostr/events/types';
 
-import type { IncidentComment } from './types';
+import type { IncidentComment, PostComment } from './types';
 
 type UseCommentActionsOptions = {
   incident?: ParsedIncident | null;
@@ -16,7 +16,7 @@ export function useCommentActions({
   incident,
   incidentAddress,
 }: UseCommentActionsOptions): {
-  postComment: (content: string, replyTo?: IncidentComment) => Promise<void>;
+  postComment: PostComment;
   deleteComment: (comment: IncidentComment) => Promise<void>;
 } {
   const postComment = useCallback(
@@ -45,7 +45,7 @@ export function useCommentActions({
       await event.publish();
     },
     [incident, incidentAddress]
-  );
+  ) as PostComment;
 
   const deleteComment = useCallback(async (comment: IncidentComment) => {
     if (!comment?.id) {
