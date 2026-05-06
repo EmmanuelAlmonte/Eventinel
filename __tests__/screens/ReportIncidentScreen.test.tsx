@@ -9,6 +9,7 @@ import ReportIncidentScreen from '../../screens/ReportIncidentScreen';
 import { buildReportDraft } from '../fixtures/report/buildReportDraft';
 import { buildReportLocation, buildResolvedReportLocation } from '../fixtures/report/buildReportLocation';
 import { pickMediaFromLibrary } from '../../lib/media/pickMedia';
+import { validatePickedMediaForUpload } from '../../lib/media/validatePickedMedia';
 import { uploadToBlossom } from '../../lib/media/blossomUpload';
 
 const mockConstants = {
@@ -33,6 +34,10 @@ jest.mock('expo-constants', () => ({
 
 jest.mock('../../lib/media/pickMedia', () => ({
   pickMediaFromLibrary: jest.fn(),
+}));
+
+jest.mock('../../lib/media/validatePickedMedia', () => ({
+  validatePickedMediaForUpload: jest.fn(),
 }));
 
 jest.mock('../../lib/media/blossomUpload', () => ({
@@ -185,6 +190,7 @@ describe('ReportIncidentScreen media upload', () => {
       mediaAttachments: [],
     });
     mockResolvedReportLocation = buildResolvedReportLocation();
+    jest.mocked(validatePickedMediaForUpload).mockResolvedValue({ ok: true });
   });
 
   it('uploads picked media through Blossom and stores the report attachment in draft state', async () => {
@@ -252,6 +258,34 @@ describe('ReportIncidentScreen media upload', () => {
         }),
       })
     );
+    expect(validatePickedMediaForUpload).toHaveBeenCalledWith(pickedMedia);
+  });
+
+  it('rejects corrupt picked images before Blossom upload', async () => {
+    const pickedMedia = {
+      uri: 'file:///picked/corrupt.png',
+      mimeType: 'image/png',
+      fileName: 'corrupt.png',
+      fileSize: 70,
+      type: 'image' as const,
+    };
+
+    jest.mocked(pickMediaFromLibrary).mockResolvedValue(pickedMedia);
+    jest.mocked(validatePickedMediaForUpload).mockResolvedValue({
+      ok: false,
+      error: {
+        type: 'invalid-image',
+        message: 'Selected image could not be opened. Choose a different image file.',
+      },
+    });
+
+    const screen = render(<ReportIncidentScreen {...buildReportIncidentScreenProps()} />);
+    fireEvent.press(screen.getByLabelText('Add report media'));
+
+    expect(await screen.findByText('Selected image could not be opened. Choose a different image file.')).toBeTruthy();
+    expect(validatePickedMediaForUpload).toHaveBeenCalledWith(pickedMedia);
+    expect(uploadToBlossom).not.toHaveBeenCalled();
+    expect(mockUpdateDraft).not.toHaveBeenCalled();
   });
 
   it('blocks media selection when no Blossom server is configured', async () => {

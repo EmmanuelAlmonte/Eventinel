@@ -24,6 +24,14 @@ function resolveEnvPath() {
 
 require('dotenv').config({ path: resolveEnvPath() });
 
+function parseBoolean(value, defaultValue = false) {
+  if (value === undefined || value === null || value === '') {
+    return defaultValue;
+  }
+
+  return ['1', 'true', 'yes', 'on'].includes(String(value).trim().toLowerCase());
+}
+
 // Debug: Verify token is loaded
 const mapboxToken = process.env.MAPBOX_ACCESS_TOKEN;
 if (!mapboxToken) {
@@ -31,6 +39,17 @@ if (!mapboxToken) {
 } else {
   console.log(`✅ Mapbox token loaded: ${mapboxToken.substring(0, 15)}...`);
 }
+
+const blossomServers =
+  process.env.EVENTINEL_BLOSSOM_SERVERS ?? process.env.EXPO_PUBLIC_EVENTINEL_BLOSSOM_SERVERS ?? '';
+const hasCleartextBlossomServer = blossomServers
+  .split(',')
+  .some((server) => server.trim().toLowerCase().startsWith('http://'));
+const usesCleartextTraffic = parseBoolean(
+  process.env.EVENTINEL_ANDROID_USES_CLEARTEXT_TRAFFIC,
+  hasCleartextBlossomServer
+);
+const googleServicesFile = path.join(__dirname, 'google-services.json');
 
 module.exports = {
   expo: {
@@ -87,6 +106,7 @@ module.exports = {
           android: {
             gradleVersion: '8.10',
             kotlinVersion: '2.0.21',
+            usesCleartextTraffic,
           },
         },
       ],
@@ -114,7 +134,7 @@ module.exports = {
         backgroundColor: '#ffffff',
       },
       package: 'com.eventinel.app',
-      googleServicesFile: './google-services.json',
+      ...(fs.existsSync(googleServicesFile) ? { googleServicesFile: './google-services.json' } : {}),
     },
     web: {
       favicon: './assets/favicon.png',
@@ -124,8 +144,7 @@ module.exports = {
         projectId: '095741fd-0726-4560-9b50-528a8e167252',
       },
       // Blossom media configuration. Values are public client policy only; no secrets.
-      EVENTINEL_BLOSSOM_SERVERS:
-        process.env.EVENTINEL_BLOSSOM_SERVERS ?? process.env.EXPO_PUBLIC_EVENTINEL_BLOSSOM_SERVERS,
+      EVENTINEL_BLOSSOM_SERVERS: blossomServers,
       EVENTINEL_BLOSSOM_IMAGE_MIME_TYPES: process.env.EVENTINEL_BLOSSOM_IMAGE_MIME_TYPES,
       EVENTINEL_BLOSSOM_VIDEO_ENABLED: process.env.EVENTINEL_BLOSSOM_VIDEO_ENABLED,
       EVENTINEL_BLOSSOM_VIDEO_MIME_TYPES: process.env.EVENTINEL_BLOSSOM_VIDEO_MIME_TYPES,

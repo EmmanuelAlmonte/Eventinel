@@ -15,6 +15,7 @@ import { useReportDraft, useSharedLocation } from '@contexts';
 import { useAppTheme } from '@hooks';
 import { buildBlossomCapabilityState, buildBlossomConfig } from '@lib/media/blossomConfig';
 import { pickMediaFromLibrary } from '@lib/media/pickMedia';
+import { validatePickedMediaForUpload } from '@lib/media/validatePickedMedia';
 import { reportMediaAttachmentFromBlossomUpload } from '@contexts/ReportDraftContext';
 import { uploadToBlossom, type BlossomUploadError } from '@lib/media/blossomUpload';
 import { getReportRadiusState } from '@lib/utils/reportLocationRadius';
@@ -142,6 +143,12 @@ export default function ReportIncidentScreen({ navigation, route }: ReportIncide
     try {
       const pickedMedia = await pickMediaFromLibrary();
       if (!pickedMedia) return;
+
+      const mediaValidation = await validatePickedMediaForUpload(pickedMedia);
+      if (!mediaValidation.ok) {
+        setMediaUploadError(mediaValidation.error.message);
+        return;
+      }
 
       setIsUploadingMedia(true);
       setMediaUploadProgress(0);

@@ -4,6 +4,7 @@ import {
   fetchAndVerifyBlossomMedia,
   isSha256Hex,
   parseBlossomMediaFromEvent,
+  resolveBlossomDisplayUrl,
   verifyBlossomBytesSha256,
   type BlossomFetchBytes,
 } from '@lib/media/blossomRender';
@@ -48,6 +49,21 @@ describe('blossomRender', () => {
     });
 
     expect(fallbackUrls).toEqual([`https://fallback.example.com/${HASH}.png`]);
+  });
+
+  it('maps local Blossom URLs to the Android emulator host loopback address for display', () => {
+    expect(resolveBlossomDisplayUrl(`http://localhost:3000/${HASH}.png`, { platform: 'android' })).toBe(
+      `http://10.0.2.2:3000/${HASH}.png`
+    );
+    expect(resolveBlossomDisplayUrl(`http://127.0.0.1:3000/${HASH}.png`, { platform: 'android' })).toBe(
+      `http://10.0.2.2:3000/${HASH}.png`
+    );
+    expect(resolveBlossomDisplayUrl(`http://0.0.0.0:3000/${HASH}.png`, { platform: 'android' })).toBe(
+      `http://10.0.2.2:3000/${HASH}.png`
+    );
+    expect(resolveBlossomDisplayUrl(`http://localhost:3000/${HASH}.png`, { platform: 'ios' })).toBe(
+      `http://localhost:3000/${HASH}.png`
+    );
   });
 
   it('parses imeta URL, hash, MIME, size, and dimensions into one image descriptor', () => {

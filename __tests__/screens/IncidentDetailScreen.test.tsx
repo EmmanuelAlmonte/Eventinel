@@ -262,6 +262,40 @@ describe('IncidentDetailScreen', () => {
 
     expect(getByText('Report media')).toBeTruthy();
     expect(getByTestId('incident-report-media-image').props.source.uri).toBe(imageUrl);
+    expect(getByTestId('incident-report-media-image').props.resizeMode).toBe('contain');
+  });
+
+  it('tries report image fallback URLs and then shows a visible placeholder if loading fails', () => {
+    mockGetIncident.mockReturnValue({
+      ...mockIncident,
+      mediaAttachments: [
+        {
+          id: `imeta:${BLOSSOM_HASH}:0`,
+          url: `https://cdn.example.com/${BLOSSOM_HASH}.jpg`,
+          sha256: BLOSSOM_HASH,
+          mimeType: 'image/jpeg',
+          source: 'imeta',
+          renderKind: 'image',
+          status: 'renderable',
+          fallbackUrls: [`https://fallback.example.com/${BLOSSOM_HASH}.jpg`],
+        },
+      ],
+    });
+
+    const { getByText, getByTestId } = render(<IncidentDetailScreen />);
+
+    act(() => {
+      fireEvent(getByTestId('incident-report-media-image'), 'error');
+    });
+    expect(getByTestId('incident-report-media-image').props.source.uri).toBe(
+      `https://fallback.example.com/${BLOSSOM_HASH}.jpg`
+    );
+
+    act(() => {
+      fireEvent(getByTestId('incident-report-media-image'), 'error');
+    });
+    expect(getByTestId('incident-report-media-placeholder')).toBeTruthy();
+    expect(getByText('Image could not be loaded from the Blossom server.')).toBeTruthy();
   });
 
   it('renders blocked video report media as a safe placeholder', () => {

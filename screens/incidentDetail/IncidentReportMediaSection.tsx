@@ -1,7 +1,11 @@
-import { Image, StyleSheet, View } from 'react-native';
+import { useEffect, useMemo, useState } from 'react';
+import { Image, Platform, StyleSheet, View } from 'react-native';
 import { Text } from '@rneui/themed';
 
-import type { BlossomMediaDescriptor } from '@lib/media/blossomRender';
+import {
+  resolveBlossomDisplayUrl,
+  type BlossomMediaDescriptor,
+} from '@lib/media/blossomRender';
 
 type ThemeColors = {
   border: string;
@@ -29,35 +33,9 @@ export function IncidentReportMediaSection({
       <View style={styles.mediaList}>
         {mediaAttachments.map((media) =>
           media.status === 'renderable' && media.renderKind === 'image' ? (
-            <Image
-              key={media.id}
-              testID="incident-report-media-image"
-              source={{ uri: media.url }}
-              style={[styles.mediaImage, { backgroundColor: colors.surface, borderColor: colors.border }]}
-              resizeMode="cover"
-              accessibilityLabel="Report media image"
-            />
+            <ReportMediaImage key={media.id} colors={colors} media={media} />
           ) : (
-            <View
-              key={media.id}
-              testID="incident-report-media-placeholder"
-              style={[styles.mediaPlaceholder, { backgroundColor: colors.surface, borderColor: colors.border }]}
-            >
-              <View
-                style={[
-                  styles.placeholderGlyph,
-                  { backgroundColor: media.renderKind === 'video' ? colors.warning : colors.textMuted },
-                ]}
-              />
-              <View style={styles.placeholderCopy}>
-                <Text style={[styles.placeholderTitle, { color: colors.text }]}>
-                  {media.renderKind === 'video' ? 'Video attachment' : 'Media unavailable'}
-                </Text>
-                <Text style={[styles.placeholderText, { color: colors.textMuted }]}>
-                  {buildPlaceholderText(media)}
-                </Text>
-              </View>
-            </View>
+            <ReportMediaPlaceholder key={media.id} colors={colors} media={media} />
           )
         )}
       </View>
@@ -65,7 +43,87 @@ export function IncidentReportMediaSection({
   );
 }
 
-function buildPlaceholderText(media: BlossomMediaDescriptor): string {
+type ReportMediaImageProps = {
+  colors: ThemeColors;
+  media: BlossomMediaDescriptor;
+};
+
+function ReportMediaImage({ colors, media }: ReportMediaImageProps) {
+  const candidateUrls = useMemo(() => buildDisplayCandidateUrls(media), [media]);
+  const [candidateIndex, setCandidateIndex] = useState(0);
+
+  useEffect(() => {
+    setCandidateIndex(0);
+  }, [candidateUrls]);
+
+  const uri = candidateUrls[candidateIndex];
+  if (!uri) {
+    return <ReportMediaPlaceholder colors={colors} media={media} loadFailed />;
+  }
+
+  return (
+    <Image
+      testID="incident-report-media-image"
+      source={{ uri }}
+      style={[styles.mediaImage, { backgroundColor: colors.surface, borderColor: colors.border }]}
+      resizeMode="contain"
+      accessibilityLabel="Report media image"
+      onError={() => {
+        setCandidateIndex((current) => current + 1);
+      }}
+    />
+  );
+}
+
+type ReportMediaPlaceholderProps = {
+  colors: ThemeColors;
+  media: BlossomMediaDescriptor;
+  loadFailed?: boolean;
+};
+
+function ReportMediaPlaceholder({ colors, media, loadFailed = false }: ReportMediaPlaceholderProps) {
+  return (
+    <View
+      testID="incident-report-media-placeholder"
+      style={[styles.mediaPlaceholder, { backgroundColor: colors.surface, borderColor: colors.border }]}
+    >
+      <View
+        style={[
+          styles.placeholderGlyph,
+          { backgroundColor: media.renderKind === 'video' ? colors.warning : colors.textMuted },
+        ]}
+      />
+      <View style={styles.placeholderCopy}>
+        <Text style={[styles.placeholderTitle, { color: colors.text }]}>
+          {media.renderKind === 'video' ? 'Video attachment' : 'Media unavailable'}
+        </Text>
+        <Text style={[styles.placeholderText, { color: colors.textMuted }]}>
+          {buildPlaceholderText(media, loadFailed)}
+        </Text>
+      </View>
+    </View>
+  );
+}
+
+function buildDisplayCandidateUrls(media: BlossomMediaDescriptor): string[] {
+  const seen = new Set<string>();
+  const urls: string[] = [];
+
+  for (const url of [media.url, ...media.fallbackUrls]) {
+    const displayUrl = resolveBlossomDisplayUrl(url, { platform: Platform.OS });
+    if (!displayUrl || seen.has(displayUrl)) continue;
+    seen.add(displayUrl);
+    urls.push(displayUrl);
+  }
+
+  return urls;
+}
+
+function buildPlaceholderText(media: BlossomMediaDescriptor, loadFailed = false): string {
+  if (loadFailed) {
+    return 'Image could not be loaded from the Blossom server.';
+  }
+
   if (media.renderKind === 'video') {
     return 'Video preview is not supported.';
   }

@@ -96,6 +96,11 @@ export type FetchAndVerifyBlossomMediaResult =
       message: string;
     };
 
+export type ResolveBlossomDisplayUrlOptions = {
+  platform?: string;
+  androidLoopbackHost?: string;
+};
+
 type RawBlossomMediaCandidate = {
   url: string;
   sha256?: string | null;
@@ -188,6 +193,25 @@ export function parseBlossomMediaFromEvent(params: ParseBlossomMediaFromEventPar
   });
 
   return Array.from(descriptors.values());
+}
+
+export function resolveBlossomDisplayUrl(
+  url: string,
+  options: ResolveBlossomDisplayUrlOptions = {}
+): string {
+  const normalized = normalizeHttpUrl(url);
+  if (!normalized) return url;
+
+  if (options.platform !== 'android') return normalized;
+
+  const parsed = parseHttpUrl(normalized);
+  if (!parsed) return normalized;
+
+  if (isLoopbackHost(parsed.hostname)) {
+    parsed.hostname = options.androidLoopbackHost ?? '10.0.2.2';
+  }
+
+  return parsed.href;
 }
 
 export async function verifyBlossomBytesSha256(
@@ -510,6 +534,16 @@ function normalizeHttpUrl(url: string): string | null {
   if (!parsed) return null;
   parsed.hash = '';
   return parsed.href;
+}
+
+function isLoopbackHost(hostname: string): boolean {
+  const normalized = hostname.trim().replace(/^\[|\]$/g, '').toLowerCase();
+  return (
+    normalized === 'localhost' ||
+    normalized === '::1' ||
+    normalized === '0.0.0.0' ||
+    normalized.startsWith('127.')
+  );
 }
 
 function parseHttpUrl(url: string): URL | null {
