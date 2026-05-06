@@ -32,6 +32,62 @@ function parseBoolean(value, defaultValue = false) {
   return ['1', 'true', 'yes', 'on'].includes(String(value).trim().toLowerCase());
 }
 
+function splitListValue(value) {
+  if (Array.isArray(value)) {
+    return value.flatMap((item) => splitListValue(item));
+  }
+
+  if (typeof value !== 'string') return [];
+
+  const trimmed = value.trim();
+  if (!trimmed) return [];
+
+  if (trimmed.startsWith('[')) {
+    try {
+      const parsed = JSON.parse(trimmed);
+      if (Array.isArray(parsed)) {
+        return parsed.flatMap((item) => splitListValue(item));
+      }
+    } catch {
+      // Fall back to delimiter parsing below.
+    }
+  }
+
+  return trimmed
+    .split(/[\n,]+/)
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
+function normalizeBlossomServerUrl(value) {
+  if (typeof value !== 'string') return null;
+
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+
+  try {
+    const parsed = new URL(trimmed);
+    if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') return null;
+    return parsed.origin;
+  } catch {
+    return null;
+  }
+}
+
+function normalizeBlossomServerUrls(value) {
+  const seen = new Set();
+  const urls = [];
+
+  for (const item of splitListValue(value)) {
+    const normalized = normalizeBlossomServerUrl(item);
+    if (!normalized || seen.has(normalized)) continue;
+    seen.add(normalized);
+    urls.push(normalized);
+  }
+
+  return urls;
+}
+
 // Debug: Verify token is loaded
 const mapboxToken = process.env.MAPBOX_ACCESS_TOKEN;
 if (!mapboxToken) {
@@ -42,9 +98,9 @@ if (!mapboxToken) {
 
 const blossomServers =
   process.env.EVENTINEL_BLOSSOM_SERVERS ?? process.env.EXPO_PUBLIC_EVENTINEL_BLOSSOM_SERVERS ?? '';
-const hasCleartextBlossomServer = blossomServers
-  .split(',')
-  .some((server) => server.trim().toLowerCase().startsWith('http://'));
+const hasCleartextBlossomServer = normalizeBlossomServerUrls(blossomServers).some((server) =>
+  server.toLowerCase().startsWith('http://')
+);
 const usesCleartextTraffic = parseBoolean(
   process.env.EVENTINEL_ANDROID_USES_CLEARTEXT_TRAFFIC,
   hasCleartextBlossomServer
