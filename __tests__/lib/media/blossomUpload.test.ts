@@ -91,7 +91,7 @@ function baseParams(overrides: Partial<BlossomUploadParams> = {}): BlossomUpload
 }
 
 describe('blossomUpload', () => {
-  it('constructs PUT /upload with content headers, SHA-256, and BUD-11 auth tags', async () => {
+  it('constructs PUT /upload with safe content headers, SHA-256, and BUD-11 auth tags', async () => {
     const captured: { request?: BlossomUploadTransportRequest } = {};
     const transport = successTransport((request) => {
       captured.request = request;
@@ -104,7 +104,7 @@ describe('blossomUpload', () => {
     expect(captured.request?.method).toBe('PUT');
     expect(captured.request?.url).toBe('https://cdn.example.com/upload');
     expect(captured.request?.headers['Content-Type']).toBe('image/jpeg');
-    expect(captured.request?.headers['Content-Length']).toBe(String(BYTES.byteLength));
+    expect(captured.request?.headers).not.toHaveProperty('Content-Length');
     expect(captured.request?.headers['X-SHA-256']).toBe(HASH);
 
     const authorization = captured.request?.headers.Authorization ?? '';

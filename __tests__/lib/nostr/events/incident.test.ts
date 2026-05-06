@@ -270,6 +270,26 @@ describe('parseIncidentEvent', () => {
         }),
       ]);
     });
+
+    it('adds author Blossom server fallbacks to parsed incident media', () => {
+      const event = createMockIncidentEvent();
+      event.tags.push([
+        'imeta',
+        `url https://cdn.example.com/${MEDIA_HASH}.jpg`,
+        `x ${MEDIA_HASH}`,
+        'm image/jpeg',
+      ]);
+
+      const result = parseIncidentEvent(event, {
+        authorBlossomServerUrls: ['https://fallback.example.com/path', 'https://cdn.example.com'],
+      });
+
+      expect(result?.mediaAttachments?.[0]).toMatchObject({
+        url: `https://cdn.example.com/${MEDIA_HASH}.jpg`,
+        sha256: MEDIA_HASH,
+        fallbackUrls: [`https://fallback.example.com/${MEDIA_HASH}.jpg`],
+      });
+    });
   });
 
   describe('incident type parsing', () => {

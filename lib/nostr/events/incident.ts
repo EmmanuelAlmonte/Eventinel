@@ -58,6 +58,11 @@ type ParsedIncidentTags = {
   addressTag?: string;
 };
 
+type ParseIncidentEventOptions = {
+  verifiedPubkeys?: Set<string>;
+  authorBlossomServerUrls?: readonly string[];
+};
+
 function extractParsedIncidentTags(tags: string[][]): ParsedIncidentTags | null {
   const incidentId = getTagValue(tags, TAGS.IDENTIFIER);
   const typeTag = getTagValue(tags, TAGS.TYPE);
@@ -220,7 +225,7 @@ export function createIncidentEvent(
  */
 export function parseIncidentEvent(
   event: NDKEvent,
-  verifiedPubkeys?: Set<string>
+  verifiedPubkeysOrOptions?: Set<string> | ParseIncidentEventOptions
 ): ParsedIncident | null {
   if (event.kind !== NOSTR_KINDS.INCIDENT) return null;
 
@@ -239,9 +244,16 @@ export function parseIncidentEvent(
   const geo = parseContentLocation(content.lat, content.lng);
   if (!geo) return null;
 
-  const isVerified = resolveVerification(event, verifiedPubkeys);
-  logIncidentVerification(event, parsedTags.sourceTag, isVerified, verifiedPubkeys);
-  const mediaAttachments = parseBlossomMediaFromEvent({ tags: event.tags });
+  const parseOptions =
+    verifiedPubkeysOrOptions instanceof Set
+      ? { verifiedPubkeys: verifiedPubkeysOrOptions }
+      : (verifiedPubkeysOrOptions ?? {});
+  const isVerified = resolveVerification(event, parseOptions.verifiedPubkeys);
+  logIncidentVerification(event, parsedTags.sourceTag, isVerified, parseOptions.verifiedPubkeys);
+  const mediaAttachments = parseBlossomMediaFromEvent({
+    tags: event.tags,
+    authorBlossomServerUrls: parseOptions.authorBlossomServerUrls,
+  });
 
   return {
     eventId: event.id,

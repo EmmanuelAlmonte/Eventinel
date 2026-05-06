@@ -415,7 +415,6 @@ export async function uploadToBlossom(params: BlossomUploadParams): Promise<Blos
     headers: {
       Authorization: authHeader,
       'Content-Type': allowance.mimeType,
-      'Content-Length': String(bytes.byteLength),
       'X-SHA-256': sha256,
     },
     body: bytes,
