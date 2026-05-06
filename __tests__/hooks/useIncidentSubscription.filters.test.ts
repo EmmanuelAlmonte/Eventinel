@@ -18,6 +18,27 @@ import {
   waitFor,
 } from './incidentSubscription/useIncidentSubscriptionTestHarness';
 import type { UseIncidentSubscriptionOptions } from '../../hooks/useIncidentSubscription';
+import { MAP_SUBSCRIPTION } from '../../lib/map/constants';
+import type { MapSubscriptionViewport } from '../../lib/map/subscriptionPlanner';
+
+function createSubscriptionViewport(zoom: number): MapSubscriptionViewport {
+  return {
+    center: [-75.1652, 39.9526],
+    bounds: {
+      ne: [-75.1552, 39.9626],
+      sw: [-75.1752, 39.9426],
+    },
+    zoom,
+  };
+}
+
+type IncidentSubscriptionFilter = {
+  kinds: number[];
+  '#g'?: string[];
+  limit: number;
+  since?: number;
+  until?: number;
+};
 
 describe('useIncidentSubscription filters and options', () => {
   beforeEach(() => {
@@ -66,7 +87,7 @@ describe('useIncidentSubscription filters and options', () => {
         expect(getSubscribeCalls().length).toBe(0);
       });
 
-      it('adds the default freshness window to live subscription filters', () => {
+      it('adds the newest recency window to live subscription filters', () => {
         const fixedNowMs = 1_735_689_600_000;
         const nowSpy = jest.spyOn(Date, 'now').mockReturnValue(fixedNowMs);
 
@@ -79,14 +100,166 @@ describe('useIncidentSubscription filters and options', () => {
 
           const filters = getSubscribeCalls()[0][0];
           expect(filters[0].since).toBe(
-            Math.floor(fixedNowMs / 1000) - INCIDENT_LIMITS.SINCE_DAYS * 86400
+            Math.floor(fixedNowMs / 1000) - 86400
           );
+          expect(filters[0].until).toBeUndefined();
         } finally {
           nowSpy.mockRestore();
         }
       });
 
-      it('uses a custom sinceDays override when provided', () => {
+      it('groups desired geohash cells into fewer live relay subscriptions', () => {
+        renderHook(() =>
+          useIncidentSubscription({
+            location: [-75.1652, 39.9526],
+          })
+        );
+
+        const calls = getSubscribeCalls();
+        expect(calls.length).toBeGreaterThan(1);
+        for (const [filters] of calls) {
+          expect(filters[0]['#g'].length).toBeLessThanOrEqual(
+            MAP_SUBSCRIPTION.MAX_CELLS_PER_GROUPED_SUBSCRIPTION
+          );
+          expect(filters[0].limit).toBeGreaterThanOrEqual(INCIDENT_LIMITS.FETCH_LIMIT);
+          expect(filters[0].limit).toBeLessThanOrEqual(
+            INCIDENT_LIMITS.GROUPED_FETCH_LIMIT_MAX
+          );
+        }
+
+        const requestedCellCount = new Set(
+          calls.flatMap(([filters]) => filters[0]['#g'])
+        ).size;
+        expect(calls.length).toBeLessThan(requestedCellCount);
+      });
+
+      it('restarts live subscriptions when a focused viewport changes with the same geohash groups', async () => {
+        const fixedNowMs = 1_735_689_600_000;
+        const nowSpy = jest.spyOn(Date, 'now').mockReturnValue(fixedNowMs);
+
+        try {
+          const { rerender } = renderHook(
+            ({ viewport }) =>
+              useIncidentSubscription({
+                location: [-75.1652, 39.9526],
+                subscriptionViewport: viewport,
+              }),
+            {
+              initialProps: {
+                viewport: createSubscriptionViewport(14),
+              },
+            }
+          );
+
+          const initialLiveCalls = getSubscribeCalls().filter(
+            ([, options]) => options.closeOnEose === false
+          );
+          expect(initialLiveCalls.length).toBeGreaterThan(0);
+
+          const initialCallCount = getSubscribeCalls().length;
+
+          rerender({
+            viewport: createSubscriptionViewport(14.3),
+          });
+
+          await waitFor(() => {
+            const restartedLiveCalls = getSubscribeCalls()
+              .slice(initialCallCount)
+              .filter(([, options]) => options.closeOnEose === false);
+            expect(restartedLiveCalls).toHaveLength(initialLiveCalls.length);
+          });
+        } finally {
+          nowSpy.mockRestore();
+        }
+      });
+
+      it('scales grouped fetch limits within a bounded cap', () => {
+        renderHook(() =>
+          useIncidentSubscription({
+            location: [-75.1652, 39.9526],
+          })
+        );
+
+        const groupedCall = getSubscribeCalls().find(
+          ([filters]) => filters[0]['#g'].length > 1
+        );
+
+        expect(groupedCall).toBeDefined();
+        if (!groupedCall) {
+          throw new Error('Expected a grouped incident subscription call');
+        }
+        const filter = groupedCall[0][0];
+        expect(filter.limit).toBe(
+          Math.min(
+            INCIDENT_LIMITS.FETCH_LIMIT * filter['#g'].length,
+            INCIDENT_LIMITS.GROUPED_FETCH_LIMIT_MAX
+          )
+        );
+      });
+
+      it('adds bounded per-cell catch-up filters without adding subscribe calls', () => {
+        const fixedNowMs = 1_735_689_600_000;
+        const nowSpy = jest.spyOn(Date, 'now').mockReturnValue(fixedNowMs);
+
+        try {
+          renderHook(() =>
+            useIncidentSubscription({
+              location: [-75.1652, 39.9526],
+            })
+          );
+
+          const liveCalls = getSubscribeCalls().filter(
+            ([, options]) => options.closeOnEose === false
+          );
+          const groupedCalls = liveCalls.filter(
+            ([filters]) => filters[0]['#g'].length > 1
+          );
+
+          expect(groupedCalls.length).toBeGreaterThan(0);
+
+          const requestedCellCount = new Set(
+            liveCalls.flatMap(([filters]) => filters[0]['#g'])
+          ).size;
+          expect(liveCalls.length).toBeLessThan(requestedCellCount);
+
+          for (const [filters] of groupedCalls) {
+            const [groupedFilter, ...cellFilters] =
+              filters as IncidentSubscriptionFilter[];
+            const groupedCells = groupedFilter['#g'] ?? [];
+
+            expect(cellFilters).toHaveLength(groupedCells.length);
+            expect(groupedFilter.limit).toBe(
+              Math.min(
+                INCIDENT_LIMITS.FETCH_LIMIT * groupedCells.length,
+                INCIDENT_LIMITS.GROUPED_FETCH_LIMIT_MAX
+              )
+            );
+
+            const cellFilterCells = cellFilters
+              .map((filter) => filter['#g']?.[0])
+              .filter((cell): cell is string => cell != null);
+            expect(cellFilterCells).toHaveLength(groupedCells.length);
+            expect(cellFilterCells.sort()).toEqual([...groupedCells].sort());
+
+            for (const filter of cellFilters) {
+              expect(filter.kinds).toEqual([30911]);
+              expect(filter['#g']).toHaveLength(1);
+              expect(filter.limit).toBe(
+                INCIDENT_LIMITS.GROUPED_CELL_CATCH_UP_LIMIT
+              );
+            }
+
+            for (const filter of filters) {
+              expect(filter.since).toBe(Math.floor(fixedNowMs / 1000) - 86400);
+              expect(filter.until).toBeUndefined();
+            }
+          }
+        } finally {
+          nowSpy.mockRestore();
+        }
+      });
+
+      it('keeps live subscription filters on the newest window when sinceDays is broader', () => {
         const fixedNowMs = 1_735_689_600_000;
         const nowSpy = jest.spyOn(Date, 'now').mockReturnValue(fixedNowMs);
 
@@ -99,7 +272,300 @@ describe('useIncidentSubscription filters and options', () => {
           );
 
           const filters = getSubscribeCalls()[0][0];
-          expect(filters[0].since).toBe(Math.floor(fixedNowMs / 1000) - 3 * 86400);
+          expect(filters[0].since).toBe(Math.floor(fixedNowMs / 1000) - 86400);
+          expect(filters[0].until).toBeUndefined();
+        } finally {
+          nowSpy.mockRestore();
+        }
+      });
+
+      it('requests older bounded backfill windows after the live window settles', async () => {
+        const fixedNowMs = 1_735_689_600_000;
+        const nowSpy = jest.spyOn(Date, 'now').mockReturnValue(fixedNowMs);
+
+        try {
+          renderHook(() =>
+            useIncidentSubscription({
+              location: [-75.1652, 39.9526],
+              sinceDays: 3,
+            })
+          );
+
+          const liveCallCount = getSubscribeCalls().length;
+
+          act(() => {
+            mockSubscription.setEose(true);
+          });
+
+          await waitFor(() => {
+            const backfillCall = getSubscribeCalls()
+              .slice(liveCallCount)
+              .find(([, options]) => options.closeOnEose === true);
+            expect(backfillCall).toBeDefined();
+
+            const filters = backfillCall?.[0] ?? [];
+            expect(filters.length).toBeGreaterThan(0);
+            for (const filter of filters) {
+              expect(filter.since).toBe(
+                Math.floor(fixedNowMs / 1000) - 2 * 86400
+              );
+              expect(filter.until).toBe(Math.floor(fixedNowMs / 1000) - 86400);
+            }
+          });
+        } finally {
+          nowSpy.mockRestore();
+        }
+      });
+
+      it('prunes cache-only incidents from bounded backfill windows after EOSE', async () => {
+        const fixedNowMs = 1_735_689_600_000;
+        const nowSpy = jest.spyOn(Date, 'now').mockReturnValue(fixedNowMs);
+
+        try {
+          const backfillCacheOnlyEvent = createMockIncidentEvent({
+            incidentId: 'cache-only-backfill-incident',
+            title: 'Cache Only Backfill Incident',
+            created_at: Math.floor(fixedNowMs / 1000) - Math.floor(1.5 * 86400),
+            occurredAt: new Date(fixedNowMs - 1.5 * 86400 * 1000).toISOString(),
+          });
+
+          const { result } = renderHook(() =>
+            useIncidentSubscription({
+              location: [-75.1652, 39.9526],
+              sinceDays: 3,
+            })
+          );
+
+          const liveCalls = getSubscribeCalls().filter(
+            ([, options]) => options.closeOnEose === false
+          );
+          expect(liveCalls.length).toBeGreaterThan(0);
+
+          act(() => {
+            for (const [, options] of liveCalls) {
+              options.onEose();
+            }
+          });
+
+          let backfillCall:
+            | ReturnType<typeof getSubscribeCalls>[number]
+            | undefined;
+          await waitFor(() => {
+            backfillCall = getSubscribeCalls().find(
+              ([, options]) => options.closeOnEose === true
+            );
+            expect(backfillCall).toBeDefined();
+          });
+
+          act(() => {
+            backfillCall?.[1].onEvents([backfillCacheOnlyEvent]);
+            backfillCall?.[1].onEose();
+          });
+
+          await waitFor(() => {
+            expect(
+              result.current.incidents.some(
+                (incident) =>
+                  incident.incidentId === 'cache-only-backfill-incident'
+              )
+            ).toBe(false);
+            expect(result.current.removedIncidentIds).toContain(
+              'cache-only-backfill-incident'
+            );
+          });
+          expect(mockDeleteIncidentEventsFromNdkCache).toHaveBeenCalledWith([
+            expect.objectContaining({
+              incidentId: 'cache-only-backfill-incident',
+              eventId: backfillCacheOnlyEvent.id,
+            }),
+          ]);
+        } finally {
+          nowSpy.mockRestore();
+        }
+      });
+
+      it('preserves older backfilled incidents when live subscriptions resubscribe', async () => {
+        const fixedNowMs = 1_735_689_600_000;
+        const nowSpy = jest.spyOn(Date, 'now').mockReturnValue(fixedNowMs);
+
+        try {
+          const olderBackfilledEvent = createMockIncidentEvent({
+            incidentId: 'older-backfilled-incident',
+            title: 'Older Backfilled Incident',
+            created_at: Math.floor(fixedNowMs / 1000) - Math.floor(1.5 * 86400),
+            occurredAt: new Date(fixedNowMs - 1.5 * 86400 * 1000).toISOString(),
+          });
+
+          const { result, rerender } = renderHook(
+            ({ viewport }) =>
+              useIncidentSubscription({
+                location: [-75.1652, 39.9526],
+                subscriptionViewport: viewport,
+                sinceDays: 3,
+              }),
+            {
+              initialProps: {
+                viewport: createSubscriptionViewport(14),
+              },
+            }
+          );
+
+          const initialLiveCalls = getSubscribeCalls().filter(
+            ([, options]) => options.closeOnEose === false
+          );
+          expect(initialLiveCalls.length).toBeGreaterThan(0);
+
+          act(() => {
+            for (const [, options] of initialLiveCalls) {
+              options.onEose();
+            }
+          });
+
+          let backfillCall:
+            | ReturnType<typeof getSubscribeCalls>[number]
+            | undefined;
+          await waitFor(() => {
+            backfillCall = getSubscribeCalls().find(
+              ([, options]) => options.closeOnEose === true
+            );
+            expect(backfillCall).toBeDefined();
+          });
+
+          act(() => {
+            backfillCall?.[1].onEvent(olderBackfilledEvent);
+            backfillCall?.[1].onEose();
+          });
+
+          await waitFor(() => {
+            expect(result.current.incidents.map((incident) => incident.incidentId)).toContain(
+              'older-backfilled-incident'
+            );
+          });
+
+          const callCountBeforeRefresh = getSubscribeCalls().length;
+          rerender({
+            viewport: createSubscriptionViewport(14.3),
+          });
+
+          let restartedLiveCalls:
+            | ReturnType<typeof getSubscribeCalls>
+            | undefined;
+          await waitFor(() => {
+            restartedLiveCalls = getSubscribeCalls()
+              .slice(callCountBeforeRefresh)
+              .filter(([, options]) => options.closeOnEose === false);
+            expect(restartedLiveCalls.length).toBe(initialLiveCalls.length);
+          });
+
+          act(() => {
+            for (const [, options] of restartedLiveCalls ?? []) {
+              options.onEose();
+            }
+          });
+
+          await waitFor(() => {
+            expect(result.current.incidents.map((incident) => incident.incidentId)).toContain(
+              'older-backfilled-incident'
+            );
+          });
+          expect(mockDeleteIncidentEventsFromNdkCache).not.toHaveBeenCalledWith([
+            expect.objectContaining({
+              incidentId: 'older-backfilled-incident',
+            }),
+          ]);
+        } finally {
+          nowSpy.mockRestore();
+        }
+      });
+
+      it('does not continue backfill windows after unmount', async () => {
+        const fixedNowMs = 1_735_689_600_000;
+        const nowSpy = jest.spyOn(Date, 'now').mockReturnValue(fixedNowMs);
+
+        try {
+          const { unmount } = renderHook(() =>
+            useIncidentSubscription({
+              location: [-75.1652, 39.9526],
+              sinceDays: 3,
+            })
+          );
+
+          const liveCalls = getSubscribeCalls().filter(
+            ([, options]) => options.closeOnEose === false
+          );
+          expect(liveCalls.length).toBeGreaterThan(0);
+
+          act(() => {
+            for (const [, options] of liveCalls) {
+              options.onEose();
+            }
+          });
+
+          let backfillCall:
+            | ReturnType<typeof getSubscribeCalls>[number]
+            | undefined;
+          await waitFor(() => {
+            backfillCall = getSubscribeCalls().find(
+              ([, options]) => options.closeOnEose === true
+            );
+            expect(backfillCall).toBeDefined();
+          });
+
+          act(() => {
+            backfillCall?.[1].onEose();
+          });
+
+          const callCountBeforeUnmount = getSubscribeCalls().length;
+          unmount();
+
+          await act(async () => {
+            await new Promise((resolve) => setTimeout(resolve, 0));
+          });
+
+          expect(getSubscribeCalls()).toHaveLength(callCountBeforeUnmount);
+        } finally {
+          nowSpy.mockRestore();
+        }
+      });
+
+      it('does not request older backfill windows after the incident cap is reached', async () => {
+        const fixedNowMs = 1_735_689_600_000;
+        const nowSpy = jest.spyOn(Date, 'now').mockReturnValue(fixedNowMs);
+
+        try {
+          const capFillEvent = createMockIncidentEvent({
+            incidentId: 'recent-cap-fill',
+            created_at: Math.floor(fixedNowMs / 1000),
+          });
+
+          const { result } = renderHook(() =>
+            useIncidentSubscription({
+              location: [-75.1652, 39.9526],
+              maxIncidents: 1,
+              sinceDays: 3,
+            })
+          );
+
+          const liveCallCount = getSubscribeCalls().length;
+
+          act(() => {
+            mockSubscription.addEvent(capFillEvent);
+            mockSubscription.setEose(true);
+          });
+
+          await waitFor(() => {
+            expect(result.current.hasReceivedHistory).toBe(true);
+            expect(result.current.incidents).toHaveLength(1);
+          });
+
+          await act(async () => {
+            await new Promise((resolve) => setTimeout(resolve, 0));
+          });
+
+          const backfillCalls = getSubscribeCalls()
+            .slice(liveCallCount)
+            .filter(([, options]) => options.closeOnEose === true);
+          expect(backfillCalls).toHaveLength(0);
         } finally {
           nowSpy.mockRestore();
         }
@@ -186,10 +652,14 @@ describe('useIncidentSubscription filters and options', () => {
 
           expect(filters).toBeDefined();
           expect(filters[0].kinds).toEqual([30911]);
-          expect(filters[0].limit).toBe(INCIDENT_LIMITS.FETCH_LIMIT);
-          expect(filters[0].since).toBe(
-            Math.floor(fixedNowMs / 1000) - INCIDENT_LIMITS.SINCE_DAYS * 86400
+          expect(filters[0].limit).toBeGreaterThanOrEqual(INCIDENT_LIMITS.FETCH_LIMIT);
+          expect(filters[0].limit).toBeLessThanOrEqual(
+            INCIDENT_LIMITS.GROUPED_FETCH_LIMIT_MAX
           );
+          expect(filters[0].since).toBe(
+            Math.floor(fixedNowMs / 1000) - 86400
+          );
+          expect(filters[0].until).toBeUndefined();
         } finally {
           nowSpy.mockRestore();
         }

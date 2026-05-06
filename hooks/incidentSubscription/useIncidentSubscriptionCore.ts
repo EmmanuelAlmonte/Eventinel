@@ -4,9 +4,10 @@
  * Coordinates incident subscriptions and cache/relay event queueing.
  */
 
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 
 import { INCIDENT_LIMITS } from '@lib/map/constants';
+import { resetIncidentBackfillRuntime } from './backfillWindows';
 import { EMPTY_SEVERITY_COUNTS, toProcessedIncident } from './sorting';
 import { useIncidentHistoryRefresh } from './useIncidentHistoryRefresh';
 import { useIncidentSubscriptionController } from './useIncidentSubscriptionController';
@@ -43,6 +44,7 @@ export function useIncidentSubscription({
     stableLocation,
     subscriptionPlan,
     desiredCells,
+    desiredSubscriptionGroups,
     subscriptionFilterKey,
     locationKey,
   } = useIncidentSubscriptionPlan({
@@ -66,6 +68,8 @@ export function useIncidentSubscription({
     flushTimerDelayMsRef,
     subscriptionRegistry,
     activeHistoryRefreshRef,
+    pendingDesiredCellsPruneRef,
+    skippedHistoryRefreshKeysRef,
   } = subscriptionState;
 
   const {
@@ -75,13 +79,14 @@ export function useIncidentSubscription({
   } = useIncidentHistoryRefresh({
     activeHistoryRefreshRef,
     refreshWatchdogTimerRef: subscriptionState.refreshWatchdogTimerRef,
+    skippedHistoryRefreshKeysRef,
     setState,
     subscriptionRegistry,
   });
 
   const controller = useIncidentSubscriptionController({
     enabled,
-    desiredSubscriptionCount: desiredCells.length,
+    desiredSubscriptionCount: desiredSubscriptionGroups.length,
     stableLocation,
     sinceDays: effectiveSinceDays,
     effectiveMaxIncidents,
@@ -95,13 +100,22 @@ export function useIncidentSubscription({
     setState,
     subscriptionRegistry,
     activeHistoryRefreshRef,
+    pendingDesiredCellsPruneRef,
+    skippedHistoryRefreshKeysRef,
     markHistoryRefreshSatisfied,
   });
   const {
     recomputeVisibleState,
     stopAllSubscriptions,
+    stopAllBackfillSubscriptions,
     clearQueuedEvents,
   } = controller;
+  const lastResortInputsRef = useRef<{
+    effectiveMaxIncidents: number;
+    locationKey: string;
+    recomputeVisibleState: typeof recomputeVisibleState;
+  } | null>(null);
+  const skippedResortForPendingPruneRef = useRef(false);
 
   // Handle enabled/disabled lifecycle.
   useEffect(() => {
@@ -111,8 +125,18 @@ export function useIncidentSubscription({
 
     clearQueuedEvents();
     stopAllSubscriptions();
+    const backfillRuntime = subscriptionState.historyBackfillRef.current;
+    stopAllBackfillSubscriptions(backfillRuntime.activeSubscriptions);
+    resetIncidentBackfillRuntime({
+      runtime: backfillRuntime,
+      planKey: 'disabled',
+      windows: [],
+      stopReason: 'disabled',
+    });
     clearHistoryRefreshWatchdog();
     activeHistoryRefreshRef.current = null;
+    pendingDesiredCellsPruneRef.current = null;
+    skippedHistoryRefreshKeysRef.current.clear();
 
     // Preserve last-known incidents during transient disables (navigation focus/app inactive)
     // to avoid a 2-3s empty-map flash while subscriptions restart. Hard-clear only when the
@@ -142,12 +166,17 @@ export function useIncidentSubscription({
     lastUpdatedRef,
     setState,
     stopAllSubscriptions,
+    stopAllBackfillSubscriptions,
     clearHistoryRefreshWatchdog,
+    pendingDesiredCellsPruneRef,
+    skippedHistoryRefreshKeysRef,
+    subscriptionState.historyBackfillRef,
   ]);
 
   useIncidentSubscriptionReconciler({
     enabled,
     desiredCells,
+    desiredSubscriptionGroups,
     subscriptionFilterKey,
     subscriptionPlanTruncated: subscriptionPlan?.truncated ?? false,
     effectiveSinceDays,
@@ -162,25 +191,67 @@ export function useIncidentSubscription({
   // Resort existing incidents on location/max changes.
   useEffect(() => {
     if (!enabled) {
+      lastResortInputsRef.current = null;
+      skippedResortForPendingPruneRef.current = false;
+      return;
+    }
+    const lastResortInputs = lastResortInputsRef.current;
+    const resortInputsChanged =
+      !lastResortInputs ||
+      lastResortInputs.locationKey !== locationKey ||
+      lastResortInputs.effectiveMaxIncidents !== effectiveMaxIncidents ||
+      lastResortInputs.recomputeVisibleState !== recomputeVisibleState;
+    if (!resortInputsChanged && !skippedResortForPendingPruneRef.current) {
+      return;
+    }
+    if (pendingDesiredCellsPruneRef.current && state.hasReceivedHistory) {
+      skippedResortForPendingPruneRef.current = true;
       return;
     }
     recomputeVisibleState([]);
-  }, [enabled, locationKey, effectiveMaxIncidents, recomputeVisibleState]);
+    lastResortInputsRef.current = {
+      effectiveMaxIncidents,
+      locationKey,
+      recomputeVisibleState,
+    };
+    skippedResortForPendingPruneRef.current = false;
+  }, [
+    enabled,
+    locationKey,
+    effectiveMaxIncidents,
+    pendingDesiredCellsPruneRef,
+    recomputeVisibleState,
+    state.hasReceivedHistory,
+  ]);
 
   // Cleanup on unmount.
   useEffect(() => {
     return () => {
       clearQueuedEvents();
       stopAllSubscriptions();
+      const backfillRuntime = subscriptionState.historyBackfillRef.current;
+      stopAllBackfillSubscriptions(backfillRuntime.activeSubscriptions);
+      resetIncidentBackfillRuntime({
+        runtime: backfillRuntime,
+        planKey: 'unmount',
+        windows: [],
+        stopReason: 'unmount',
+      });
       clearHistoryRefreshWatchdog();
       activeHistoryRefreshRef.current = null;
+      pendingDesiredCellsPruneRef.current = null;
+      skippedHistoryRefreshKeysRef.current.clear();
       subscriptionRegistry.clear();
     };
   }, [
     activeHistoryRefreshRef,
     clearHistoryRefreshWatchdog,
     clearQueuedEvents,
+    pendingDesiredCellsPruneRef,
+    skippedHistoryRefreshKeysRef,
+    stopAllBackfillSubscriptions,
     stopAllSubscriptions,
+    subscriptionState.historyBackfillRef,
     subscriptionRegistry,
   ]);
 

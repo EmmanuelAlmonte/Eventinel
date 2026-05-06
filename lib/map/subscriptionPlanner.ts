@@ -43,7 +43,16 @@ export interface SubscriptionPlan {
   truncated: boolean;
 }
 
+export interface IncidentSubscriptionGroup {
+  /** Stable key used for reconcile, EOSE, and debug accounting */
+  key: string;
+  /** Raw relay-side geohash filters included in this subscription */
+  cells: string[];
+}
+
 const DEFAULT_ZOOM_FALLBACK = 14;
+const GROUPED_SUBSCRIPTION_KEY_PREFIX = 'g:';
+const GEOHASH_BASE32_ALPHABET = '0123456789bcdefghjkmnpqrstuvwxyz';
 
 function normalizePrecision(precision: number): number {
   if (!Number.isFinite(precision)) {
@@ -62,8 +71,20 @@ function normalizeMaxCells(maxCells: number): number {
   return Math.max(0, Math.floor(maxCells));
 }
 
+function normalizeMaxCellsPerGroup(maxCellsPerGroup: number): number {
+  if (!Number.isFinite(maxCellsPerGroup)) {
+    return 1;
+  }
+
+  return Math.max(1, Math.floor(maxCellsPerGroup));
+}
+
 function isFiniteBounds(bounds: ViewportBounds): boolean {
   return isFiniteLngLat(bounds?.ne) && isFiniteLngLat(bounds?.sw);
+}
+
+function isPointBounds(bounds: ViewportBounds): boolean {
+  return bounds.ne[0] === bounds.sw[0] && bounds.ne[1] === bounds.sw[1];
 }
 
 function applyCapPolicy(
@@ -151,7 +172,22 @@ function deriveRequestedCells(options: {
     return { visibleCells, prefetchCandidates, modeRadius };
   }
 
-  const visibleCells = getViewportGeohashes(bounds, precision);
+  const viewportCells = getViewportGeohashes(bounds, precision);
+  const shouldUseCenterFallback = viewportCells.length <= 1 && isPointBounds(bounds);
+  if (shouldUseCenterFallback) {
+    const modeRadius = computeCenterGridRadiusForZoom(zoom);
+    const visibleCells = buildGeohashGrid(centerHash, modeRadius);
+    const prefetchCandidates =
+      prefetchRing > 0
+        ? buildGeohashGrid(centerHash, modeRadius + prefetchRing).filter(
+            (cell) => !visibleCells.includes(cell)
+          )
+        : [];
+
+    return { visibleCells, prefetchCandidates, modeRadius };
+  }
+
+  const visibleCells = viewportCells;
   const prefetchCandidates =
     prefetchRing > 0
       ? expandCellsByRing(visibleCells, prefetchRing, center)
@@ -283,4 +319,172 @@ export function planIncidentCells(
     }),
     truncated,
   };
+}
+
+export function buildIncidentSubscriptionGroupKey(cells: readonly string[]): string {
+  if (cells.length === 1) {
+    return cells[0];
+  }
+
+  return `${GROUPED_SUBSCRIPTION_KEY_PREFIX}${cells.join(',')}`;
+}
+
+export interface VisibleCellCoverageSummary {
+  visibleCellCount: number;
+  desiredCellCount: number;
+  coveredVisibleCellCount: number;
+  missingVisibleCellCount: number;
+  coverageRatio: number;
+  isCovered: boolean;
+}
+
+export function summarizeVisibleCellCoverage(
+  visibleCells: readonly string[],
+  desiredCells: readonly string[]
+): VisibleCellCoverageSummary {
+  const normalizedVisibleCells = uniqueSorted(
+    visibleCells.map((cell) => cell.trim().toLowerCase()).filter(Boolean)
+  );
+  const desiredSet = new Set(
+    desiredCells.map((cell) => cell.trim().toLowerCase()).filter(Boolean)
+  );
+
+  let coveredVisibleCellCount = 0;
+  for (const cell of normalizedVisibleCells) {
+    if (desiredSet.has(cell)) {
+      coveredVisibleCellCount += 1;
+    }
+  }
+
+  const missingVisibleCellCount = normalizedVisibleCells.length - coveredVisibleCellCount;
+  const coverageRatio =
+    normalizedVisibleCells.length === 0
+      ? 1
+      : coveredVisibleCellCount / normalizedVisibleCells.length;
+
+  return {
+    visibleCellCount: normalizedVisibleCells.length,
+    desiredCellCount: desiredSet.size,
+    coveredVisibleCellCount,
+    missingVisibleCellCount,
+    coverageRatio,
+    isCovered: missingVisibleCellCount === 0,
+  };
+}
+
+export function isVisibleCellCoverageAcceptable(
+  coverage: VisibleCellCoverageSummary,
+  options: {
+    maxMissingCells: number;
+    minCoverageRatio: number;
+  }
+): boolean {
+  if (coverage.visibleCellCount === 0) {
+    return false;
+  }
+
+  return (
+    coverage.isCovered ||
+    (coverage.missingVisibleCellCount <= options.maxMissingCells &&
+      coverage.coverageRatio >= options.minCoverageRatio)
+  );
+}
+
+export function shouldReuseIncidentSubscriptionPlanForViewport(options: {
+  activeDesiredCells: readonly string[] | null;
+  nextVisibleCells: readonly string[];
+  previousZoom: number | null;
+  nextZoom: number;
+  maxMissingCells: number;
+  minCoverageRatio: number;
+  maxZoomDelta: number;
+}): boolean {
+  const {
+    activeDesiredCells,
+    nextVisibleCells,
+    previousZoom,
+    nextZoom,
+    maxMissingCells,
+    minCoverageRatio,
+    maxZoomDelta,
+  } = options;
+
+  if (!activeDesiredCells || activeDesiredCells.length === 0) {
+    return false;
+  }
+
+  if (
+    previousZoom != null &&
+    Number.isFinite(previousZoom) &&
+    Number.isFinite(nextZoom) &&
+    Math.abs(nextZoom - previousZoom) > maxZoomDelta
+  ) {
+    return false;
+  }
+
+  return isVisibleCellCoverageAcceptable(
+    summarizeVisibleCellCoverage(nextVisibleCells, activeDesiredCells),
+    { maxMissingCells, minCoverageRatio }
+  );
+}
+
+export function parseIncidentSubscriptionGroupKey(key: string): string[] {
+  if (!key.startsWith(GROUPED_SUBSCRIPTION_KEY_PREFIX)) {
+    return [key.toLowerCase()];
+  }
+
+  return key
+    .slice(GROUPED_SUBSCRIPTION_KEY_PREFIX.length)
+    .split(',')
+    .map((cell) => cell.trim().toLowerCase())
+    .filter(Boolean);
+}
+
+function getStableGroupBucketKey(cell: string, maxCellsPerGroup: number): string {
+  if (cell.length === 0) {
+    return '';
+  }
+
+  const parentPrefix = cell.slice(0, -1);
+  const bucketChar = cell[cell.length - 1];
+  const bucketCharIndex = GEOHASH_BASE32_ALPHABET.indexOf(bucketChar);
+  if (bucketCharIndex < 0) {
+    return `${parentPrefix}|${bucketChar}`;
+  }
+
+  const bucketStart = Math.floor(bucketCharIndex / maxCellsPerGroup) * maxCellsPerGroup;
+  return `${parentPrefix}|${bucketStart.toString().padStart(2, '0')}`;
+}
+
+export function groupIncidentSubscriptionCells(
+  desiredCells: readonly string[],
+  maxCellsPerGroup: number
+): IncidentSubscriptionGroup[] {
+  const safeGroupSize = normalizeMaxCellsPerGroup(maxCellsPerGroup);
+  const normalizedCells = uniqueSorted(
+    desiredCells
+      .map((cell) => cell.trim().toLowerCase())
+      .filter(Boolean)
+  );
+  const cellsByBucket = new Map<string, string[]>();
+  for (const cell of normalizedCells) {
+    const bucketKey = getStableGroupBucketKey(cell, safeGroupSize);
+    const bucket = cellsByBucket.get(bucketKey) ?? [];
+    bucket.push(cell);
+    cellsByBucket.set(bucketKey, bucket);
+  }
+
+  const groups: IncidentSubscriptionGroup[] = [];
+  for (const bucketKey of Array.from(cellsByBucket.keys()).sort()) {
+    const bucketCells = cellsByBucket.get(bucketKey) ?? [];
+    for (let index = 0; index < bucketCells.length; index += safeGroupSize) {
+      const cells = bucketCells.slice(index, index + safeGroupSize);
+      groups.push({
+        key: buildIncidentSubscriptionGroupKey(cells),
+        cells,
+      });
+    }
+  }
+
+  return groups;
 }

@@ -25,6 +25,12 @@ type KnownIncidentSnapshot = {
   type: ProcessedIncident['type'];
 };
 
+type SilentBaselineReason =
+  | 'initial-history'
+  | 'history-window-refresh'
+  | 'subscription-refresh'
+  | 'app-resume';
+
 type ToastTriggerSource = 'live-insert' | 'live-update';
 
 type QueuedIncidentToast = ToastableIncident & {
@@ -102,16 +108,29 @@ function getQueuedToastKey(incident: Pick<ToastableIncident, 'incidentId' | 'eve
   return incident.incidentId;
 }
 
+function getIncidentRevisionKey(
+  incident: Pick<ProcessedIncident, 'incidentId' | 'eventId'>
+) {
+  return `${incident.incidentId}:${incident.eventId}`;
+}
+
 export function useLiveIncidentToasts(
   handleIncidentNotification: (payload: IncidentNotificationPayload) => Promise<void>
 ) {
-  const { incidents, updatedIncidents, hasReceivedHistory } = useSharedIncidents();
+  const {
+    incidents,
+    updatedIncidents,
+    hasReceivedHistory,
+    historyWindowDays,
+  } = useSharedIncidents();
   const appStateRef = useRef(AppState.currentState);
   const hasSeededRef = useRef(false);
   const baselineActiveRef = useRef(false);
+  const baselineReasonRef = useRef<SilentBaselineReason | null>(null);
   const baselineEpochRef = useRef(0);
   const notificationEligibilityStartedAtMsRef = useRef(0);
   const previousHasReceivedHistoryRef = useRef(hasReceivedHistory);
+  const previousHistoryWindowDaysRef = useRef(historyWindowDays);
   const knownSnapshotByIncidentIdRef = useRef<Map<string, KnownIncidentSnapshot>>(new Map());
   const knownRevisionByIncidentIdRef = useRef<Map<string, string>>(new Map());
   const lastNotifiedRevisionByIncidentIdRef = useRef<Map<string, string>>(new Map());
@@ -159,12 +178,13 @@ export function useLiveIncidentToasts(
   }, [clearPendingNextToastTimeout]);
 
   const startSilentBaseline = useCallback(
-    (reason: string) => {
+    (reason: SilentBaselineReason) => {
       if (baselineActiveRef.current) {
         return false;
       }
 
       baselineActiveRef.current = true;
+      baselineReasonRef.current = reason;
       baselineEpochRef.current += 1;
       notificationEligibilityStartedAtMsRef.current = Date.now();
       const droppedQueuedCount = clearQueuedBacklog();
@@ -186,9 +206,40 @@ export function useLiveIncidentToasts(
     nextIncidents: readonly ProcessedIncident[],
     absorbedUpdatedIncidents: readonly ProcessedIncident[] = []
   ) => {
+    const baselineReason = baselineReasonRef.current;
+    const baselineStartedAtMs = notificationEligibilityStartedAtMsRef.current;
+    const postBaselineLiveIncidents =
+      baselineReason === 'subscription-refresh'
+        ? absorbedUpdatedIncidents.filter(
+            (incident) => incident.createdAtMs >= baselineStartedAtMs
+          )
+        : [];
+    const postBaselineLiveRevisionKeys = new Set(
+      postBaselineLiveIncidents.map(getIncidentRevisionKey)
+    );
+    const previousSnapshotByIncidentId = knownSnapshotByIncidentIdRef.current;
+    const previousRevisionByIncidentId = knownRevisionByIncidentIdRef.current;
     const { snapshotByIncidentId, revisionByIncidentId } = createKnownSnapshotState(nextIncidents);
 
     absorbedUpdatedIncidents.forEach((incident) => {
+      if (postBaselineLiveRevisionKeys.has(getIncidentRevisionKey(incident))) {
+        const previousSnapshot = previousSnapshotByIncidentId.get(incident.incidentId);
+        const previousRevision =
+          previousRevisionByIncidentId.get(incident.incidentId) ??
+          previousSnapshot?.eventId;
+
+        snapshotByIncidentId.delete(incident.incidentId);
+        revisionByIncidentId.delete(incident.incidentId);
+
+        if (previousSnapshot) {
+          snapshotByIncidentId.set(incident.incidentId, previousSnapshot);
+        }
+        if (previousRevision) {
+          revisionByIncidentId.set(incident.incidentId, previousRevision);
+        }
+        return;
+      }
+
       snapshotByIncidentId.set(incident.incidentId, toKnownIncidentSnapshot(incident));
       revisionByIncidentId.set(incident.incidentId, incident.eventId);
     });
@@ -196,12 +247,15 @@ export function useLiveIncidentToasts(
     knownSnapshotByIncidentIdRef.current = snapshotByIncidentId;
     knownRevisionByIncidentIdRef.current = revisionByIncidentId;
     baselineActiveRef.current = false;
+    baselineReasonRef.current = null;
     hasSeededRef.current = true;
 
     logIncidentToastEvent('baseline completed', {
       reason,
+      baselineReason,
       epoch: baselineEpochRef.current,
       visibleIncidentCount: nextIncidents.length,
+      postBaselineLiveCount: postBaselineLiveIncidents.length,
     });
   }, []);
 
@@ -367,7 +421,9 @@ export function useLiveIncidentToasts(
 
   useEffect(() => {
     const previousHasReceivedHistory = previousHasReceivedHistoryRef.current;
+    const previousHistoryWindowDays = previousHistoryWindowDaysRef.current;
     previousHasReceivedHistoryRef.current = hasReceivedHistory;
+    previousHistoryWindowDaysRef.current = historyWindowDays;
 
     if (!hasSeededRef.current) {
       if (!hasReceivedHistory) {
@@ -380,7 +436,11 @@ export function useLiveIncidentToasts(
     }
 
     if (previousHasReceivedHistory && !hasReceivedHistory) {
-      startSilentBaseline('subscription-refresh');
+      startSilentBaseline(
+        previousHistoryWindowDays !== historyWindowDays
+          ? 'history-window-refresh'
+          : 'subscription-refresh'
+      );
       return;
     }
 
@@ -394,6 +454,7 @@ export function useLiveIncidentToasts(
   }, [
     completeSilentBaseline,
     hasReceivedHistory,
+    historyWindowDays,
     incidents,
     startSilentBaseline,
     updatedIncidents,

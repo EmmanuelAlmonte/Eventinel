@@ -7,6 +7,7 @@ import type {
   QueuedEvent,
   SubscriptionLifecycle,
 } from './types';
+import { computeHasReceivedHistory } from './reconcile';
 
 const DEBUG_HISTORY_WINDOW =
   __DEV__ &&
@@ -49,6 +50,7 @@ export function summarizeQueuedEventSources(
 interface UseIncidentHistoryRefreshArgs {
   activeHistoryRefreshRef: MutableRefObject<HistoryRefreshProgress | null>;
   refreshWatchdogTimerRef: MutableRefObject<ReturnType<typeof setTimeout> | null>;
+  skippedHistoryRefreshKeysRef: MutableRefObject<Set<string>>;
   setState: Dispatch<SetStateAction<IncidentSubscriptionDisplayState>>;
   subscriptionRegistry: SubscriptionLifecycle;
 }
@@ -56,6 +58,7 @@ interface UseIncidentHistoryRefreshArgs {
 export function useIncidentHistoryRefresh({
   activeHistoryRefreshRef,
   refreshWatchdogTimerRef,
+  skippedHistoryRefreshKeysRef,
   setState,
   subscriptionRegistry,
 }: UseIncidentHistoryRefreshArgs) {
@@ -85,6 +88,10 @@ export function useIncidentHistoryRefresh({
 
       for (const key of stillActiveUnsatisfiedKeys) {
         subscriptionRegistry.setHasReceivedHistory(key);
+        skippedHistoryRefreshKeysRef.current.delete(key);
+      }
+      for (const key of removedUnsatisfiedKeys) {
+        skippedHistoryRefreshKeysRef.current.add(key);
       }
 
       clearHistoryRefreshWatchdog();
@@ -100,14 +107,24 @@ export function useIncidentHistoryRefresh({
         skippedRemovedKeys: removedUnsatisfiedKeys,
       });
 
+      const nextHasReceivedHistory =
+        removedUnsatisfiedKeys.length === 0
+          ? true
+          : computeHasReceivedHistory(
+              true,
+              subscriptionRegistry.subscriptions.keys(),
+              subscriptionRegistry.eoseBySubscriptionKey,
+              subscriptionRegistry.subscriptions.size
+            );
+
       setState((prev) => {
-        if (prev.hasReceivedHistory) {
+        if (prev.hasReceivedHistory === nextHasReceivedHistory) {
           return prev;
         }
 
         return {
           ...prev,
-          hasReceivedHistory: true,
+          hasReceivedHistory: nextHasReceivedHistory,
         };
       });
     },
@@ -115,6 +132,7 @@ export function useIncidentHistoryRefresh({
       activeHistoryRefreshRef,
       clearHistoryRefreshWatchdog,
       setState,
+      skippedHistoryRefreshKeysRef,
       subscriptionRegistry,
     ]
   );
@@ -149,6 +167,7 @@ export function useIncidentHistoryRefresh({
       activeHistoryRefresh.sawDataSignal =
         activeHistoryRefresh.sawDataSignal || source === 'cache';
       subscriptionRegistry.setHasReceivedHistory(key);
+      skippedHistoryRefreshKeysRef.current.delete(key);
 
       logHistoryWindowDebugEvent('history-window satisfaction recorded', {
         key,
@@ -178,6 +197,7 @@ export function useIncidentHistoryRefresh({
       activeHistoryRefreshRef,
       completeHistoryRefresh,
       setState,
+      skippedHistoryRefreshKeysRef,
       subscriptionRegistry,
     ]
   );

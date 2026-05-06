@@ -25,22 +25,41 @@ import {
 } from '../../../hooks/incidentSubscription/types';
 
 // Mock ngeohash
-jest.mock('ngeohash', () => ({
-  encode: jest.fn((lat: number, lng: number, precision: number) => {
-    // Return a deterministic hash based on coordinates
-    return `gh${Math.abs(lat).toFixed(0)}${Math.abs(lng).toFixed(0)}`;
-  }),
-  neighbors: jest.fn((hash: string) => ({
-    n: hash + 'n',
-    ne: hash + 'ne',
-    e: hash + 'e',
-    se: hash + 'se',
-    s: hash + 's',
-    sw: hash + 'sw',
-    w: hash + 'w',
-    nw: hash + 'nw',
-  })),
-}));
+jest.mock('ngeohash', () => {
+  const alphabet = '0123456789bcdefghjkmnpqrstuvwxyz';
+  const makeNeighbor = (hash: string, offset: number) => {
+    const prefix = hash.slice(0, -1);
+    const last = hash[hash.length - 1] ?? '0';
+    const index = Math.max(0, alphabet.indexOf(last));
+    return `${prefix}${alphabet[(index + offset) % alphabet.length]}`;
+  };
+
+  return {
+    encode: jest.fn((lat: number, lng: number, _precision: number) => {
+      // Return a deterministic hash based on coordinates
+      return `gh${Math.abs(lat).toFixed(0)}${Math.abs(lng).toFixed(0)}`;
+    }),
+    bboxes: jest.fn((
+      minLat: number,
+      minLng: number,
+      _maxLat: number,
+      _maxLng: number,
+      _precision: number
+    ) => [
+      `gh${Math.abs(minLat).toFixed(0)}${Math.abs(minLng).toFixed(0)}`,
+    ]),
+    neighbors: jest.fn((hash: string) => ({
+      n: makeNeighbor(hash, 1),
+      ne: makeNeighbor(hash, 2),
+      e: makeNeighbor(hash, 3),
+      se: makeNeighbor(hash, 4),
+      s: makeNeighbor(hash, 5),
+      sw: makeNeighbor(hash, 6),
+      w: makeNeighbor(hash, 7),
+      nw: makeNeighbor(hash, 8),
+    })),
+  };
+});
 
 jest.mock('@lib/ndk', () => ({
   ndk: mockNDKHooks.getNDK(),

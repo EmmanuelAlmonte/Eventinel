@@ -6,6 +6,7 @@
  */
 
 import { useState, useEffect, useCallback } from 'react';
+import { AppState, type AppStateStatus } from 'react-native';
 import * as Location from 'expo-location';
 
 type PermissionStatus = 'undetermined' | 'granted' | 'denied';
@@ -65,6 +66,20 @@ function applyDefaultLocation(context: LocationContext, setters: LocationSetters
   return false;
 }
 
+function toPermissionStatus(status: Location.PermissionStatus): PermissionStatus {
+  if (status === 'granted') {
+    return 'granted';
+  }
+  if (status === 'undetermined') {
+    return 'undetermined';
+  }
+  return 'denied';
+}
+
+function isAppStateActive(state: AppStateStatus): boolean {
+  return state !== 'background' && state !== 'inactive';
+}
+
 async function resolvePermission(setters: LocationSetters): Promise<Location.PermissionStatus> {
   logLocation('🔒 Checking permission...');
   let { status } = await Location.getForegroundPermissionsAsync();
@@ -77,7 +92,7 @@ async function resolvePermission(setters: LocationSetters): Promise<Location.Per
     logLocation('🔒 Permission result:', status);
   }
 
-  setters.setPermission(status === 'granted' ? 'granted' : 'denied');
+  setters.setPermission(toPermissionStatus(status));
   return status;
 }
 
@@ -155,6 +170,7 @@ async function resolveFreshLocation(
 function handlePermissionDenied(context: LocationContext, setters: LocationSetters): void {
   logLocation('❌ Permission DENIED - using fallback');
   if (!applyDefaultLocation(context, setters)) {
+    setters.setLocation(null);
     setters.setSource('none');
     setters.setIsLoading(false);
   }
@@ -270,10 +286,75 @@ export function useUserLocation(options: UseUserLocationOptions = {}): UseUserLo
     }
   }, [accuracy, defaultLocation, fallback, lastKnownMaxAgeMs, location, timeout]);
 
+  const refreshPermissionAfterResume = useCallback(async () => {
+    logLocation('▶️ START resume permission check');
+
+    const context: LocationContext = {
+      fallback,
+      defaultLocation,
+      accuracy,
+      timeout,
+      lastKnownMaxAgeMs,
+      currentLocation: location,
+    };
+    const setters: LocationSetters = {
+      setLocation,
+      setPermission,
+      setSource,
+      setIsLoading,
+      setError,
+    };
+
+    try {
+      const { status } = await Location.getForegroundPermissionsAsync();
+      logLocation('🔒 Resume permission status:', status);
+      setters.setPermission(toPermissionStatus(status));
+
+      if (status !== 'granted') {
+        handlePermissionDenied(context, setters);
+        return;
+      }
+
+      if (permission !== 'granted' || !location) {
+        await getLocation();
+      }
+    } catch (errorValue) {
+      logLocation('❌ Resume permission check failed:', errorValue);
+      setters.setError(errorValue instanceof Error ? errorValue.message : 'Location error');
+      setters.setIsLoading(false);
+    } finally {
+      logLocation('🏁 END resume permission check');
+    }
+  }, [
+    accuracy,
+    defaultLocation,
+    fallback,
+    getLocation,
+    lastKnownMaxAgeMs,
+    location,
+    permission,
+    timeout,
+  ]);
+
   useEffect(() => {
     getLocation();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  useEffect(() => {
+    let previousState = AppState.currentState;
+    const subscription = AppState.addEventListener?.('change', (nextState) => {
+      const wasActive = isAppStateActive(previousState);
+      const isActive = isAppStateActive(nextState);
+      previousState = nextState;
+
+      if (!wasActive && isActive) {
+        void refreshPermissionAfterResume();
+      }
+    });
+
+    return () => subscription?.remove?.();
+  }, [refreshPermissionAfterResume]);
 
   return { location, permission, source, isLoading, error, refresh: getLocation };
 }

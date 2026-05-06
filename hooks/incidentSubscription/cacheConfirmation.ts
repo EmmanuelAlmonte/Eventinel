@@ -1,11 +1,17 @@
 import type { MutableRefObject } from 'react';
 
 import { MAP_SUBSCRIPTION } from '@lib/map/constants';
+import { parseIncidentSubscriptionGroupKey } from '@lib/map/subscriptionPlanner';
 import { deleteIncidentEventsFromNdkCache } from '@lib/ndk';
 import type { IncidentCacheDeleteTarget } from '@lib/nostr/incidentCacheMaintenance';
 import type { ProcessedIncident } from './types';
 
 export type RelayConfirmationMapRef = MutableRefObject<Map<string, Set<string>>>;
+
+export type PruneUnconfirmedIncidentOptions = {
+  cellGroupKey?: string;
+  shouldPruneIncident?: (incident: ProcessedIncident) => boolean;
+};
 
 export function resetRelayConfirmationsForSubscription(
   relayConfirmedIncidentIdsBySubscriptionKeyRef: RelayConfirmationMapRef,
@@ -54,21 +60,21 @@ function incidentBelongsToSubscriptionKey(
     return false;
   }
 
-  return (
-    geohash.slice(0, MAP_SUBSCRIPTION.GEOHASH_PRECISION) ===
-    subscriptionKey.toLowerCase()
-  );
+  const cell = geohash.slice(0, MAP_SUBSCRIPTION.GEOHASH_PRECISION);
+  return parseIncidentSubscriptionGroupKey(subscriptionKey).includes(cell);
 }
 
 export function pruneUnconfirmedIncidentsForSubscription({
   incidentMapRef,
   relayConfirmedIncidentIdsBySubscriptionKeyRef,
   subscriptionKey,
+  cellGroupKey = subscriptionKey,
+  shouldPruneIncident,
 }: {
   incidentMapRef: MutableRefObject<Map<string, ProcessedIncident>>;
   relayConfirmedIncidentIdsBySubscriptionKeyRef: RelayConfirmationMapRef;
   subscriptionKey: string;
-}): string[] {
+} & PruneUnconfirmedIncidentOptions): string[] {
   const confirmedIncidentIds =
     relayConfirmedIncidentIdsBySubscriptionKeyRef.current.get(subscriptionKey) ?? new Set();
   const removedIncidentIds: string[] = [];
@@ -76,7 +82,11 @@ export function pruneUnconfirmedIncidentsForSubscription({
   let nextIncidentMap: Map<string, ProcessedIncident> | null = null;
 
   for (const [incidentId, incident] of incidentMapRef.current.entries()) {
-    if (!incidentBelongsToSubscriptionKey(incident, subscriptionKey)) {
+    if (!incidentBelongsToSubscriptionKey(incident, cellGroupKey)) {
+      continue;
+    }
+
+    if (shouldPruneIncident && !shouldPruneIncident(incident)) {
       continue;
     }
 

@@ -114,7 +114,7 @@ function recomputeVisibleSubscriptionState(
     })),
   });
 
-  startTransition(() => {
+  const applyVisibleState = () => {
     setState((prev) => ({
       incidents,
       severityCounts,
@@ -122,11 +122,21 @@ function recomputeVisibleSubscriptionState(
         updatedIncidents.length === 0 && removedIncidentIds.length > 0
           ? prev.updatedIncidents
           : updatedIncidents,
-      removedIncidentIds,
+      removedIncidentIds:
+        updatedIncidents.length === 0 && removedIncidentIds.length === 0
+          ? prev.removedIncidentIds
+          : removedIncidentIds,
       totalEventsReceived: lastTotalEventsRef.current,
       hasReceivedHistory: hasReceivedHistory(),
     }));
-  });
+  };
+
+  if (removedIncidentIds.length > 0) {
+    applyVisibleState();
+    return;
+  }
+
+  startTransition(applyVisibleState);
 }
 
 function flushQueuedIncidentEvents(

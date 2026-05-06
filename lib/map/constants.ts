@@ -65,9 +65,10 @@ export const MAP_SUBSCRIPTION = {
   /**
    * Grid planner mode.
    * - 'center-grid': builds a center radius grid from zoom tiers.
-   * - 'viewport-ring': builds a ring around current viewport cells.
+   * - 'viewport-ring': builds from current viewport cells, with center-grid
+   *   fallback until the native map reports real bounds.
    */
-  SUBSCRIPTION_PLANNER_MODE: 'center-grid' as const,
+  SUBSCRIPTION_PLANNER_MODE: 'viewport-ring' as const,
 
   /**
    * Number of additional rings to include as prefetch after computing visible cells.
@@ -80,6 +81,12 @@ export const MAP_SUBSCRIPTION = {
   MAX_ACTIVE_CELLS: 200,
 
   /**
+   * Maximum geohash cells carried by one relay subscription filter.
+   * Grouping keeps relay fan-out bounded while preserving raw-cell pruning.
+   */
+  MAX_CELLS_PER_GROUPED_SUBSCRIPTION: 8,
+
+  /**
    * Allow small edge mismatch between viewport cells and active subscription grid
    * before showing a "zoom in" warning. Helps avoid false positives at default zoom.
    */
@@ -89,6 +96,29 @@ export const MAP_SUBSCRIPTION = {
    * Minimum coverage ratio for soft coverage mode.
    */
   VIEWPORT_SOFT_COVERAGE_MIN_RATIO: 0.8,
+
+  /**
+   * Existing active coverage may be reused for small pans when it still covers
+   * most of the newly visible viewport. This avoids churn at geohash edges.
+   */
+  VIEWPORT_REUSE_MAX_MISSING_CELLS: 4,
+
+  /**
+   * Minimum visible-cell coverage required before reusing active subscriptions.
+   */
+  VIEWPORT_REUSE_MIN_RATIO: 0.9,
+
+  /**
+   * Zoom changes below this threshold can reuse active coverage if cells still
+   * cover the viewport.
+   */
+  VIEWPORT_REUSE_MAX_ZOOM_DELTA: 0.5,
+
+  /**
+   * Zooming in by at least this much should create a focused refresh even when
+   * the new viewport is technically covered by the prior geohash cells.
+   */
+  VIEWPORT_ZOOM_IN_REFRESH_MIN_DELTA: 0.25,
 
   /**
    * Wait this long after map idle before applying a viewport-driven subscription update.
@@ -119,6 +149,19 @@ export const INCIDENT_LIMITS = {
    * Maximum number of events requested per active relay subscription filter.
    */
   FETCH_LIMIT: 200,
+
+  /**
+   * Upper bound for grouped subscription filters. A grouped query gets more
+   * room than a single-cell query, but stays below the old per-cell fan-out.
+   */
+  GROUPED_FETCH_LIMIT_MAX: 600,
+
+  /**
+   * Per-cell fairness slice sent alongside grouped filters. This keeps one
+   * subscription per grouped key while preventing dense cells from exhausting
+   * the grouped relay limit before sparse cells can return recent events.
+   */
+  GROUPED_CELL_CATCH_UP_LIMIT: 25,
 
   /**
    * Maximum incidents rendered from the live subscription set.

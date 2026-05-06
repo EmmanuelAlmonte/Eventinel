@@ -2,6 +2,10 @@ import { useRef, useState } from 'react';
 import type { Dispatch, SetStateAction, MutableRefObject } from 'react';
 
 import { createSubscriptionRegistry } from './subscriptionRegistry';
+import {
+  createIncidentBackfillRuntime,
+  type IncidentBackfillRuntime,
+} from './backfillWindows';
 import { EMPTY_SEVERITY_COUNTS } from './sorting';
 import type {
   HistoryRefreshProgress,
@@ -31,6 +35,9 @@ export interface IncidentSubscriptionCoreState {
   refreshEpochRef: MutableRefObject<number>;
   activeHistoryRefreshRef: MutableRefObject<HistoryRefreshProgress | null>;
   refreshWatchdogTimerRef: MutableRefObject<ReturnType<typeof setTimeout> | null>;
+  pendingDesiredCellsPruneRef: MutableRefObject<Set<string> | null>;
+  skippedHistoryRefreshKeysRef: MutableRefObject<Set<string>>;
+  historyBackfillRef: MutableRefObject<IncidentBackfillRuntime>;
 }
 
 export function useIncidentSubscriptionState(): IncidentSubscriptionCoreState {
@@ -54,6 +61,11 @@ export function useIncidentSubscriptionState(): IncidentSubscriptionCoreState {
   const refreshEpochRef = useRef(0);
   const activeHistoryRefreshRef = useRef<HistoryRefreshProgress | null>(null);
   const refreshWatchdogTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pendingDesiredCellsPruneRef = useRef<Set<string> | null>(null);
+  const skippedHistoryRefreshKeysRef = useRef<Set<string>>(new Set());
+  const historyBackfillRef = useRef<IncidentBackfillRuntime>(
+    createIncidentBackfillRuntime()
+  );
 
   const [state, setState] = useState<IncidentSubscriptionDisplayState>({
     incidents: [],
@@ -80,5 +92,8 @@ export function useIncidentSubscriptionState(): IncidentSubscriptionCoreState {
     refreshEpochRef,
     activeHistoryRefreshRef,
     refreshWatchdogTimerRef,
+    pendingDesiredCellsPruneRef,
+    skippedHistoryRefreshKeysRef,
+    historyBackfillRef,
   };
 }

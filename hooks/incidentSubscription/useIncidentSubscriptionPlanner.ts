@@ -1,7 +1,12 @@
 import { useMemo } from 'react';
 
 import { MAPBOX_CONFIG, MAP_SUBSCRIPTION } from '@lib/map/constants';
-import { planIncidentCells, type MapSubscriptionViewport } from '@lib/map/subscriptionPlanner';
+import {
+  groupIncidentSubscriptionCells,
+  planIncidentCells,
+  type IncidentSubscriptionGroup,
+  type MapSubscriptionViewport,
+} from '@lib/map/subscriptionPlanner';
 
 import type { UseIncidentSubscriptionOptions } from './types';
 
@@ -18,6 +23,7 @@ export interface IncidentSubscriptionPlanResult {
   fallbackSubscriptionViewport: MapSubscriptionViewport | null;
   subscriptionPlan: ReturnType<typeof planIncidentCells> | null;
   desiredCells: string[];
+  desiredSubscriptionGroups: IncidentSubscriptionGroup[];
   subscriptionFilterKey: string;
   locationKey: string;
 }
@@ -81,13 +87,32 @@ export function useIncidentSubscriptionPlan({
   ]);
 
   const desiredCells = subscriptionPlan?.desiredCells ?? [];
+  const desiredSubscriptionGroups = useMemo(
+    () =>
+      groupIncidentSubscriptionCells(
+        desiredCells,
+        MAP_SUBSCRIPTION.MAX_CELLS_PER_GROUPED_SUBSCRIPTION
+      ),
+    [desiredCells]
+  );
 
   const subscriptionFilterKey = useMemo(() => {
     if (!enabled) {
       return 'disabled';
     }
-    return subscriptionPlan?.key ?? 'none';
-  }, [enabled, subscriptionPlan?.key]);
+    if (!subscriptionPlan) {
+      return 'none';
+    }
+
+    const groupedKeys = desiredSubscriptionGroups
+      .map((group) => group.key)
+      .join('|');
+    return [
+      subscriptionPlan.key,
+      `groupSize:${MAP_SUBSCRIPTION.MAX_CELLS_PER_GROUPED_SUBSCRIPTION}`,
+      `groups:${groupedKeys}`,
+    ].join('|');
+  }, [desiredSubscriptionGroups, enabled, subscriptionPlan]);
 
   const locationKey = useMemo(() => {
     if (!location) {
@@ -102,8 +127,8 @@ export function useIncidentSubscriptionPlan({
     fallbackSubscriptionViewport,
     subscriptionPlan,
     desiredCells,
+    desiredSubscriptionGroups,
     subscriptionFilterKey,
     locationKey,
   };
 }
-

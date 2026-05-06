@@ -10,17 +10,20 @@ export interface PruneIncidentsByCellInput {
 export interface PruneIncidentsByCellResult {
   incidentMap: Map<string, ProcessedIncident>;
   didPrune: boolean;
+  removedIncidentIds: string[];
 }
 
 export function computeReconcilePlan({
   enabled,
-  desiredCells,
+  desiredSubscriptionKeys,
   activeSubscriptionKeys,
 }: ReconcileInput): ReconcileResult {
-  // Contract: no desired geohash cells means intentionally no subscriptions.
+  // Contract: no desired subscription keys means intentionally no subscriptions.
   // This avoids implicit global fallback and keeps relay coverage strictly
   // tied to the planner output.
-  const desiredKeys = new Set(enabled && desiredCells.length > 0 ? desiredCells : []);
+  const desiredKeys = new Set(
+    enabled && desiredSubscriptionKeys.length > 0 ? desiredSubscriptionKeys : []
+  );
   const activeKeys = new Set(activeSubscriptionKeys);
 
   const toAdd = Array.from(desiredKeys).filter((key) => !activeKeys.has(key));
@@ -30,7 +33,7 @@ export function computeReconcilePlan({
     desiredKeys,
     toAdd,
     toRemove,
-    shouldPruneByCell: enabled && desiredCells.length > 0,
+    shouldPruneByCell: enabled && desiredSubscriptionKeys.length > 0,
   };
 }
 
@@ -67,6 +70,7 @@ export function pruneIncidentsByDesiredCells({
   geohashPrecision,
 }: PruneIncidentsByCellInput): PruneIncidentsByCellResult {
   let didPrune = false;
+  const removedIncidentIds: string[] = [];
 
   const next = new Map<string, ProcessedIncident>(incidentMap);
   for (const [incidentId, incident] of incidentMap.entries()) {
@@ -78,6 +82,7 @@ export function pruneIncidentsByDesiredCells({
     const cell = geohash.slice(0, geohashPrecision);
     if (!desiredCells.has(cell)) {
       next.delete(incidentId);
+      removedIncidentIds.push(incidentId);
       didPrune = true;
     }
   }
@@ -85,5 +90,6 @@ export function pruneIncidentsByDesiredCells({
   return {
     incidentMap: didPrune ? next : incidentMap,
     didPrune,
+    removedIncidentIds,
   };
 }

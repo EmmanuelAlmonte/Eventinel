@@ -1,8 +1,14 @@
 import { useCallback, useEffect, useRef, useState, type MutableRefObject } from 'react';
 
 import { MAP_SUBSCRIPTION } from '@lib/map/constants';
-import { evaluateViewportCoverage, type LngLat, type ViewportBounds } from '@lib/map/geohashViewport';
-import { computeCenterGridRadiusForZoom, type MapSubscriptionViewport } from '@lib/map/subscriptionPlanner';
+import { encodeGeohashFromLngLat, type LngLat, type ViewportBounds } from '@lib/map/geohashViewport';
+import {
+  isVisibleCellCoverageAcceptable,
+  planIncidentCells,
+  shouldReuseIncidentSubscriptionPlanForViewport,
+  summarizeVisibleCellCoverage,
+  type MapSubscriptionViewport,
+} from '@lib/map/subscriptionPlanner';
 
 import { extractZoomFromProperties, isLngLat } from './helpers';
 
@@ -40,9 +46,18 @@ export function useMapViewportSubscription({
   const viewportDebounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const suppressViewportUpdatesRef = useRef(false);
   const lastViewportAnchorHashRef = useRef<string | null>(null);
+  const lastViewportPlanKeyRef = useRef<string | null>(null);
+  const lastViewportDesiredCellsRef = useRef<string[] | null>(null);
   const lastViewportZoomRef = useRef<number | null>(null);
   const lastViewportUpdateAtRef = useRef(0);
   const [isViewportCoveredBySubscriptionGrid, setIsViewportCoveredBySubscriptionGrid] = useState(true);
+
+  const clearViewportDebounce = useCallback(() => {
+    if (viewportDebounceTimerRef.current) {
+      clearTimeout(viewportDebounceTimerRef.current);
+      viewportDebounceTimerRef.current = null;
+    }
+  }, []);
 
   const handleMapIdle = useCallback(
     (state: MapIdleState) => {
@@ -65,44 +80,77 @@ export function useMapViewportSubscription({
       if (!isLngLat(center) || !isLngLat(ne) || !isLngLat(sw)) return;
 
       const bounds: ViewportBounds = { ne, sw };
-      const coverageRadius = computeCenterGridRadiusForZoom(zoomBucket);
-      const coverage = evaluateViewportCoverage(
-        bounds,
+      const centerGeohash = encodeGeohashFromLngLat(
         center,
-        MAP_SUBSCRIPTION.GEOHASH_PRECISION,
-        coverageRadius
+        MAP_SUBSCRIPTION.GEOHASH_PRECISION
       );
-      if (!coverage) return;
+      if (!centerGeohash) return;
 
-      const isSoftCovered =
-        coverage.missingViewportCellCount <= MAP_SUBSCRIPTION.VIEWPORT_SOFT_COVERAGE_MAX_MISSING_CELLS &&
-        coverage.coverageRatio >= MAP_SUBSCRIPTION.VIEWPORT_SOFT_COVERAGE_MIN_RATIO;
-      const isViewportCovered = coverage.isCoveredBySubscriptionGrid || isSoftCovered;
+      const nextPlan = planIncidentCells({
+        mode: MAP_SUBSCRIPTION.SUBSCRIPTION_PLANNER_MODE,
+        precision: MAP_SUBSCRIPTION.GEOHASH_PRECISION,
+        center,
+        bounds,
+        zoom: zoomBucket,
+        maxCells: MAP_SUBSCRIPTION.MAX_ACTIVE_CELLS,
+        prefetchRing: MAP_SUBSCRIPTION.SUBSCRIPTION_PREFETCH_RING,
+      });
+      if (nextPlan.desiredCells.length === 0 || nextPlan.visibleCells.length === 0) return;
+
+      const nextCoverage = summarizeVisibleCellCoverage(
+        nextPlan.visibleCells,
+        nextPlan.desiredCells
+      );
+      const isViewportCovered = isVisibleCellCoverageAcceptable(nextCoverage, {
+        maxMissingCells: MAP_SUBSCRIPTION.VIEWPORT_SOFT_COVERAGE_MAX_MISSING_CELLS,
+        minCoverageRatio: MAP_SUBSCRIPTION.VIEWPORT_SOFT_COVERAGE_MIN_RATIO,
+      });
 
       setIsViewportCoveredBySubscriptionGrid(isViewportCovered);
       if (!isViewportCovered) {
+        clearViewportDebounce();
         if (__DEV__) {
-          const gridWidth = coverageRadius * 2 + 1;
           console.log(
-            `[MapScreen] viewport exceeds ${gridWidth}x${gridWidth} p${MAP_SUBSCRIPTION.GEOHASH_PRECISION} grid (${coverage.viewportGeohashes.length} cells, missing:${coverage.missingViewportCellCount}, ratio:${coverage.coverageRatio.toFixed(2)})`
+            `[MapScreen] viewport exceeds incident subscription budget (${nextCoverage.visibleCellCount} visible cells, desired:${nextCoverage.desiredCellCount}, missing:${nextCoverage.missingVisibleCellCount}, ratio:${nextCoverage.coverageRatio.toFixed(2)}, truncated:${nextPlan.truncated})`
           );
         }
         return;
       }
 
-      if (
-        lastViewportAnchorHashRef.current === coverage.centerGeohash &&
-        lastViewportZoomRef.current === zoomBucket
-      ) {
+      const previousZoom = lastViewportZoomRef.current;
+      const isFocusedZoomIn =
+        previousZoom != null &&
+        Number.isFinite(previousZoom) &&
+        zoomBucket - previousZoom >=
+          MAP_SUBSCRIPTION.VIEWPORT_ZOOM_IN_REFRESH_MIN_DELTA;
+      const canReuseActiveCoverage =
+        !isFocusedZoomIn &&
+        shouldReuseIncidentSubscriptionPlanForViewport({
+          activeDesiredCells: lastViewportDesiredCellsRef.current,
+          nextVisibleCells: nextPlan.visibleCells,
+          previousZoom,
+          nextZoom: zoomBucket,
+          maxMissingCells: MAP_SUBSCRIPTION.VIEWPORT_REUSE_MAX_MISSING_CELLS,
+          minCoverageRatio: MAP_SUBSCRIPTION.VIEWPORT_REUSE_MIN_RATIO,
+          maxZoomDelta: MAP_SUBSCRIPTION.VIEWPORT_REUSE_MAX_ZOOM_DELTA,
+        });
+      if (canReuseActiveCoverage) {
+        clearViewportDebounce();
         return;
       }
 
-      if (viewportDebounceTimerRef.current) {
-        clearTimeout(viewportDebounceTimerRef.current);
+      if (
+        lastViewportAnchorHashRef.current === centerGeohash &&
+        lastViewportPlanKeyRef.current === nextPlan.key
+      ) {
+        clearViewportDebounce();
+        return;
       }
 
+      clearViewportDebounce();
+
       const nextAnchor: LngLat = [center[0], center[1]];
-      const nextAnchorHash = coverage.centerGeohash;
+      const nextAnchorHash = centerGeohash;
       const nextViewport: MapSubscriptionViewport = {
         center: [center[0], center[1]],
         bounds,
@@ -117,26 +165,27 @@ export function useMapViewportSubscription({
 
         lastViewportUpdateAtRef.current = now;
         lastViewportAnchorHashRef.current = nextAnchorHash;
+        lastViewportPlanKeyRef.current = nextPlan.key;
+        lastViewportDesiredCellsRef.current = nextPlan.desiredCells;
         lastViewportZoomRef.current = zoomBucket;
         setMapSubscriptionViewport(nextViewport);
         setMapSubscriptionAnchor(nextAnchor);
 
         if (__DEV__) {
           console.log(
-            `[MapScreen] subscription viewport -> ${nextAnchorHash} zoom:${nextViewport.zoom.toFixed(2)}`
+            `[MapScreen] subscription viewport -> ${nextAnchorHash} zoom:${nextViewport.zoom.toFixed(2)} desired:${nextPlan.desiredCells.length} visible:${nextPlan.visibleCells.length}`
           );
         }
       }, MAP_SUBSCRIPTION.VIEWPORT_UPDATE_DEBOUNCE_MS);
     },
-    [isFocused, lastCameraZoomRef, setMapSubscriptionAnchor, setMapSubscriptionViewport]
+    [
+      clearViewportDebounce,
+      isFocused,
+      lastCameraZoomRef,
+      setMapSubscriptionAnchor,
+      setMapSubscriptionViewport,
+    ]
   );
-
-  const clearViewportDebounce = useCallback(() => {
-    if (viewportDebounceTimerRef.current) {
-      clearTimeout(viewportDebounceTimerRef.current);
-      viewportDebounceTimerRef.current = null;
-    }
-  }, []);
 
   const teardownMapFocusState = useCallback(() => {
     setMapFocused(false);
@@ -165,6 +214,8 @@ export function useMapViewportSubscription({
       setMapSubscriptionAnchor(null);
       setMapSubscriptionViewport(null);
       lastViewportAnchorHashRef.current = null;
+      lastViewportPlanKeyRef.current = null;
+      lastViewportDesiredCellsRef.current = null;
       lastViewportZoomRef.current = null;
     };
   }, [setMapSubscriptionAnchor, setMapSubscriptionViewport, teardownMapFocusState]);

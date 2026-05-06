@@ -26,6 +26,7 @@ import {
   TestWrapper,
   TestWrapperWithoutFocus,
   Text,
+  useSharedIncidents,
   View,
   waitFor,
 } from './incidentSubscriptionContextTestHarness';
@@ -378,6 +379,89 @@ describe('IncidentSubscriptionContext location and lifecycle', () => {
             subscriptionViewport: mapViewport,
           })
         );
+      });
+
+      it('ignores duplicate map viewport targets with equal coordinates', () => {
+        jest.useFakeTimers();
+        const mapAnchor: [number, number] = [-75.0513433, 40.0383633];
+        const mapViewport = {
+          center: mapAnchor,
+          bounds: {
+            ne: [-75.0, 40.08] as [number, number],
+            sw: [-75.1, 40.0] as [number, number],
+          },
+          zoom: 14,
+        };
+        let capturedSetters:
+          | Pick<
+              ReturnType<typeof useSharedIncidents>,
+              | 'setMapFocused'
+              | 'setMapSubscriptionAnchor'
+              | 'setMapSubscriptionViewport'
+            >
+          | null = null;
+
+        function CaptureMapSubscriptionSetters() {
+          const {
+            setMapFocused,
+            setMapSubscriptionAnchor,
+            setMapSubscriptionViewport,
+          } = useSharedIncidents();
+          capturedSetters = {
+            setMapFocused,
+            setMapSubscriptionAnchor,
+            setMapSubscriptionViewport,
+          };
+          return null;
+        }
+
+        render(
+          <TestWrapperWithoutFocus>
+            <CaptureMapSubscriptionSetters />
+            <SubscriptionConsumer />
+          </TestWrapperWithoutFocus>
+        );
+
+        releaseInitialSubscriptionLocationGate();
+
+        act(() => {
+          capturedSetters?.setMapFocused(true);
+        });
+        act(() => {
+          capturedSetters?.setMapSubscriptionAnchor(mapAnchor);
+        });
+        act(() => {
+          capturedSetters?.setMapSubscriptionViewport(mapViewport);
+        });
+
+        act(() => {
+          capturedSetters?.setMapSubscriptionAnchor([mapAnchor[0], mapAnchor[1]]);
+        });
+        const duplicateViewport = {
+          center: [mapAnchor[0], mapAnchor[1]] as [number, number],
+          bounds: {
+            ne: [mapViewport.bounds.ne[0], mapViewport.bounds.ne[1]] as [
+              number,
+              number,
+            ],
+            sw: [mapViewport.bounds.sw[0], mapViewport.bounds.sw[1]] as [
+              number,
+              number,
+            ],
+          },
+          zoom: mapViewport.zoom,
+        };
+        act(() => {
+          capturedSetters?.setMapSubscriptionViewport(duplicateViewport);
+        });
+
+        const lastSubscriptionOptions =
+          mockUseIncidentSubscription.mock.calls[
+            mockUseIncidentSubscription.mock.calls.length - 1
+          ][0];
+        expect(lastSubscriptionOptions.subscriptionLocation).toBe(mapAnchor);
+        expect(lastSubscriptionOptions.subscriptionViewport).toBe(mapViewport);
+        expect(lastSubscriptionOptions.subscriptionViewport).not.toBe(duplicateViewport);
       });
     });
 });

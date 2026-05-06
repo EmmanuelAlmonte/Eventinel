@@ -12,6 +12,10 @@ jest.mock('../../../hooks/incidentSubscription/useIncidentSubscriptionPlanner', 
   return {
     useIncidentSubscriptionPlan: () => ({
       desiredCells: React.useMemo(() => ['dr5reg'], []),
+      desiredSubscriptionGroups: React.useMemo(
+        () => [{ key: 'dr5reg', cells: ['dr5reg'] }],
+        []
+      ),
       locationKey: 'location-key',
       stableLocation: React.useMemo(() => [-75.1652, 39.9526], []),
       subscriptionFilterKey: 'filter-key',
@@ -67,6 +71,17 @@ jest.mock('../../../hooks/incidentSubscription/useIncidentSubscriptionState', ()
         refreshEpochRef: React.useRef(0),
         activeHistoryRefreshRef: React.useRef(null),
         refreshWatchdogTimerRef: React.useRef(null),
+        pendingDesiredCellsPruneRef: React.useRef(null),
+        skippedHistoryRefreshKeysRef: React.useRef(new Set()),
+        historyBackfillRef: React.useRef({
+          epoch: 0,
+          planKey: 'disabled',
+          windows: [],
+          nextWindowIndex: 1,
+          activeWindowIndex: null,
+          activeSubscriptions: new Map(),
+          stopReason: null,
+        }),
       };
     },
   };
@@ -80,17 +95,25 @@ jest.mock('../../../hooks/incidentSubscription/useIncidentSubscriptionController
       mockMarkHistoryRefreshSatisfiedCallbacks.push(args.markHistoryRefreshSatisfied);
 
       const stableNoop = React.useCallback(() => undefined, []);
-      const stableFalse = React.useCallback(() => false, []);
+      const stableSubscription = React.useMemo(() => ({ stop: jest.fn() }), []);
+      const stableStartBackfill = React.useCallback(() => stableSubscription, [
+        stableSubscription,
+      ]);
+      const stableEmptyList = React.useCallback(() => [], []);
       const stableHasReceivedHistory = React.useCallback(() => true, []);
 
       return {
         hasReceivedHistory: stableHasReceivedHistory,
         recomputeVisibleState: stableNoop,
+        recomputeVisibleStateWithRemovals: stableNoop,
         flushQueuedEvents: stableNoop,
         startSubscription: stableNoop,
+        startBackfillSubscription: stableStartBackfill,
         stopSubscription: stableNoop,
         stopAllSubscriptions: stableNoop,
-        pruneToDesiredGeohashes: stableFalse,
+        stopBackfillSubscription: stableNoop,
+        stopAllBackfillSubscriptions: stableNoop,
+        pruneToDesiredGeohashes: stableEmptyList,
         clearQueuedEvents: stableNoop,
       };
     }),

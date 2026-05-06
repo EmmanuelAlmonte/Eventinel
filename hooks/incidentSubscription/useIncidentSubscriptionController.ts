@@ -1,4 +1,4 @@
-import { useCallback } from 'react';
+import { useCallback, useEffect, useRef } from 'react';
 import type { Dispatch, MutableRefObject, SetStateAction } from 'react';
 import {
   type NDKEvent,
@@ -10,15 +10,18 @@ import { useIncidentSubscriptionPlannerController } from './subscriptionPlannerC
 import { useIncidentSubscriptionStateSyncController } from './subscriptionStateSyncController';
 import {
   type RelayConfirmationMapRef,
+  type PruneUnconfirmedIncidentOptions,
   pruneUnconfirmedIncidentsForSubscription,
 } from './cacheConfirmation';
 import {
   type HistoryRefreshProgress,
+  type IncidentSubscriptionGroup,
   type IncidentSubscriptionDisplayState,
   type IncomingEventSource,
   type QueuedEvent,
   type ProcessedIncident,
 } from './types';
+import type { IncidentBackfillWindow } from './backfillWindows';
 
 type RegistryLike = {
   subscriptions: Map<string, NDKSubscription>;
@@ -45,6 +48,8 @@ export interface SubscriptionControllerArgs {
   setState: Dispatch<SetStateAction<IncidentSubscriptionDisplayState>>;
   subscriptionRegistry: RegistryLike;
   activeHistoryRefreshRef: MutableRefObject<HistoryRefreshProgress | null>;
+  pendingDesiredCellsPruneRef: MutableRefObject<Set<string> | null>;
+  skippedHistoryRefreshKeysRef: MutableRefObject<Set<string>>;
   markHistoryRefreshSatisfied: (
     key: string,
     epoch: number,
@@ -65,10 +70,21 @@ export interface SubscriptionController {
     source: IncomingEventSource,
     subscriptionKey?: string
   ) => void;
-  startSubscription: (key: string, historyRefreshEpoch?: number | null) => void;
+  startSubscription: (
+    group: IncidentSubscriptionGroup,
+    historyRefreshEpoch?: number | null
+  ) => void;
+  startBackfillSubscription: (
+    group: IncidentSubscriptionGroup,
+    historyWindow: IncidentBackfillWindow,
+    subscriptionKey: string,
+    onEose: (subscriptionKey: string) => void
+  ) => NDKSubscription;
   stopSubscription: (key: string) => void;
   stopAllSubscriptions: () => void;
-  pruneToDesiredGeohashes: (desiredKeys: Set<string>) => boolean;
+  stopBackfillSubscription: (key: string, subscription: NDKSubscription) => void;
+  stopAllBackfillSubscriptions: (subscriptions: Map<string, NDKSubscription>) => void;
+  pruneToDesiredGeohashes: (desiredKeys: Set<string>) => string[];
   clearQueuedEvents: () => void;
 }
 
@@ -124,6 +140,8 @@ export function useIncidentSubscriptionController({
   setState,
   subscriptionRegistry,
   activeHistoryRefreshRef,
+  pendingDesiredCellsPruneRef,
+  skippedHistoryRefreshKeysRef,
   markHistoryRefreshSatisfied,
 }: SubscriptionControllerArgs): SubscriptionController {
   const hasReceivedHistory = useCallback(() => {
@@ -157,27 +175,64 @@ export function useIncidentSubscriptionController({
       setState,
     });
 
-  const setHasReceivedHistoryState = useCallback(() => {
+  const lastRemovedIncidentIdsRef = useRef<string[]>([]);
+  const hasPendingRemovedIncidentIdsSurfaceRef = useRef(false);
+
+  useEffect(() => {
+    if (!hasPendingRemovedIncidentIdsSurfaceRef.current) {
+      return;
+    }
+
+    hasPendingRemovedIncidentIdsSurfaceRef.current = false;
+    lastRemovedIncidentIdsRef.current = [];
+  });
+
+  const setHasReceivedHistoryState = useCallback((removedIncidentIds: string[] = []) => {
+    if (removedIncidentIds.length > 0) {
+      lastRemovedIncidentIdsRef.current = removedIncidentIds;
+      hasPendingRemovedIncidentIdsSurfaceRef.current = true;
+    }
+
+    const nextRemovedIncidentIds =
+      removedIncidentIds.length > 0
+        ? removedIncidentIds
+        : lastRemovedIncidentIdsRef.current;
+
     setState((prev) => ({
       ...prev,
+      removedIncidentIds: nextRemovedIncidentIds,
       hasReceivedHistory: hasReceivedHistory(),
     }));
   }, [hasReceivedHistory, setState]);
 
-  const { startSubscription, stopSubscription, stopAllSubscriptions, pruneToDesiredGeohashes } =
-    useIncidentSubscriptionPlannerController({
+  const {
+    startSubscription,
+    stopSubscription,
+    stopAllSubscriptions,
+    startBackfillSubscription,
+    stopBackfillSubscription,
+    stopAllBackfillSubscriptions,
+    pruneToDesiredGeohashes,
+  } = useIncidentSubscriptionPlannerController({
       subscriptionRegistry,
       enqueueEvents,
       flushQueuedEvents,
       recomputeVisibleStateWithRemovals,
       markHistoryRefreshSatisfied,
       setHasReceivedHistoryState,
+      hasReceivedHistory,
       incidentMapRef,
-      pruneUnconfirmedIncidentsForSubscription: (subscriptionKey) =>
+      pendingDesiredCellsPruneRef,
+      skippedHistoryRefreshKeysRef,
+      pruneUnconfirmedIncidentsForSubscription: (
+        subscriptionKey,
+        options?: PruneUnconfirmedIncidentOptions
+      ) =>
         pruneUnconfirmedIncidentsForSubscription({
           incidentMapRef,
           relayConfirmedIncidentIdsBySubscriptionKeyRef,
           subscriptionKey,
+          ...options,
         }),
       relayConfirmedIncidentIdsBySubscriptionKeyRef,
       sinceDays,
@@ -190,8 +245,11 @@ export function useIncidentSubscriptionController({
     flushQueuedEvents,
     enqueueEvents,
     startSubscription,
+    startBackfillSubscription,
     stopSubscription,
     stopAllSubscriptions,
+    stopBackfillSubscription,
+    stopAllBackfillSubscriptions,
     pruneToDesiredGeohashes,
     clearQueuedEvents,
   };
