@@ -36,6 +36,7 @@ function ReportDraftProbe() {
       <Text testID="draft-still-active">{draft.stillActive === null ? 'unset' : String(draft.stillActive)}</Text>
       <Text testID="draft-media-count">{draft.mediaAttachments.length}</Text>
       <Text testID="draft-media-url">{draft.mediaAttachments[0]?.url ?? 'none'}</Text>
+      <Text testID="draft-second-media-url">{draft.mediaAttachments[1]?.url ?? 'none'}</Text>
       <Pressable
         testID="start-draft"
         onPress={() =>
@@ -61,6 +62,14 @@ function ReportDraftProbe() {
         }
       />
       <Pressable testID="set-still-active-false" onPress={() => updateDraft({ stillActive: false })} />
+      <Pressable
+        testID="append-media"
+        onPress={() =>
+          updateDraft((currentDraft) => ({
+            mediaAttachments: [...currentDraft.mediaAttachments, firstAttachment],
+          }))
+        }
+      />
       <Pressable
         testID="resume-same-session"
         onPress={() =>
@@ -116,6 +125,12 @@ describe('ReportDraftContext', () => {
     expect(screen.getByTestId('draft-still-active').props.children).toBe('false');
     expect(screen.getByTestId('draft-media-count').props.children).toBe(1);
     expect(screen.getByTestId('draft-media-url').props.children).toBe('https://cdn.example.com/second.png');
+
+    fireEvent.press(screen.getByTestId('append-media'));
+
+    expect(screen.getByTestId('draft-media-count').props.children).toBe(2);
+    expect(screen.getByTestId('draft-media-url').props.children).toBe('https://cdn.example.com/second.png');
+    expect(screen.getByTestId('draft-second-media-url').props.children).toBe('https://cdn.example.com/first.jpg');
 
     fireEvent.press(screen.getByTestId('resume-same-session'));
 

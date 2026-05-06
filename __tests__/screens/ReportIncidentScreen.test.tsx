@@ -233,20 +233,41 @@ describe('ReportIncidentScreen media upload', () => {
     });
 
     await waitFor(() => {
-      expect(mockUpdateDraft).toHaveBeenCalledWith({
-        mediaAttachments: [
-          expect.objectContaining({
-            id: 'a'.repeat(64),
-            url: `https://cdn.example.com/${'a'.repeat(64)}.jpg`,
-            sha256: 'a'.repeat(64),
-            mimeType: 'image/jpeg',
-            size: 12345,
-            width: 640,
-            height: 480,
-            mediaKind: 'image',
-          }),
-        ],
-      });
+      expect(mockUpdateDraft).toHaveBeenCalledWith(expect.any(Function));
+    });
+
+    const appendUploadedMedia = mockUpdateDraft.mock.calls[0][0] as Function;
+    const existingAttachment = {
+      id: 'existing-image',
+      url: 'https://cdn.example.com/existing-image.jpg',
+      sha256: 'b'.repeat(64),
+      mimeType: 'image/jpeg',
+      size: 12345,
+      width: 640,
+      height: 480,
+      mediaKind: 'image' as const,
+    };
+
+    expect(
+      appendUploadedMedia(
+        buildReportDraft({
+          mediaAttachments: [existingAttachment],
+        })
+      )
+    ).toEqual({
+      mediaAttachments: [
+        existingAttachment,
+        expect.objectContaining({
+          id: 'a'.repeat(64),
+          url: `https://cdn.example.com/${'a'.repeat(64)}.jpg`,
+          sha256: 'a'.repeat(64),
+          mimeType: 'image/jpeg',
+          size: 12345,
+          width: 640,
+          height: 480,
+          mediaKind: 'image',
+        }),
+      ],
     });
 
     expect(uploadToBlossom).toHaveBeenCalledWith(

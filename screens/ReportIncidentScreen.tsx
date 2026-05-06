@@ -167,9 +167,9 @@ export default function ReportIncidentScreen({ navigation, route }: ReportIncide
       }
 
       const attachment = reportMediaAttachmentFromBlossomUpload(outcome.result);
-      updateDraft({
-        mediaAttachments: [...draft.mediaAttachments, attachment],
-      });
+      updateDraft((currentDraft) => ({
+        mediaAttachments: [...currentDraft.mediaAttachments, attachment],
+      }));
     } catch (error) {
       setMediaUploadError(error instanceof Error ? error.message : 'Failed to add report media.');
     } finally {

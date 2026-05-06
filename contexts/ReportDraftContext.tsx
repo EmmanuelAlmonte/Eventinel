@@ -37,10 +37,12 @@ type ReportDraftContextValue = {
   sessionKey: string | null;
   adjustEntryMode: ReportAdjustEntryMode;
   startDraft: (sessionKey: string, initial?: Partial<ReportDraft>) => void;
-  updateDraft: (updates: Partial<ReportDraft>) => void;
+  updateDraft: (updates: ReportDraftUpdate) => void;
   setAdjustEntryMode: (mode: ReportAdjustEntryMode) => void;
   resetDraft: () => void;
 };
+
+type ReportDraftUpdate = Partial<ReportDraft> | ((currentDraft: ReportDraft) => Partial<ReportDraft>);
 
 const EMPTY_REPORT_DRAFT: ReportDraft = {
   sourceTab: undefined,
@@ -158,21 +160,26 @@ export function ReportDraftProvider({ children }: { children: ReactNode }) {
     });
   }, []);
 
-  const updateDraft = useCallback((updates: Partial<ReportDraft>) => {
-    setDraft((currentDraft) => ({
-      ...currentDraft,
-      ...updates,
-      sourceTab: updates.sourceTab ?? currentDraft.sourceTab,
-      location: updates.location !== undefined ? updates.location : currentDraft.location,
-      incidentType: updates.incidentType !== undefined ? updates.incidentType : currentDraft.incidentType,
-      description: updates.description ?? currentDraft.description,
-      locationNote: updates.locationNote ?? currentDraft.locationNote,
-      stillActive: updates.stillActive !== undefined ? updates.stillActive : currentDraft.stillActive,
-      mediaAttachments:
-        updates.mediaAttachments !== undefined
-          ? normalizeReportMediaAttachments(updates.mediaAttachments)
-          : currentDraft.mediaAttachments,
-    }));
+  const updateDraft = useCallback((updates: ReportDraftUpdate) => {
+    setDraft((currentDraft) => {
+      const resolvedUpdates = typeof updates === 'function' ? updates(currentDraft) : updates;
+
+      return {
+        ...currentDraft,
+        ...resolvedUpdates,
+        sourceTab: resolvedUpdates.sourceTab ?? currentDraft.sourceTab,
+        location: resolvedUpdates.location !== undefined ? resolvedUpdates.location : currentDraft.location,
+        incidentType:
+          resolvedUpdates.incidentType !== undefined ? resolvedUpdates.incidentType : currentDraft.incidentType,
+        description: resolvedUpdates.description ?? currentDraft.description,
+        locationNote: resolvedUpdates.locationNote ?? currentDraft.locationNote,
+        stillActive: resolvedUpdates.stillActive !== undefined ? resolvedUpdates.stillActive : currentDraft.stillActive,
+        mediaAttachments:
+          resolvedUpdates.mediaAttachments !== undefined
+            ? normalizeReportMediaAttachments(resolvedUpdates.mediaAttachments)
+            : currentDraft.mediaAttachments,
+      };
+    });
   }, []);
 
   const resetDraft = useCallback(() => {
