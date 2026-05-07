@@ -164,6 +164,16 @@ export function normalizeBlossomServerUrls(value: unknown): string[] {
   return urls;
 }
 
+function normalizeUserBlossomUploadServerUrls(value: unknown): string[] {
+  return normalizeBlossomServerUrls(value).filter((url) => {
+    try {
+      return new URL(url).protocol === 'https:';
+    } catch {
+      return false;
+    }
+  });
+}
+
 export function normalizeMimeTypes(value: unknown, defaults: readonly string[] = []): string[] {
   const seen = new Set<string>();
   const values = splitListValue(value);
@@ -234,7 +244,7 @@ export function buildBlossomCapabilityState(
   userKind10063Servers: string[] = [],
   serverCapabilities: BlossomUploadCapabilityInput = {}
 ): BlossomCapabilityState {
-  const normalizedUserServers = normalizeBlossomServerUrls(userKind10063Servers);
+  const normalizedUserServers = normalizeUserBlossomUploadServerUrls(userKind10063Servers);
   const uploadServers: BlossomServer[] = [
     ...normalizedUserServers.map((url) => ({ url, source: 'user-kind-10063' as const })),
     ...config.appUploadServers

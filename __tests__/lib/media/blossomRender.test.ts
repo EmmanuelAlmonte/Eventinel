@@ -12,6 +12,15 @@ import {
 const HASH = 'a'.repeat(64);
 const SECOND_HASH = 'b'.repeat(64);
 const UPPER_HASH = 'C'.repeat(64);
+const originalFetch = global.fetch;
+
+afterEach(() => {
+  Object.defineProperty(global, 'fetch', {
+    value: originalFetch,
+    configurable: true,
+    writable: true,
+  });
+});
 
 describe('blossomRender', () => {
   it('validates 64-character SHA-256 hex values', () => {
@@ -48,7 +57,10 @@ describe('blossomRender', () => {
       originalUrl: `https://cdn.example.com/${HASH}.png?download=1`,
     });
 
-    expect(fallbackUrls).toEqual([`https://fallback.example.com/${HASH}.png`]);
+    expect(fallbackUrls).toEqual([
+      `https://cdn.example.com/path/${HASH}.png`,
+      `https://fallback.example.com/${HASH}.png`,
+    ]);
   });
 
   it('maps local Blossom URLs to the Android emulator host loopback address for display', () => {
@@ -92,7 +104,7 @@ describe('blossomRender', () => {
       source: 'imeta',
       renderKind: 'image',
       status: 'renderable',
-      fallbackUrls: [`https://fallback.example.com/${HASH}.png`],
+      fallbackUrls: [`https://fallback.example.com/path/${HASH}.png`],
     });
   });
 
@@ -220,6 +232,7 @@ describe('blossomRender', () => {
       fallbackUrls: [`https://fallback.example.com/${HASH}.png`],
       expectedSha256: HASH,
       mimeType: 'image/png',
+      maxBytes: 1,
       fetchBytes,
       digest: async (bytes) => (bytes[0] === 2 ? HASH : SECOND_HASH),
     });
@@ -236,6 +249,7 @@ describe('blossomRender', () => {
       `https://cdn.example.com/${HASH}.png`,
       `https://fallback.example.com/${HASH}.png`,
     ]);
+    expect(fetchBytes.mock.calls.every(([, options]) => options?.maxBytes === 1)).toBe(true);
   });
 
   it('reports all candidate failures when every fetched URL mismatches the hash', async () => {
@@ -264,4 +278,119 @@ describe('blossomRender', () => {
       ],
     });
   });
+
+  it('rejects oversized Content-Length before reading or digesting media bytes', async () => {
+    const url = `https://cdn.example.com/${HASH}.png`;
+    const arrayBuffer = jest.fn(async () => new Uint8Array([1, 2, 3, 4]).buffer);
+    const digest = jest.fn(async () => HASH);
+    setGlobalFetch(
+      jest.fn(async (_input: RequestInfo | URL) =>
+        mockFetchResponse({
+          contentLength: '4',
+          arrayBuffer,
+        })
+      )
+    );
+
+    const outcome = await fetchAndVerifyBlossomMedia({
+      candidateUrls: [url],
+      expectedSha256: HASH,
+      maxBytes: 3,
+      digest,
+    });
+
+    expect(outcome).toMatchObject({
+      ok: false,
+      reason: 'all-candidates-failed',
+      attemptedUrls: [url],
+      attempts: [
+        {
+          url,
+          reason: 'fetch-failed',
+        },
+      ],
+    });
+    if (!outcome.ok) {
+      expect(outcome.attempts[0].message).toContain('exceeds the Blossom render download limit of 3 bytes');
+    }
+    expect(arrayBuffer).not.toHaveBeenCalled();
+    expect(digest).not.toHaveBeenCalled();
+  });
+
+  it('stops streamed downloads when the byte count exceeds the render limit', async () => {
+    const url = `https://cdn.example.com/${HASH}.png`;
+    const arrayBuffer = jest.fn(async () => new Uint8Array([1, 2, 3, 4]).buffer);
+    const read = jest
+      .fn()
+      .mockResolvedValueOnce({ done: false, value: new Uint8Array([1, 2]) })
+      .mockResolvedValueOnce({ done: false, value: new Uint8Array([3, 4]) });
+    const cancel = jest.fn(async () => undefined);
+    const releaseLock = jest.fn();
+    const digest = jest.fn(async () => HASH);
+
+    setGlobalFetch(
+      jest.fn(async (_input: RequestInfo | URL) =>
+        mockFetchResponse({
+          body: {
+            getReader: () => ({
+              read,
+              cancel,
+              releaseLock,
+            }),
+          },
+          arrayBuffer,
+        })
+      )
+    );
+
+    const outcome = await fetchAndVerifyBlossomMedia({
+      candidateUrls: [url],
+      expectedSha256: HASH,
+      maxBytes: 3,
+      digest,
+    });
+
+    expect(outcome).toMatchObject({
+      ok: false,
+      reason: 'all-candidates-failed',
+      attempts: [
+        {
+          url,
+          reason: 'fetch-failed',
+        },
+      ],
+    });
+    if (!outcome.ok) {
+      expect(outcome.attempts[0].message).toContain('exceeds the Blossom render download limit of 3 bytes');
+    }
+    expect(read).toHaveBeenCalledTimes(2);
+    expect(cancel).toHaveBeenCalledTimes(1);
+    expect(releaseLock).toHaveBeenCalledTimes(1);
+    expect(arrayBuffer).not.toHaveBeenCalled();
+    expect(digest).not.toHaveBeenCalled();
+  });
 });
+
+function setGlobalFetch(fetchImpl: jest.MockedFunction<typeof fetch>): void {
+  Object.defineProperty(global, 'fetch', {
+    value: fetchImpl,
+    configurable: true,
+    writable: true,
+  });
+}
+
+function mockFetchResponse(params: {
+  contentLength?: string;
+  body?: unknown;
+  arrayBuffer: () => Promise<ArrayBuffer>;
+}): Response {
+  return {
+    ok: true,
+    status: 200,
+    headers: {
+      get: (name: string) => (name.toLowerCase() === 'content-length' ? (params.contentLength ?? null) : null),
+    },
+    body: params.body,
+    arrayBuffer: params.arrayBuffer,
+  } as unknown as Response;
+}

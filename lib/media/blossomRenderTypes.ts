@@ -42,7 +42,11 @@ export type ParseBlossomMediaFromEventParams = {
 };
 
 export type BlossomSha256Digest = (bytes: Uint8Array) => Promise<string>;
-export type BlossomFetchBytes = (url: string, signal?: AbortSignal) => Promise<Uint8Array>;
+export type BlossomFetchBytesOptions = {
+  signal?: AbortSignal;
+  maxBytes?: number;
+};
+export type BlossomFetchBytes = (url: string, options?: BlossomFetchBytesOptions) => Promise<Uint8Array>;
 
 export type BlossomSha256VerificationResult =
   | {
@@ -70,6 +74,7 @@ export type FetchAndVerifyBlossomMediaParams = {
   candidateUrls?: readonly string[];
   expectedSha256: string;
   mimeType?: string | null;
+  maxBytes?: number;
   fetchBytes?: BlossomFetchBytes;
   digest?: BlossomSha256Digest;
   signal?: AbortSignal;

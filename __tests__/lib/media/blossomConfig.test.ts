@@ -195,6 +195,24 @@ describe('blossomConfig', () => {
     ]);
   });
 
+  it('ignores non-HTTPS user kind:10063 upload servers while preserving configured HTTP defaults', () => {
+    const config = buildBlossomConfig({
+      EVENTINEL_BLOSSOM_SERVERS: 'http://10.0.2.2:3000, https://app.example.com',
+    });
+    const userServers = normalizeKind10063ServerTags([
+      ['server', 'http://user.example.com'],
+      ['server', 'https://user.example.com'],
+      ['server', 'http://10.0.2.2:3000'],
+      ['server', 'https://app.example.com'],
+    ]);
+
+    expect(buildBlossomCapabilityState(config, userServers).uploadServers).toEqual([
+      { url: 'https://user.example.com', source: 'user-kind-10063' },
+      { url: 'https://app.example.com', source: 'user-kind-10063' },
+      { url: 'http://10.0.2.2:3000', source: 'app-default' },
+    ]);
+  });
+
   it('intersects configured policy with BUD-06-style server capabilities when present', () => {
     const capability = buildBlossomCapabilityState(
       buildBlossomConfig({
