@@ -1,5 +1,5 @@
 import React from 'react';
-import { render, fireEvent, act } from '@testing-library/react-native';
+import { render, fireEvent, act, waitFor } from '@testing-library/react-native';
 import { Share } from 'react-native';
 
 import IncidentDetailScreen from '../../screens/IncidentDetailScreen';
@@ -99,6 +99,20 @@ const mockIncident: ParsedIncident = {
 const BLOSSOM_HASH = 'a'.repeat(64);
 
 const mockGetIncident = jest.fn((id: string) => (id === 'test-incident-id' ? mockIncident : undefined));
+
+const mockFetchAndVerifyBlossomMediaImpl = jest.fn();
+
+function mockFetchAndVerifyBlossomMedia(params: unknown) {
+  return mockFetchAndVerifyBlossomMediaImpl(params);
+}
+
+jest.mock('@lib/media/blossomRender', () => {
+  const actual = jest.requireActual('../../lib/media/blossomRender');
+  return {
+    ...actual,
+    fetchAndVerifyBlossomMedia: (params: unknown) => mockFetchAndVerifyBlossomMedia(params),
+  };
+});
 
 jest.mock('@contexts', () => ({
   useIncidentCache: () => ({
@@ -212,6 +226,14 @@ describe('IncidentDetailScreen', () => {
     };
     mockRouteParams.incidentId = 'test-incident-id';
     mockGetIncident.mockImplementation((id) => (id === 'test-incident-id' ? mockIncident : undefined));
+    mockFetchAndVerifyBlossomMediaImpl.mockResolvedValue({
+      ok: true,
+      url: `https://cdn.example.com/${BLOSSOM_HASH}.jpg`,
+      sha256: BLOSSOM_HASH,
+      mimeType: 'image/jpeg',
+      dataUri: 'data:image/jpeg;base64,AA==',
+      attemptedUrls: [`https://cdn.example.com/${BLOSSOM_HASH}.jpg`],
+    });
     mockUseIncidentComments.mockReturnValue({
       comments: [],
       isLoading: false,
@@ -240,7 +262,7 @@ describe('IncidentDetailScreen', () => {
     expect(getByText('30 minutes ago · New York, NY · Community')).toBeTruthy();
   });
 
-  it('renders report image media from the incident event metadata', () => {
+  it('renders report image media from verified incident event metadata', async () => {
     const imageUrl = `https://cdn.example.com/${BLOSSOM_HASH}.jpg`;
     mockGetIncident.mockReturnValue({
       ...mockIncident,
@@ -261,11 +283,30 @@ describe('IncidentDetailScreen', () => {
     const { getByText, getByTestId } = render(<IncidentDetailScreen />);
 
     expect(getByText('Report media')).toBeTruthy();
-    expect(getByTestId('incident-report-media-image').props.source.uri).toBe(imageUrl);
+    await waitFor(() => {
+      expect(getByTestId('incident-report-media-image').props.source.uri).toBe('data:image/jpeg;base64,AA==');
+    });
     expect(getByTestId('incident-report-media-image').props.resizeMode).toBe('contain');
+    expect(mockFetchAndVerifyBlossomMediaImpl).toHaveBeenCalledWith(
+      expect.objectContaining({
+        candidateUrls: [imageUrl],
+        expectedSha256: BLOSSOM_HASH,
+        mimeType: 'image/jpeg',
+      })
+    );
   });
 
-  it('tries report image fallback URLs and then shows a visible placeholder if loading fails', () => {
+  it('shows a visible placeholder if report image verification fails', async () => {
+    mockFetchAndVerifyBlossomMediaImpl.mockResolvedValueOnce({
+      ok: false,
+      reason: 'all-candidates-failed',
+      attemptedUrls: [
+        `https://cdn.example.com/${BLOSSOM_HASH}.jpg`,
+        `https://fallback.example.com/${BLOSSOM_HASH}.jpg`,
+      ],
+      attempts: [],
+      message: 'No Blossom media candidate matched the expected SHA-256 hash.',
+    });
     mockGetIncident.mockReturnValue({
       ...mockIncident,
       mediaAttachments: [
@@ -284,18 +325,19 @@ describe('IncidentDetailScreen', () => {
 
     const { getByText, getByTestId } = render(<IncidentDetailScreen />);
 
-    act(() => {
-      fireEvent(getByTestId('incident-report-media-image'), 'error');
+    await waitFor(() => {
+      expect(getByTestId('incident-report-media-placeholder')).toBeTruthy();
+      expect(getByText('Image could not be verified from the Blossom server.')).toBeTruthy();
     });
-    expect(getByTestId('incident-report-media-image').props.source.uri).toBe(
-      `https://fallback.example.com/${BLOSSOM_HASH}.jpg`
+    expect(mockFetchAndVerifyBlossomMediaImpl).toHaveBeenCalledWith(
+      expect.objectContaining({
+        candidateUrls: [
+          `https://cdn.example.com/${BLOSSOM_HASH}.jpg`,
+          `https://fallback.example.com/${BLOSSOM_HASH}.jpg`,
+        ],
+        expectedSha256: BLOSSOM_HASH,
+      })
     );
-
-    act(() => {
-      fireEvent(getByTestId('incident-report-media-image'), 'error');
-    });
-    expect(getByTestId('incident-report-media-placeholder')).toBeTruthy();
-    expect(getByText('Image could not be loaded from the Blossom server.')).toBeTruthy();
   });
 
   it('renders blocked video report media as a safe placeholder', () => {

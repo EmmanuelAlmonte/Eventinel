@@ -149,6 +149,18 @@ describe('blossomRender', () => {
     });
   });
 
+  it('ignores generic r tags that are not paired with media metadata', () => {
+    const media = parseBlossomMediaFromEvent({
+      content: '',
+      tags: [
+        ['r', 'https://example.com/reference-page'],
+        ['p', 'not-media-metadata'],
+      ],
+    });
+
+    expect(media).toEqual([]);
+  });
+
   it('infers image MIME and hash metadata from plain content URLs', () => {
     const [media] = parseBlossomMediaFromEvent({
       content: `See https://cdn.example.com/files/${UPPER_HASH}.JPG.`,

@@ -1,11 +1,9 @@
-import { useEffect, useMemo, useState } from 'react';
-import { Image, Platform, StyleSheet, View } from 'react-native';
+import { Image, StyleSheet, View } from 'react-native';
 import { Text } from '@rneui/themed';
 
-import {
-  resolveBlossomDisplayUrl,
-  type BlossomMediaDescriptor,
-} from '@lib/media/blossomRender';
+import type { BlossomMediaDescriptor } from '@lib/media/blossomRender';
+
+import { useVerifiedBlossomImage } from './useVerifiedBlossomImage';
 
 type ThemeColors = {
   border: string;
@@ -49,28 +47,25 @@ type ReportMediaImageProps = {
 };
 
 function ReportMediaImage({ colors, media }: ReportMediaImageProps) {
-  const candidateUrls = useMemo(() => buildDisplayCandidateUrls(media), [media]);
-  const [candidateIndex, setCandidateIndex] = useState(0);
+  const verifiedImage = useVerifiedBlossomImage(media);
 
-  useEffect(() => {
-    setCandidateIndex(0);
-  }, [candidateUrls]);
-
-  const uri = candidateUrls[candidateIndex];
-  if (!uri) {
-    return <ReportMediaPlaceholder colors={colors} media={media} loadFailed />;
+  if (verifiedImage.status !== 'ready') {
+    return (
+      <ReportMediaPlaceholder
+        colors={colors}
+        media={media}
+        loadState={verifiedImage.status}
+      />
+    );
   }
 
   return (
     <Image
       testID="incident-report-media-image"
-      source={{ uri }}
+      source={{ uri: verifiedImage.uri }}
       style={[styles.mediaImage, { backgroundColor: colors.surface, borderColor: colors.border }]}
       resizeMode="contain"
       accessibilityLabel="Report media image"
-      onError={() => {
-        setCandidateIndex((current) => current + 1);
-      }}
     />
   );
 }
@@ -78,10 +73,10 @@ function ReportMediaImage({ colors, media }: ReportMediaImageProps) {
 type ReportMediaPlaceholderProps = {
   colors: ThemeColors;
   media: BlossomMediaDescriptor;
-  loadFailed?: boolean;
+  loadState?: 'loading' | 'failed';
 };
 
-function ReportMediaPlaceholder({ colors, media, loadFailed = false }: ReportMediaPlaceholderProps) {
+function ReportMediaPlaceholder({ colors, media, loadState }: ReportMediaPlaceholderProps) {
   return (
     <View
       testID="incident-report-media-placeholder"
@@ -98,30 +93,20 @@ function ReportMediaPlaceholder({ colors, media, loadFailed = false }: ReportMed
           {media.renderKind === 'video' ? 'Video attachment' : 'Media unavailable'}
         </Text>
         <Text style={[styles.placeholderText, { color: colors.textMuted }]}>
-          {buildPlaceholderText(media, loadFailed)}
+          {buildPlaceholderText(media, loadState)}
         </Text>
       </View>
     </View>
   );
 }
 
-function buildDisplayCandidateUrls(media: BlossomMediaDescriptor): string[] {
-  const seen = new Set<string>();
-  const urls: string[] = [];
-
-  for (const url of [media.url, ...media.fallbackUrls]) {
-    const displayUrl = resolveBlossomDisplayUrl(url, { platform: Platform.OS });
-    if (!displayUrl || seen.has(displayUrl)) continue;
-    seen.add(displayUrl);
-    urls.push(displayUrl);
+function buildPlaceholderText(media: BlossomMediaDescriptor, loadState?: 'loading' | 'failed'): string {
+  if (loadState === 'loading') {
+    return 'Verifying image from the Blossom server.';
   }
 
-  return urls;
-}
-
-function buildPlaceholderText(media: BlossomMediaDescriptor, loadFailed = false): string {
-  if (loadFailed) {
-    return 'Image could not be loaded from the Blossom server.';
+  if (loadState === 'failed') {
+    return 'Image could not be verified from the Blossom server.';
   }
 
   if (media.renderKind === 'video') {

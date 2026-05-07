@@ -82,6 +82,15 @@ function parseImetaCandidates(tags: readonly (readonly string[])[]): RawBlossomM
 function parseTopLevelTagCandidates(tags: readonly (readonly string[])[]): RawBlossomMediaCandidate[] {
   const candidates: RawBlossomMediaCandidate[] = [];
   let current: RawBlossomMediaCandidate | null = null;
+  let hasMediaMetadata = false;
+
+  const pushCurrent = () => {
+    if (current && hasMediaMetadata) {
+      candidates.push(current);
+    }
+    current = null;
+    hasMediaMetadata = false;
+  };
 
   for (const tag of tags) {
     const name = tag[0];
@@ -89,21 +98,35 @@ function parseTopLevelTagCandidates(tags: readonly (readonly string[])[]): RawBl
     if (typeof value !== 'string') continue;
 
     if (name === 'r') {
+      pushCurrent();
       current = {
         url: value,
         source: 'tags',
       };
-      candidates.push(current);
       continue;
     }
 
     if (!current) continue;
 
-    if (name === 'x' && !current.sha256) current.sha256 = value;
-    if (name === 'm' && !current.mimeType) current.mimeType = value;
-    if (name === 'size' && current.size === undefined) current.size = value;
-    if (name === 'dim' && !current.dim) current.dim = value;
+    if (name === 'x' && !current.sha256) {
+      current.sha256 = value;
+      hasMediaMetadata = true;
+    }
+    if (name === 'm' && !current.mimeType) {
+      current.mimeType = value;
+      hasMediaMetadata = true;
+    }
+    if (name === 'size' && current.size === undefined) {
+      current.size = value;
+      hasMediaMetadata = true;
+    }
+    if (name === 'dim' && !current.dim) {
+      current.dim = value;
+      hasMediaMetadata = true;
+    }
   }
+
+  pushCurrent();
 
   return candidates;
 }
