@@ -22,10 +22,13 @@ const mockConstants = {
 
 let mockDraft = buildReportDraft();
 let mockResolvedReportLocation = buildResolvedReportLocation();
+let mockCurrentPubkey: string | null = 'pubkey-123';
 const mockStartDraft = jest.fn();
 const mockUpdateDraft = jest.fn();
 const mockResetDraft = jest.fn();
 const mockSetAdjustEntryMode = jest.fn();
+const mockNdkFetchEvents = jest.fn();
+const mockNdk = { fetchEvents: mockNdkFetchEvents };
 
 jest.mock('expo-constants', () => ({
   ...mockConstants,
@@ -42,6 +45,16 @@ jest.mock('../../lib/media/validatePickedMedia', () => ({
 
 jest.mock('../../lib/media/blossomUpload', () => ({
   uploadToBlossom: jest.fn(),
+}));
+
+jest.mock('@nostr-dev-kit/mobile', () => ({
+  NDKSubscriptionCacheUsage: {
+    CACHE_FIRST: 'CACHE_FIRST',
+  },
+  useNDK: () => ({
+    ndk: mockNdk,
+  }),
+  useNDKCurrentPubkey: () => mockCurrentPubkey,
 }));
 
 jest.mock('@contexts', () => ({
@@ -185,6 +198,8 @@ describe('ReportIncidentScreen media upload', () => {
       EVENTINEL_BLOSSOM_SERVERS: 'https://cdn.example.com',
     };
     process.env.EVENTINEL_BLOSSOM_SERVERS = 'https://cdn.example.com';
+    mockCurrentPubkey = 'pubkey-123';
+    mockNdkFetchEvents.mockResolvedValue(new Set());
     mockDraft = buildReportDraft({
       location: buildReportLocation(),
       mediaAttachments: [],
@@ -312,6 +327,7 @@ describe('ReportIncidentScreen media upload', () => {
   it('blocks media selection when no Blossom server is configured', async () => {
     mockConstants.expoConfig.extra = {};
     delete process.env.EVENTINEL_BLOSSOM_SERVERS;
+    mockCurrentPubkey = null;
 
     const screen = render(<ReportIncidentScreen {...buildReportIncidentScreenProps()} />);
     fireEvent.press(screen.getByLabelText('Add report media'));
@@ -319,6 +335,80 @@ describe('ReportIncidentScreen media upload', () => {
     expect(await screen.findByText('No Blossom upload server is configured for report media.')).toBeTruthy();
     expect(pickMediaFromLibrary).not.toHaveBeenCalled();
     expect(uploadToBlossom).not.toHaveBeenCalled();
+  });
+
+  it('uploads with current user kind:10063 Blossom servers when app config has no server', async () => {
+    mockConstants.expoConfig.extra = {};
+    delete process.env.EVENTINEL_BLOSSOM_SERVERS;
+    mockNdkFetchEvents.mockResolvedValue(
+      new Set([
+        {
+          kind: 10063,
+          pubkey: 'pubkey-123',
+          created_at: 1_714_000_000,
+          tags: [
+            ['server', 'https://user-blossom.example.com/upload'],
+            ['server', 'ftp://ignored.example.com'],
+          ],
+        },
+      ])
+    );
+    const pickedMedia = {
+      uri: 'file:///picked/report.jpg',
+      mimeType: 'image/jpeg',
+      fileName: 'report.jpg',
+      fileSize: 12345,
+      width: 640,
+      height: 480,
+      type: 'image' as const,
+    };
+
+    jest.mocked(pickMediaFromLibrary).mockResolvedValue(pickedMedia);
+    jest.mocked(uploadToBlossom).mockResolvedValue({
+      ok: true,
+      result: buildUploadedMedia({
+        server: {
+          url: 'https://user-blossom.example.com',
+          source: 'user-kind-10063',
+        },
+        sourceServerUrl: 'https://user-blossom.example.com',
+      }),
+    } as any);
+
+    const screen = render(<ReportIncidentScreen {...buildReportIncidentScreenProps()} />);
+
+    await waitFor(() => {
+      expect(mockNdkFetchEvents).toHaveBeenCalledWith(
+        expect.objectContaining({
+          kinds: [10063],
+          authors: ['pubkey-123'],
+          limit: 1,
+        }),
+        expect.objectContaining({
+          cacheUsage: 'CACHE_FIRST',
+          groupable: false,
+        })
+      );
+    });
+
+    fireEvent.press(screen.getByLabelText('Add report media'));
+
+    await waitFor(() => {
+      expect(uploadToBlossom).toHaveBeenCalledWith(
+        expect.objectContaining({
+          media: pickedMedia,
+          capability: expect.objectContaining({
+            status: 'ready',
+            uploadServers: [
+              {
+                url: 'https://user-blossom.example.com',
+                source: 'user-kind-10063',
+              },
+            ],
+          }),
+        })
+      );
+    });
   });
 
   it('shows upload validation errors without changing the draft', async () => {

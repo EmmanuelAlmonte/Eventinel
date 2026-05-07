@@ -25,6 +25,7 @@ import { buildLocationPresentation, useResolvedReportLocation } from './reportIn
 import { ReportIncidentDetailsSection, MIN_DESCRIPTION_LENGTH } from './reportIncident/ReportIncidentDetailsSection';
 import { ReportIncidentFooter } from './reportIncident/ReportIncidentFooter';
 import { ReportIncidentLocationSection } from './reportIncident/ReportIncidentLocationSection';
+import { useCurrentUserBlossomServers } from './reportIncident/useCurrentUserBlossomServers';
 
 type ReportIncidentScreenProps = NativeStackScreenProps<RootStackParamList, 'ReportIncident'>;
 
@@ -38,6 +39,7 @@ export default function ReportIncidentScreen({ navigation, route }: ReportIncide
   const [isUploadingMedia, setIsUploadingMedia] = useState(false);
   const [mediaUploadProgress, setMediaUploadProgress] = useState<number | null>(null);
   const [mediaUploadError, setMediaUploadError] = useState<string | null>(null);
+  const currentUserBlossomServers = useCurrentUserBlossomServers();
   const currentDeviceLocation = useMemo(
     () =>
       sharedLocation
@@ -53,8 +55,8 @@ export default function ReportIncidentScreen({ navigation, route }: ReportIncide
       ...process.env,
       ...(Constants?.expoConfig?.extra ?? {}),
     });
-    return buildBlossomCapabilityState(config);
-  }, []);
+    return buildBlossomCapabilityState(config, currentUserBlossomServers);
+  }, [currentUserBlossomServers]);
 
   useEffect(() => {
     startDraft(route.params.sessionKey);
