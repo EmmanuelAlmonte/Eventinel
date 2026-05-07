@@ -88,6 +88,7 @@ export type BlossomMediaAllowance =
 
 const TRUE_VALUES = new Set(['1', 'true', 'yes', 'y', 'on']);
 const FALSE_VALUES = new Set(['0', 'false', 'no', 'n', 'off']);
+const TERMINAL_BLOSSOM_ENDPOINT_PATH_PATTERN = /\/(?:upload|media)$/;
 
 function getString(input: BlossomConfigInput, keys: string[]): string | null {
   for (const key of keys) {
@@ -135,11 +136,18 @@ export function normalizeBlossomServerUrl(value: unknown): string | null {
   try {
     const parsed = new URL(trimmed);
     if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') return null;
-    const normalizedPath = parsed.pathname.replace(/\/+$/, '');
+    const normalizedPath = normalizeBlossomServerPathname(parsed.pathname);
     return normalizedPath ? `${parsed.origin}${normalizedPath}` : parsed.origin;
   } catch {
     return null;
   }
+}
+
+function normalizeBlossomServerPathname(pathname: string): string {
+  return pathname
+    .replace(/\/+$/, '')
+    .replace(TERMINAL_BLOSSOM_ENDPOINT_PATH_PATTERN, '')
+    .replace(/\/+$/, '');
 }
 
 export function normalizeBlossomServerUrls(value: unknown): string[] {

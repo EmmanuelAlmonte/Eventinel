@@ -1,6 +1,6 @@
 import { Buffer } from 'buffer';
 
-import type { BlossomCapabilityState } from './blossomConfig';
+import { normalizeBlossomServerUrl, type BlossomCapabilityState } from './blossomConfig';
 import {
   BLOSSOM_UPLOAD_AUTH_KIND,
   BlossomDefaultAuthMissing,
@@ -28,9 +28,11 @@ export function resolveBlossomServerAuthTag(serverUrl: string): string {
 }
 
 export function buildBlossomUploadUrl(serverUrl: string, endpoint: '/upload' | '/media'): string {
-  const parsed = new URL(serverUrl);
-  const basePath = parsed.pathname.replace(/\/+$/, '');
-  return `${parsed.origin}${basePath}${endpoint}`;
+  const normalizedServerUrl = normalizeBlossomServerUrl(serverUrl);
+  if (!normalizedServerUrl) {
+    throw new Error('Blossom server URL must be an HTTP(S) URL.');
+  }
+  return `${normalizedServerUrl}${endpoint}`;
 }
 
 export function buildBlossomAuthEventTemplate(params: {

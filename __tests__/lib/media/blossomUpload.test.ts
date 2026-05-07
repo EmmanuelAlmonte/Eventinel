@@ -6,6 +6,7 @@ import {
   type BlossomCapabilityState,
 } from '@lib/media/blossomConfig';
 import {
+  buildBlossomUploadUrl,
   encodeBlossomAuthHeader,
   uploadToBlossom,
   type BlossomAuthSigner,
@@ -155,6 +156,20 @@ describe('blossomUpload', () => {
     );
 
     expect(captured.request?.url).toBe('https://cdn.example.com/blossom/upload');
+  });
+
+  it('does not duplicate terminal Blossom upload or media endpoint paths', () => {
+    expect(buildBlossomUploadUrl('https://cdn.example.com/upload', '/upload')).toBe('https://cdn.example.com/upload');
+    expect(buildBlossomUploadUrl('https://cdn.example.com/media', '/upload')).toBe('https://cdn.example.com/upload');
+    expect(buildBlossomUploadUrl('https://cdn.example.com/media?token=ignored#section', '/media')).toBe(
+      'https://cdn.example.com/media'
+    );
+    expect(buildBlossomUploadUrl('https://cdn.example.com/blossom/upload/', '/upload')).toBe(
+      'https://cdn.example.com/blossom/upload'
+    );
+    expect(buildBlossomUploadUrl('https://cdn.example.com/blossom/media/?token=ignored#section', '/media')).toBe(
+      'https://cdn.example.com/blossom/media'
+    );
   });
 
   it('rejects media through classifyBlossomMediaAllowance before auth or transport, including video disabled', async () => {

@@ -34,15 +34,23 @@ describe('blossomConfig', () => {
     });
   });
 
-  it('normalizes Blossom server URLs while preserving configured base paths', () => {
+  it('normalizes Blossom server URLs while preserving real base paths', () => {
+    expect(normalizeBlossomServerUrl('https://upload.example.com')).toBe('https://upload.example.com');
+    expect(normalizeBlossomServerUrl('https://upload.example.com/?x=1#hash')).toBe('https://upload.example.com');
     expect(normalizeBlossomServerUrl('https://upload.example.com/blossom/?x=1#hash')).toBe(
       'https://upload.example.com/blossom'
     );
-    expect(normalizeBlossomServerUrl('https://upload.example.com/?x=1#hash')).toBe(
+    expect(normalizeBlossomServerUrl('http://upload.example.com/path')).toBe('http://upload.example.com/path');
+    expect(normalizeBlossomServerUrl('https://upload.example.com/upload')).toBe('https://upload.example.com');
+    expect(normalizeBlossomServerUrl('https://upload.example.com/upload/?x=1#hash')).toBe(
       'https://upload.example.com'
     );
-    expect(normalizeBlossomServerUrl('http://upload.example.com/path')).toBe(
-      'http://upload.example.com/path'
+    expect(normalizeBlossomServerUrl('https://upload.example.com/media#hash')).toBe('https://upload.example.com');
+    expect(normalizeBlossomServerUrl('https://upload.example.com/blossom/upload?x=1#hash')).toBe(
+      'https://upload.example.com/blossom'
+    );
+    expect(normalizeBlossomServerUrl('https://upload.example.com/blossom/media/')).toBe(
+      'https://upload.example.com/blossom'
     );
     expect(normalizeBlossomServerUrl('ftp://upload.example.com/path')).toBeNull();
   });
@@ -156,12 +164,17 @@ describe('blossomConfig', () => {
       ['relay', 'wss://relay.example.com'],
       ['server', 'https://fallback.example.com'],
       ['server', 'https://second.example.com/path?ignored=true#hash'],
+      ['server', 'https://api.example.com/upload/?ignored=true#hash'],
+      ['server', 'https://api.example.com/media'],
+      ['server', 'https://media.example.com/blossom/media?ignored=true#hash'],
     ];
 
     expect(BLOSSOM_KIND_SERVER_LIST).toBe(10063);
     expect(normalizeKind10063ServerTags(tags)).toEqual([
       'https://fallback.example.com',
       'https://second.example.com/path',
+      'https://api.example.com',
+      'https://media.example.com/blossom',
     ]);
   });
 
