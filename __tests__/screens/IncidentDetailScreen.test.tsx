@@ -9,6 +9,12 @@ import type { UseIncidentCommentsResult } from '../../hooks/useIncidentComments'
 const mockNavigate = jest.fn();
 const mockGoBack = jest.fn();
 const mockRouteParams = { incidentId: 'test-incident-id' };
+const mockConstants = {
+  expoConfig: {
+    extra: {} as Record<string, unknown>,
+  },
+};
+const originalBlossomMaxBytes = process.env.EVENTINEL_BLOSSOM_MAX_BYTES;
 
 jest.mock('@react-navigation/native', () => {
   const actual = jest.requireActual('@react-navigation/native');
@@ -23,6 +29,11 @@ jest.mock('@react-navigation/native', () => {
     }),
   };
 });
+
+jest.mock('expo-constants', () => ({
+  ...mockConstants,
+  default: mockConstants,
+}));
 
 const mockColors = {
   background: '#111827',
@@ -215,11 +226,18 @@ describe('IncidentDetailScreen', () => {
   });
 
   afterAll(() => {
+    if (originalBlossomMaxBytes === undefined) {
+      delete process.env.EVENTINEL_BLOSSOM_MAX_BYTES;
+    } else {
+      process.env.EVENTINEL_BLOSSOM_MAX_BYTES = originalBlossomMaxBytes;
+    }
     jest.useRealTimers();
   });
 
   beforeEach(() => {
     jest.clearAllMocks();
+    mockConstants.expoConfig.extra = {};
+    delete process.env.EVENTINEL_BLOSSOM_MAX_BYTES;
     mockCurrentUser = {
       pubkey: 'user-pubkey-123',
       profile: { displayName: 'Test User' },
@@ -263,6 +281,10 @@ describe('IncidentDetailScreen', () => {
   });
 
   it('renders report image media from verified incident event metadata', async () => {
+    process.env.EVENTINEL_BLOSSOM_MAX_BYTES = '268435456';
+    mockConstants.expoConfig.extra = {
+      EVENTINEL_BLOSSOM_MAX_BYTES: '268435456',
+    };
     const imageUrl = `https://cdn.example.com/${BLOSSOM_HASH}.jpg`;
     mockGetIncident.mockReturnValue({
       ...mockIncident,
@@ -291,6 +313,42 @@ describe('IncidentDetailScreen', () => {
       expect.objectContaining({
         candidateUrls: [imageUrl],
         expectedSha256: BLOSSOM_HASH,
+        maxBytes: 268435456,
+        mimeType: 'image/jpeg',
+      })
+    );
+  });
+
+  it('uses report image metadata size as the verification limit when no Blossom max is configured', async () => {
+    const imageUrl = `https://cdn.example.com/${BLOSSOM_HASH}.jpg`;
+    const mediaSize = 25 * 1024 * 1024;
+    mockGetIncident.mockReturnValue({
+      ...mockIncident,
+      mediaAttachments: [
+        {
+          id: `imeta:${BLOSSOM_HASH}:0`,
+          url: imageUrl,
+          sha256: BLOSSOM_HASH,
+          mimeType: 'image/jpeg',
+          size: mediaSize,
+          source: 'imeta',
+          renderKind: 'image',
+          status: 'renderable',
+          fallbackUrls: [],
+        },
+      ],
+    });
+
+    const { getByTestId } = render(<IncidentDetailScreen />);
+
+    await waitFor(() => {
+      expect(getByTestId('incident-report-media-image').props.source.uri).toBe('data:image/jpeg;base64,AA==');
+    });
+    expect(mockFetchAndVerifyBlossomMediaImpl).toHaveBeenCalledWith(
+      expect.objectContaining({
+        candidateUrls: [imageUrl],
+        expectedSha256: BLOSSOM_HASH,
+        maxBytes: mediaSize,
         mimeType: 'image/jpeg',
       })
     );

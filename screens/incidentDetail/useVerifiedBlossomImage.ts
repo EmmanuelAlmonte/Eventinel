@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Platform } from 'react-native';
+import Constants from 'expo-constants';
 
+import { buildBlossomConfig } from '@lib/media/blossomConfig';
 import {
   fetchAndVerifyBlossomMedia,
   resolveBlossomDisplayUrl,
@@ -24,6 +26,7 @@ type VerifiedBlossomImageState =
 export function useVerifiedBlossomImage(media: BlossomMediaDescriptor): VerifiedBlossomImageState {
   const candidateUrls = useMemo(() => buildDisplayCandidateUrls(media), [media]);
   const expectedSha256 = media.sha256;
+  const maxBytes = getBlossomRenderMaxBytes(media.size);
   const mimeType = media.mimeType;
   const [state, setState] = useState<VerifiedBlossomImageState>({ status: 'loading', uri: null });
 
@@ -44,6 +47,7 @@ export function useVerifiedBlossomImage(media: BlossomMediaDescriptor): Verified
     fetchAndVerifyBlossomMedia({
       candidateUrls,
       expectedSha256,
+      ...(maxBytes === undefined ? {} : { maxBytes }),
       mimeType,
       signal: controller.signal,
     })
@@ -60,9 +64,25 @@ export function useVerifiedBlossomImage(media: BlossomMediaDescriptor): Verified
       isActive = false;
       controller.abort();
     };
-  }, [candidateUrls, expectedSha256, mimeType]);
+  }, [candidateUrls, expectedSha256, maxBytes, mimeType]);
 
   return state;
+}
+
+function getBlossomRenderMaxBytes(mediaSize?: number): number | undefined {
+  const configuredMaxBytes = buildBlossomConfig({
+    ...process.env,
+    ...(Constants?.expoConfig?.extra ?? {}),
+  }).maxBytes;
+
+  return configuredMaxBytes ?? normalizePositiveInteger(mediaSize);
+}
+
+function normalizePositiveInteger(value?: number): number | undefined {
+  if (typeof value !== 'number' || !Number.isFinite(value) || value <= 0) return undefined;
+
+  const normalized = Math.floor(value);
+  return normalized > 0 ? normalized : undefined;
 }
 
 function buildDisplayCandidateUrls(media: BlossomMediaDescriptor): string[] {
