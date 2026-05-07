@@ -138,6 +138,25 @@ describe('blossomUpload', () => {
     );
   });
 
+  it('preserves Blossom server base paths without carrying query or fragment into upload requests', async () => {
+    const captured: { request?: BlossomUploadTransportRequest } = {};
+    const transport = successTransport((request) => {
+      captured.request = request;
+    });
+
+    await uploadToBlossom(
+      baseParams({
+        server: {
+          url: 'https://cdn.example.com/blossom/?token=ignored#section',
+          source: 'app-default',
+        },
+        transport,
+      })
+    );
+
+    expect(captured.request?.url).toBe('https://cdn.example.com/blossom/upload');
+  });
+
   it('rejects media through classifyBlossomMediaAllowance before auth or transport, including video disabled', async () => {
     const signer = jest.fn(signAuth);
     const transport = successTransport();

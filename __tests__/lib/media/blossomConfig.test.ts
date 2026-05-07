@@ -24,7 +24,7 @@ describe('blossomConfig', () => {
     });
 
     expect(config).toEqual({
-      appUploadServers: ['https://cdn.example.com', 'https://upload.example.com'],
+      appUploadServers: ['https://cdn.example.com', 'https://upload.example.com/path'],
       imageMimeTypes: ['image/jpeg', 'image/png'],
       videoEnabled: true,
       videoMimeTypes: ['video/mp4'],
@@ -34,11 +34,16 @@ describe('blossomConfig', () => {
     });
   });
 
-  it('normalizes Blossom server URLs to scheme and host only', () => {
-    expect(normalizeBlossomServerUrl('https://upload.example.com/path/?x=1#hash')).toBe(
+  it('normalizes Blossom server URLs while preserving configured base paths', () => {
+    expect(normalizeBlossomServerUrl('https://upload.example.com/blossom/?x=1#hash')).toBe(
+      'https://upload.example.com/blossom'
+    );
+    expect(normalizeBlossomServerUrl('https://upload.example.com/?x=1#hash')).toBe(
       'https://upload.example.com'
     );
-    expect(normalizeBlossomServerUrl('http://upload.example.com/path')).toBe('http://upload.example.com');
+    expect(normalizeBlossomServerUrl('http://upload.example.com/path')).toBe(
+      'http://upload.example.com/path'
+    );
     expect(normalizeBlossomServerUrl('ftp://upload.example.com/path')).toBeNull();
   });
 
@@ -156,7 +161,7 @@ describe('blossomConfig', () => {
     expect(BLOSSOM_KIND_SERVER_LIST).toBe(10063);
     expect(normalizeKind10063ServerTags(tags)).toEqual([
       'https://fallback.example.com',
-      'https://second.example.com',
+      'https://second.example.com/path',
     ]);
   });
 
@@ -194,5 +199,23 @@ describe('blossomConfig', () => {
     expect(capability.allowedMimeTypes).toEqual(['image/png']);
     expect(capability.videoUploadEnabled).toBe(false);
     expect(capability.maxBytes).toBe(3000);
+  });
+
+  it('matches server MIME wildcards against configured concrete media policy', () => {
+    const capability = buildBlossomCapabilityState(
+      buildBlossomConfig({
+        EVENTINEL_BLOSSOM_SERVERS: 'https://app.example.com',
+        EVENTINEL_BLOSSOM_IMAGE_MIME_TYPES: 'image/jpeg, image/png',
+        EVENTINEL_BLOSSOM_VIDEO_ENABLED: 'true',
+        EVENTINEL_BLOSSOM_VIDEO_MIME_TYPES: 'video/mp4, video/webm',
+      }),
+      [],
+      {
+        acceptedMimeTypes: 'image/*, video/*, audio/*, image/jp*g',
+      }
+    );
+
+    expect(capability.allowedMimeTypes).toEqual(['image/jpeg', 'image/png', 'video/mp4', 'video/webm']);
+    expect(capability.videoUploadEnabled).toBe(true);
   });
 });

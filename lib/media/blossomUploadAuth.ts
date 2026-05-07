@@ -29,7 +29,8 @@ export function resolveBlossomServerAuthTag(serverUrl: string): string {
 
 export function buildBlossomUploadUrl(serverUrl: string, endpoint: '/upload' | '/media'): string {
   const parsed = new URL(serverUrl);
-  return `${parsed.origin}${endpoint}`;
+  const basePath = parsed.pathname.replace(/\/+$/, '');
+  return `${parsed.origin}${basePath}${endpoint}`;
 }
 
 export function buildBlossomAuthEventTemplate(params: {

@@ -135,7 +135,8 @@ export function normalizeBlossomServerUrl(value: unknown): string | null {
   try {
     const parsed = new URL(trimmed);
     if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') return null;
-    return parsed.origin;
+    const normalizedPath = parsed.pathname.replace(/\/+$/, '');
+    return normalizedPath ? `${parsed.origin}${normalizedPath}` : parsed.origin;
   } catch {
     return null;
   }
@@ -238,7 +239,9 @@ export function buildBlossomCapabilityState(
   const serverMimeTypes = normalizeMimeTypes(serverCapabilities.acceptedMimeTypes);
   const allowedMimeTypes =
     serverMimeTypes.length > 0
-      ? configuredMimeTypes.filter((mimeType) => serverMimeTypes.includes(mimeType))
+      ? configuredMimeTypes.filter((mimeType) =>
+          serverMimeTypes.some((serverMimeType) => serverMimeTypeMatchesConfiguredMimeType(serverMimeType, mimeType))
+        )
       : configuredMimeTypes;
   const serverMaxBytes = parseBlossomPositiveNumber(serverCapabilities.maxBytes);
   const maxBytes =
@@ -271,6 +274,16 @@ export function buildBlossomCapabilityState(
     uploadServers,
     imageUploadEnabled: true,
   };
+}
+
+function serverMimeTypeMatchesConfiguredMimeType(serverMimeType: string, configuredMimeType: string): boolean {
+  if (serverMimeType === configuredMimeType) return true;
+
+  const [serverType, serverSubtype] = serverMimeType.split('/');
+  if (serverSubtype !== '*') return false;
+
+  const [configuredType, configuredSubtype] = configuredMimeType.split('/');
+  return configuredSubtype !== '*' && configuredType === serverType;
 }
 
 function inferMediaKind(media: PickedMediaForBlossom): 'image' | 'video' | 'unsupported' | 'unknown' {
