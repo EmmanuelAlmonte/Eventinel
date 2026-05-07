@@ -59,8 +59,25 @@ describe('blossomRender', () => {
 
     expect(fallbackUrls).toEqual([
       `https://cdn.example.com/path/${HASH}.png`,
+      `https://cdn.example.com/${HASH}.png`,
       `https://fallback.example.com/${HASH}.png`,
     ]);
+  });
+
+  it('does not duplicate the original Blossom URL when there is no query-token difference', () => {
+    const fallbackUrls = buildBlossomFallbackUrls({
+      serverUrls: [
+        'https://cdn.example.com',
+        'https://cdn.example.com/upload',
+        'https://fallback.example.com',
+        'https://fallback.example.com/media',
+      ],
+      sha256: HASH,
+      extension: 'png',
+      originalUrl: `https://cdn.example.com/${HASH}.png`,
+    });
+
+    expect(fallbackUrls).toEqual([`https://fallback.example.com/${HASH}.png`]);
   });
 
   it('maps local Blossom URLs to the Android emulator host loopback address for display', () => {

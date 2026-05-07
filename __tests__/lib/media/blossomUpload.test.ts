@@ -362,6 +362,51 @@ describe('blossomUpload', () => {
     });
   });
 
+  it('rejects successful upload responses whose descriptor hash does not match the uploaded bytes', async () => {
+    const transport = successTransport(undefined, {
+      status: 201,
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(
+        blobDescriptor({
+          sha256: SECOND_HASH,
+          url: `https://cdn.example.com/${SECOND_HASH}.jpg`,
+        })
+      ),
+    });
+
+    const outcome = await uploadToBlossom(baseParams({ transport }));
+
+    expect(outcome).toMatchObject({
+      ok: false,
+      error: {
+        type: 'invalid-response',
+        status: 201,
+        message: 'Blossom server response SHA-256 did not match the uploaded media hash.',
+        retryable: false,
+      },
+    });
+  });
+
+  it('rejects successful upload responses whose descriptor size does not match the uploaded byte length', async () => {
+    const transport = successTransport(undefined, {
+      status: 201,
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(blobDescriptor({ size: BYTES.byteLength + 1 })),
+    });
+
+    const outcome = await uploadToBlossom(baseParams({ transport }));
+
+    expect(outcome).toMatchObject({
+      ok: false,
+      error: {
+        type: 'invalid-response',
+        status: 201,
+        message: 'Blossom server response size did not match the uploaded media byte length.',
+        retryable: false,
+      },
+    });
+  });
+
   it('normalizes server status, body, and X-Reason rejection details', async () => {
     const transport = successTransport(undefined, {
       status: 413,

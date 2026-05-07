@@ -47,13 +47,13 @@ export function buildBlossomFallbackUrls(params: BuildBlossomFallbackUrlsParams)
     normalizeExtension(params.extension) ??
     (params.originalUrl ? extractExtensionFromUrl(params.originalUrl) : null);
   const suffix = extension ? `.${extension}` : '';
-  const originalKey = params.originalUrl ? buildUrlResourceKey(params.originalUrl) : null;
+  const originalKey = params.originalUrl ? buildUrlComparisonKey(params.originalUrl) : null;
   const seen = new Set<string>();
   const fallbackUrls: string[] = [];
 
   for (const serverUrl of normalizeBlossomServerUrls([...params.serverUrls])) {
     const candidate = `${serverUrl}/${sha256}${suffix}`;
-    const candidateKey = buildUrlResourceKey(candidate);
+    const candidateKey = buildUrlComparisonKey(candidate);
     if (!candidateKey || candidateKey === originalKey || seen.has(candidateKey)) continue;
     seen.add(candidateKey);
     fallbackUrls.push(candidate);
@@ -132,12 +132,6 @@ export function buildUrlComparisonKey(url: string): string | null {
   if (!parsed) return null;
   parsed.hash = '';
   return `${parsed.origin}${parsed.pathname}${parsed.search}`.toLowerCase();
-}
-
-export function buildUrlResourceKey(url: string): string | null {
-  const parsed = parseHttpUrl(url);
-  if (!parsed) return null;
-  return `${parsed.origin}${parsed.pathname}`.toLowerCase();
 }
 
 export function normalizeSha256(value: unknown): string | null {

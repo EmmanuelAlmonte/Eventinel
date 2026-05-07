@@ -24,10 +24,13 @@ import {
 import type {
   BlossomUploadNetworkError,
   BlossomUploadOutcome,
+  BlossomUploadInvalidResponseError,
   BlossomUploadParams,
   BlossomUploadServerRejectedError,
   BlossomUploadTimeoutError,
   BlossomUploadTransportRequest,
+  BlossomUploadTransportResponse,
+  BlossomUploadedMedia,
 } from './blossomUploadTypes';
 import { BlossomDefaultAuthMissing } from './blossomUploadTypes';
 
@@ -251,7 +254,16 @@ export async function uploadToBlossom(params: BlossomUploadParams): Promise<Blos
       server,
     });
 
-    if (normalized.ok) return normalized;
+    if (normalized.ok) {
+      const verificationError = verifyNormalizedUploadResult(
+        normalized.result,
+        sha256,
+        bytes.byteLength,
+        responseOutcome.response
+      );
+      if (verificationError) return { ok: false, error: verificationError };
+      return normalized;
+    }
 
     if (!isRetryableUploadError(normalized.error) || attempt >= maxAttempts) {
       if (lastTransientError && isRetryableUploadError(normalized.error)) {
@@ -272,4 +284,58 @@ export async function uploadToBlossom(params: BlossomUploadParams): Promise<Blos
     ok: false,
     error: retryExhaustedError(maxAttempts, lastTransientError ?? networkError('Upload retry limit reached')),
   };
+}
+
+function verifyNormalizedUploadResult(
+  result: BlossomUploadedMedia,
+  expectedSha256: string,
+  expectedSize: number,
+  response: BlossomUploadTransportResponse
+): BlossomUploadInvalidResponseError | null {
+  if (
+    result.sha256.toLowerCase() !== expectedSha256 ||
+    result.descriptor.sha256.toLowerCase() !== expectedSha256
+  ) {
+    return invalidUploadResponseError(
+      response,
+      'Blossom server response SHA-256 did not match the uploaded media hash.'
+    );
+  }
+
+  if (hasUploadSizeMismatch(result.size, expectedSize) || hasUploadSizeMismatch(result.descriptor.size, expectedSize)) {
+    return invalidUploadResponseError(
+      response,
+      'Blossom server response size did not match the uploaded media byte length.'
+    );
+  }
+
+  return null;
+}
+
+function hasUploadSizeMismatch(size: unknown, expectedSize: number): boolean {
+  return typeof size === 'number' && Number.isFinite(size) && size !== expectedSize;
+}
+
+function invalidUploadResponseError(
+  response: BlossomUploadTransportResponse,
+  message: string
+): BlossomUploadInvalidResponseError {
+  return {
+    type: 'invalid-response',
+    status: response.status,
+    message,
+    body: stringifyInvalidResponseBody(response.body),
+    retryable: false,
+  };
+}
+
+function stringifyInvalidResponseBody(body: unknown): string | null {
+  if (typeof body === 'string') return body.length > 0 ? body : null;
+  if (body === null || body === undefined) return null;
+
+  try {
+    return JSON.stringify(body);
+  } catch {
+    return String(body);
+  }
 }
