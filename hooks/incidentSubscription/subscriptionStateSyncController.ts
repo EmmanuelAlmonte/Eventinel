@@ -4,6 +4,8 @@ import type { NDKEvent } from '@nostr-dev-kit/mobile';
 
 import { calculateIncidentSinceUnixSeconds } from '@lib/incidentHistoryWindow';
 import { INCIDENT_LIMITS } from '@lib/map/constants';
+import { resolveCachedAuthorBlossomServerUrls } from '@lib/media/blossomServerList';
+import { ndk } from '@lib/ndk';
 import { buildIncidentDisplayState } from './sorting';
 import { applyIncidentEventBatch } from './eventReducer';
 import type { RelayConfirmationMapRef } from './cacheConfirmation';
@@ -168,6 +170,8 @@ function flushQueuedIncidentEvents(
     ? args.pendingEventsRef.current.slice(INITIAL_HISTORY_FLUSH_CHUNK_SIZE)
     : [];
 
+  const authorBlossomServerUrlsByPubkey =
+    buildAuthorBlossomServerUrlsByPubkey(queued);
   const reducerResult = applyIncidentEventBatch({
     queuedEvents: queued,
     incidentMap: args.incidentMapRef.current,
@@ -175,6 +179,7 @@ function flushQueuedIncidentEvents(
     maxParseCandidates: INCIDENT_LIMITS.MAX_PARSE_CANDIDATES,
     location: args.stableLocation,
     minCreatedAtUnixSeconds: calculateIncidentSinceUnixSeconds(args.sinceDays),
+    authorBlossomServerUrlsByPubkey,
   });
   args.incidentMapRef.current = reducerResult.incidentMap;
 
@@ -228,6 +233,26 @@ function flushQueuedIncidentEvents(
       INITIAL_HISTORY_FLUSH_CONTINUATION_MS
     );
   }
+}
+
+function buildAuthorBlossomServerUrlsByPubkey(
+  queuedEvents: readonly QueuedEvent[]
+): ReadonlyMap<string, readonly string[]> | undefined {
+  const serverUrlsByPubkey = new Map<string, readonly string[]>();
+
+  for (const queued of queuedEvents) {
+    const authorPubkey = queued.event.pubkey;
+    if (!authorPubkey || serverUrlsByPubkey.has(authorPubkey)) {
+      continue;
+    }
+
+    const serverUrls = resolveCachedAuthorBlossomServerUrls(ndk, authorPubkey);
+    if (serverUrls.length > 0) {
+      serverUrlsByPubkey.set(authorPubkey, serverUrls);
+    }
+  }
+
+  return serverUrlsByPubkey.size > 0 ? serverUrlsByPubkey : undefined;
 }
 
 export function useIncidentSubscriptionStateSyncController({

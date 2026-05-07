@@ -287,7 +287,7 @@ describe('parseIncidentEvent', () => {
       expect(result?.mediaAttachments?.[0]).toMatchObject({
         url: `https://cdn.example.com/${MEDIA_HASH}.jpg`,
         sha256: MEDIA_HASH,
-        fallbackUrls: [`https://fallback.example.com/${MEDIA_HASH}.jpg`],
+        fallbackUrls: [`https://fallback.example.com/path/${MEDIA_HASH}.jpg`],
       });
     });
   });

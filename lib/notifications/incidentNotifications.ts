@@ -1,6 +1,10 @@
 import type { NDKEvent, NDKFilter } from '@nostr-dev-kit/mobile';
 import { NDKSubscriptionCacheUsage } from '@nostr-dev-kit/mobile';
 import { ndk } from '@lib/ndk';
+import {
+  fetchAuthorBlossomServerUrls,
+  resolveCachedAuthorBlossomServerUrls,
+} from '@lib/media/blossomServerList';
 import { parseIncidentEvent } from '@lib/nostr/events/incident';
 import type { ParsedIncident } from '@lib/nostr/events/types';
 import { NOSTR_KINDS } from '@lib/nostr/config';
@@ -53,6 +57,32 @@ const INCIDENT_NOTIFICATION_RELAY_OPTIONS = {
 
 const LOOKUP_CACHE_TAG = '#d';
 const hasSyncCacheLookup = (): boolean => typeof ndk.fetchEventSync === 'function';
+
+function parseIncidentEventWithCachedAuthorServers(
+  event: NDKEvent
+): ParsedIncident | null {
+  const authorBlossomServerUrls = resolveCachedAuthorBlossomServerUrls(
+    ndk,
+    event.pubkey
+  );
+  if (authorBlossomServerUrls.length === 0) {
+    return parseIncidentEvent(event);
+  }
+  return parseIncidentEvent(event, { authorBlossomServerUrls });
+}
+
+async function parseIncidentEventWithFetchedAuthorServers(
+  event: NDKEvent
+): Promise<ParsedIncident | null> {
+  const authorBlossomServerUrls = await fetchAuthorBlossomServerUrls(
+    ndk,
+    event.pubkey
+  );
+  if (authorBlossomServerUrls.length === 0) {
+    return parseIncidentEvent(event);
+  }
+  return parseIncidentEvent(event, { authorBlossomServerUrls });
+}
 
 function getRecordValue(record: NotificationData, key: string): string | undefined {
   const value = record[key];
@@ -175,7 +205,7 @@ function findLatestIncidentInCache(
     if (!cached || cached.length === 0) return null;
     const event = pickLatestEvent(cached);
     if (!event) return null;
-    return parseIncidentEvent(event);
+    return parseIncidentEventWithCachedAuthorServers(event);
   }
 
   const incidentId = payload.incidentId;
@@ -190,11 +220,11 @@ function findLatestIncidentInCache(
 
   const cachedEvent = pickLatestIncidentFromEventsByDTag(cached, incidentId);
   if (cachedEvent) {
-    return parseIncidentEvent(cachedEvent);
+    return parseIncidentEventWithCachedAuthorServers(cachedEvent);
   }
 
   const fallbackEvent = pickLatestEvent(cached);
-  return fallbackEvent ? parseIncidentEvent(fallbackEvent) : null;
+  return fallbackEvent ? parseIncidentEventWithCachedAuthorServers(fallbackEvent) : null;
 }
 
 export function coerceIncidentNotificationPayload(
@@ -275,7 +305,7 @@ async function fetchIncidentAttemptFromRelay(
   // Count a "relay response" when an event is returned (parse success tracked separately).
   trackLookupTiming('relay', relayLookupMs, Boolean(event));
 
-  const parsed = event ? parseIncidentEvent(event) : null;
+  const parsed = event ? await parseIncidentEventWithFetchedAuthorServers(event) : null;
   if (parsed) {
     INC_NOTIFICATION_METRICS.relayParses += 1;
   }

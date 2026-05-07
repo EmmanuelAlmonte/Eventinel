@@ -141,4 +141,33 @@ describe('applyIncidentEventBatch', () => {
       overflowCount - INCIDENT_LIMITS.MAX_PARSE_CANDIDATES
     );
   });
+
+  it('passes author Blossom server fallbacks into incident parsing', () => {
+    const queued = buildQueuedIncidentEvent('incident-with-media', 100, {
+      eventId: 'event-with-media',
+      pubkey: 'author-pubkey',
+    });
+    mockParseIncidentEvent.mockReturnValue(
+      buildParsedIncident('incident-with-media', {
+        eventId: 'event-with-media',
+        pubkey: 'author-pubkey',
+        createdAt: 100,
+      })
+    );
+
+    applyIncidentEventBatch({
+      queuedEvents: [queued],
+      incidentMap: new Map(),
+      maxCandidateRetention: 1000,
+      location: null,
+      minCreatedAtUnixSeconds: null,
+      authorBlossomServerUrlsByPubkey: new Map([
+        ['author-pubkey', ['https://fallback.example.com/path']],
+      ]),
+    });
+
+    expect(mockParseIncidentEvent).toHaveBeenCalledWith(queued.event, {
+      authorBlossomServerUrls: ['https://fallback.example.com/path'],
+    });
+  });
 });

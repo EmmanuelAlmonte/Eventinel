@@ -235,7 +235,8 @@ function applyIncidentEventUpdates(
   candidates: readonly QueuedEventCandidate[],
   incidentMap: EventBatchInput['incidentMap'],
   metricsInput: IncidentEventReducerMetrics,
-  minCreatedAtUnixSeconds: number | null | undefined
+  minCreatedAtUnixSeconds: number | null | undefined,
+  authorBlossomServerUrlsByPubkey: EventBatchInput['authorBlossomServerUrlsByPubkey']
 ): IncidentEventParseResult {
   let nextIncidentMap = incidentMap;
   const updatedIncidentMap = new Map<string, ProcessedIncident>();
@@ -246,7 +247,12 @@ function applyIncidentEventUpdates(
 
   for (const queued of candidates) {
     const parseStart = Date.now();
-    const parsed = parseIncidentEvent(queued.event);
+    const authorBlossomServerUrls =
+      queued.event.pubkey && authorBlossomServerUrlsByPubkey?.get(queued.event.pubkey);
+    const parsed =
+      authorBlossomServerUrls && authorBlossomServerUrls.length > 0
+        ? parseIncidentEvent(queued.event, { authorBlossomServerUrls })
+        : parseIncidentEvent(queued.event);
     const parseMs = Date.now() - parseStart;
     metricsInput.totalParseMs += parseMs;
     parsedEvents += 1;
@@ -363,7 +369,8 @@ export function applyIncidentEventBatch(input: EventBatchInput): EventBatchResul
       partitioned.candidates,
       input.incidentMap,
       REDUCTION_METRICS,
-      input.minCreatedAtUnixSeconds
+      input.minCreatedAtUnixSeconds,
+      input.authorBlossomServerUrlsByPubkey
     );
     nextIncidentMap = parsed.incidentMap;
     updatedIncidents.push(...parsed.updatedIncidents);

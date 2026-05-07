@@ -111,6 +111,7 @@ export interface EventBatchInput {
   maxParseCandidates?: number;
   location: [number, number] | null;
   minCreatedAtUnixSeconds?: number | null;
+  authorBlossomServerUrlsByPubkey?: ReadonlyMap<string, readonly string[]>;
 }
 
 export interface EventBatchResult {

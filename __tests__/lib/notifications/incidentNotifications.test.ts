@@ -14,6 +14,8 @@ import {
 jest.mock('../../../lib/ndk', () => ({
   ndk: {
     fetchEvent: jest.fn(),
+    fetchEvents: jest.fn(),
+    fetchEventSync: jest.fn(),
   },
 }));
 
@@ -234,6 +236,8 @@ describe('coerceIncidentNotificationPayload', () => {
 describe('fetchIncidentFromRelay', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    (mockedNdk.fetchEvents as jest.Mock).mockResolvedValue(new Set());
+    (mockedNdk.fetchEventSync as jest.Mock).mockReturnValue(undefined);
   });
 
   describe('returns null for invalid payloads', () => {
@@ -276,6 +280,80 @@ describe('fetchIncidentFromRelay', () => {
       expect(mockedParseIncidentEvent).toHaveBeenCalledWith(mockEvent);
       expect(result).not.toBeNull();
       expect(result?.eventId).toBe('event-123');
+    });
+
+    it('passes fetched author Blossom servers into relay incident parsing', async () => {
+      const mockEvent = {
+        id: 'event-with-media',
+        pubkey: 'author-pubkey',
+        created_at: 1234567890,
+        kind: 30911,
+        tags: [['d', 'incident-with-media']],
+        content: '{}',
+      };
+      (mockedNdk.fetchEvent as jest.Mock).mockResolvedValueOnce(mockEvent);
+      (mockedNdk.fetchEvents as jest.Mock).mockResolvedValueOnce(
+        new Set([
+          {
+            kind: 10063,
+            pubkey: 'author-pubkey',
+            created_at: 1_714_000_000,
+            tags: [['server', 'https://fallback.example.com/path']],
+          },
+        ])
+      );
+
+      await fetchIncidentFromRelay({ eventId: 'event-with-media' });
+
+      expect(mockedNdk.fetchEvents).toHaveBeenCalledWith(
+        {
+          kinds: [10063],
+          authors: ['author-pubkey'],
+          limit: 1,
+        },
+        expect.objectContaining({
+          cacheUsage: expect.anything(),
+          groupable: false,
+        })
+      );
+      expect(mockedParseIncidentEvent).toHaveBeenCalledWith(mockEvent, {
+        authorBlossomServerUrls: ['https://fallback.example.com/path'],
+      });
+    });
+
+    it('passes cached author Blossom servers into cached incident parsing', async () => {
+      const mockEvent = {
+        id: 'event-from-cache',
+        pubkey: 'cached-author',
+        created_at: 1234567890,
+        kind: 30911,
+        tags: [['d', 'incident-from-cache']],
+        content: '{}',
+      };
+      (mockedNdk.fetchEventSync as jest.Mock).mockImplementation((filter) => {
+        const firstFilter = Array.isArray(filter) ? filter[0] : filter;
+        if (firstFilter?.ids?.[0] === 'event-from-cache') {
+          return [mockEvent];
+        }
+        if (firstFilter?.kinds?.includes(10063)) {
+          return [
+            {
+              kind: 10063,
+              pubkey: 'cached-author',
+              created_at: 1_714_000_001,
+              tags: [['server', 'https://cache-fallback.example.com/path']],
+            },
+          ];
+        }
+        return undefined;
+      });
+
+      await fetchIncidentFromRelay({ eventId: 'event-from-cache' });
+
+      expect(mockedNdk.fetchEvent).not.toHaveBeenCalled();
+      expect(mockedParseIncidentEvent).toHaveBeenCalledWith(mockEvent, {
+        authorBlossomServerUrls: ['https://cache-fallback.example.com/path'],
+      });
     });
 
     it('returns null when event not found by eventId', async () => {
