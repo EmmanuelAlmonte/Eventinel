@@ -437,26 +437,55 @@ describe('ReportIncidentScreen media upload', () => {
     expect(mockUpdateDraft).not.toHaveBeenCalled();
   });
 
-  it('removes existing report media attachments from draft state', () => {
-    mockDraft = buildReportDraft({
-      mediaAttachments: [
-        {
-          id: 'attached-image',
-          url: 'https://cdn.example.com/attached-image.jpg',
-          sha256: 'b'.repeat(64),
-          mimeType: 'image/jpeg',
-          size: 12345,
-          width: 640,
-          height: 480,
-          mediaKind: 'image',
-        },
-      ],
+  it('removes existing report media attachments from the latest draft state', () => {
+    const firstAttachment = {
+      id: 'attached-image',
+      url: 'https://cdn.example.com/attached-image.jpg',
+      sha256: 'b'.repeat(64),
+      mimeType: 'image/jpeg',
+      size: 12345,
+      width: 640,
+      height: 480,
+      mediaKind: 'image' as const,
+    };
+    const secondAttachment = {
+      id: 'second-attached-image',
+      url: 'https://cdn.example.com/second-attached-image.jpg',
+      sha256: 'c'.repeat(64),
+      mimeType: 'image/jpeg',
+      size: 67890,
+      width: 320,
+      height: 240,
+      mediaKind: 'image' as const,
+    };
+    const initialDraft = buildReportDraft({
+      mediaAttachments: [firstAttachment, secondAttachment],
     });
+    mockDraft = initialDraft;
 
     const screen = render(<ReportIncidentScreen {...buildReportIncidentScreenProps()} />);
-    fireEvent.press(screen.getByLabelText('Remove image attachment'));
+    const removeButtons = screen.getAllByLabelText('Remove image attachment');
+    fireEvent.press(removeButtons[0]);
+    fireEvent.press(removeButtons[1]);
 
-    expect(mockUpdateDraft).toHaveBeenCalledWith({
+    expect(mockUpdateDraft).toHaveBeenCalledTimes(2);
+    expect(mockUpdateDraft).toHaveBeenNthCalledWith(1, expect.any(Function));
+    expect(mockUpdateDraft).toHaveBeenNthCalledWith(2, expect.any(Function));
+
+    const removeFirstAttachment = mockUpdateDraft.mock.calls[0][0] as (
+      currentDraft: typeof initialDraft
+    ) => Partial<typeof initialDraft>;
+    const removeSecondAttachment = mockUpdateDraft.mock.calls[1][0] as (
+      currentDraft: typeof initialDraft
+    ) => Partial<typeof initialDraft>;
+
+    const afterFirstRemoval = {
+      ...initialDraft,
+      ...removeFirstAttachment(initialDraft),
+    };
+
+    expect(afterFirstRemoval.mediaAttachments).toEqual([secondAttachment]);
+    expect(removeSecondAttachment(afterFirstRemoval)).toEqual({
       mediaAttachments: [],
     });
   });

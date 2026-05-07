@@ -181,9 +181,9 @@ export default function ReportIncidentScreen({ navigation, route }: ReportIncide
   }
 
   function handleRemoveMediaAttachment(attachmentId: string) {
-    updateDraft({
-      mediaAttachments: draft.mediaAttachments.filter((attachment) => attachment.id !== attachmentId),
-    });
+    updateDraft((currentDraft) => ({
+      mediaAttachments: currentDraft.mediaAttachments.filter((attachment) => attachment.id !== attachmentId),
+    }));
     setMediaUploadError(null);
   }
 
