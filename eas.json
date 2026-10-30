@@ -3,14 +3,21 @@
     "version": ">= 3.0.0"
   },
   "build": {
+    "base": {
+      "node": "24.22.2"
+    },
     "development": {
+      "extends": "base",
       "developmentClient": true,
       "distribution": "internal"
     },
     "preview": {
+      "extends": "base",
       "distribution": "internal"
     },
-    "production": {}
+    "production": {
+      "extends": "base"
+    }
   },
   "submit": {
     "production": {}

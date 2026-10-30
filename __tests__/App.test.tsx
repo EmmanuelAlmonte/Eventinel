@@ -96,10 +96,12 @@ describe('App', () => {
 
       const { queryByText } = render(<App />);
 
+      // Wait for startup to finish so the check covers the post-startup screen.
       await waitFor(() => {
-        // LoginScreen should NOT be visible
-        expect(queryByText('Sign in to Eventinel')).toBeNull();
+        expect(queryByText('Starting Eventinel')).toBeNull();
       });
+      // LoginScreen should NOT be visible
+      expect(queryByText('Sign in to Eventinel')).toBeNull();
     });
 
     it('transitions from LoginScreen to main app after authentication', async () => {
@@ -264,9 +266,11 @@ describe('App', () => {
       // that we're not showing LoginScreen
       const { queryByText } = render(<App />);
 
+      // Wait for startup to finish so the check covers the post-startup screen.
       await waitFor(() => {
-        expect(queryByText('Sign in to Eventinel')).toBeNull();
+        expect(queryByText('Starting Eventinel')).toBeNull();
       });
+      expect(queryByText('Sign in to Eventinel')).toBeNull();
     });
   });
 
