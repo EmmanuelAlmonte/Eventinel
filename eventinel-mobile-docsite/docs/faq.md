@@ -5,7 +5,7 @@ description: Frequently asked questions about Eventinel.
 
 ## What Node.js versions are supported?
 
-Eventinel is tested on active LTS releases. Use Node.js 18+.
+Use Node.js 24.22.1 or later on the 24.x line, as pinned in `.nvmrc`. Earlier 24.x releases have known security issues.
 
 ## Which commands do I run most often?
 
