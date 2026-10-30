@@ -57,7 +57,7 @@ function TabNavigator() {
       screenOptions={{
         headerShown: false,
         lazy: false,
-        tabBarShowLabel: true,
+        tabBarLabelVisibilityMode: 'labeled',
         tabBarHideOnKeyboard: true,
         tabBarActiveTintColor: colors.primary,
         tabBarInactiveTintColor: colors.textMuted,
