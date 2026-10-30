@@ -84,7 +84,7 @@ describe('App', () => {
       const { getByText } = render(<App />);
 
       await waitFor(() => {
-        expect(getByText('Welcome to Eventinel')).toBeTruthy();
+        expect(getByText('Sign in to Eventinel')).toBeTruthy();
       });
     });
 
@@ -98,7 +98,7 @@ describe('App', () => {
 
       await waitFor(() => {
         // LoginScreen should NOT be visible
-        expect(queryByText('Welcome to Eventinel')).toBeNull();
+        expect(queryByText('Sign in to Eventinel')).toBeNull();
       });
     });
 
@@ -109,7 +109,7 @@ describe('App', () => {
       const { getByText, queryByText, rerender } = render(<App />);
 
       await waitFor(() => {
-        expect(getByText('Welcome to Eventinel')).toBeTruthy();
+        expect(getByText('Sign in to Eventinel')).toBeTruthy();
       });
 
       // Simulate user authentication
@@ -124,7 +124,7 @@ describe('App', () => {
       await waitFor(() => {
         // LoginScreen should now be hidden
         // Note: In real app, useNDKCurrentUser would trigger re-render
-        expect(queryByText('Welcome to Eventinel')).toBeNull();
+        expect(queryByText('Sign in to Eventinel')).toBeNull();
       });
     });
   });
@@ -193,7 +193,7 @@ describe('App', () => {
 
       // App should still render (shows LoginScreen because no user)
       await waitFor(() => {
-        expect(getByText('Welcome to Eventinel')).toBeTruthy();
+        expect(getByText('Sign in to Eventinel')).toBeTruthy();
       });
     });
 
@@ -204,7 +204,7 @@ describe('App', () => {
 
       await waitFor(() => {
         // App should still initialize
-        expect(getByText('Welcome to Eventinel')).toBeTruthy();
+        expect(getByText('Sign in to Eventinel')).toBeTruthy();
         // addExplicitRelay should not be called
         expect(ndk.addExplicitRelay).not.toHaveBeenCalled();
       });
@@ -242,7 +242,7 @@ describe('App', () => {
       const { getByText } = render(<App />);
 
       await waitFor(() => {
-        expect(getByText('Welcome to Eventinel')).toBeTruthy();
+        expect(getByText('Sign in to Eventinel')).toBeTruthy();
       });
     });
   });
@@ -265,7 +265,7 @@ describe('App', () => {
       const { queryByText } = render(<App />);
 
       await waitFor(() => {
-        expect(queryByText('Welcome to Eventinel')).toBeNull();
+        expect(queryByText('Sign in to Eventinel')).toBeNull();
       });
     });
   });

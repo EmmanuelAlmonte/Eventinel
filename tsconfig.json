@@ -22,6 +22,8 @@
     "do",
     "docs/**/*",
     "docs",
+    "eventinel-mobile-docsite/**/*",
+    "eventinel-mobile-docsite",
     "os/**/*",
     "os"
   ]

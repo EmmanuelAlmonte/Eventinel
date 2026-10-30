@@ -63,6 +63,10 @@ module.exports = {
   // Only look for tests in these directories
   roots: ['<rootDir>/__tests__'],
 
+  // Supporting fixtures and harnesses under __tests__ are imported by suites but
+  // must not be collected as suites themselves.
+  testMatch: ['<rootDir>/__tests__/**/*.test.{ts,tsx,js,jsx}'],
+
   // Transform ignore patterns - process these modules
   transformIgnorePatterns: [
     'node_modules/(?!((jest-)?react-native|@react-native(-community)?)|expo(nent)?|@expo(nent)?/.*|@expo-google-fonts/.*|react-navigation|@react-navigation/.*|@unimodules/.*|unimodules|sentry-expo|native-base|react-native-svg|@nostr-dev-kit/.*|@rneui/.*|@rnmapbox/.*)',
