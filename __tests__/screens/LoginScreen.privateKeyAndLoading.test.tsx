@@ -136,6 +136,8 @@ describe('LoginScreen private key and loading behavior', () => {
     await waitFor(() => {
       expect(screen.queryByText('Connecting...')).toBeTruthy();
     });
+    // Let this screen's own 500 ms login settle so its toast cannot leak into later tests.
+    await waitFor(() => expect(screen.queryByText('Connecting...')).toBeNull(), { timeout: 2000 });
   });
 
   it('hides loading overlay after login completes', async () => {
@@ -183,5 +185,7 @@ describe('LoginScreen private key and loading behavior', () => {
     await waitFor(() => {
       expect(keyInput.props.editable).toBe(false);
     });
+    // Let this screen's own 500 ms login settle so its toast cannot leak into later tests.
+    await waitFor(() => expect(keyInput.props.editable).toBe(true), { timeout: 2000 });
   });
 });
