@@ -7,7 +7,7 @@ Use this guide to install dependencies and prepare the app for local development
 
 ## Prerequisites
 
-- Node.js 24.22.1 or later on the 24.x line (see `.nvmrc`)
+- Node.js 24.22.1 or later on the 24.x line (`.nvmrc` pins 24.22.2)
 - npm 11.19.1 or later
 - Expo tooling via project dependencies
 - Android Studio and/or Xcode for native device builds

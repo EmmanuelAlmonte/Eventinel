@@ -31,7 +31,7 @@ The repo also contains work that should be described as planned, experimental, o
 
 ## Local Setup
 
-Requires Node.js 24.22.1 or later on the 24.x line (pinned in `.nvmrc`) and npm 11.19.1 or later.
+Requires Node.js 24.22.1 or later on the 24.x line and npm 11.19.1 or later. `.nvmrc` pins Node 24.22.2.
 
 ```bash
 cp .env.example .env.local
